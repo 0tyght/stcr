@@ -11,7 +11,6 @@ import { init, use, type ECharts, type EChartsCoreOption } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import { useEffect, useMemo, useRef } from "react";
 import type { LimitMap, SensorKey, TimeSeriesPoint } from "../../types";
-import { formatDateTime } from "../../utils/format";
 import { sensorByKey } from "../../utils/sensors";
 
 use([
@@ -34,6 +33,8 @@ export function TimeSeriesChart({
   rightAxisSensors = ["humidity"],
   leftAxisName = "°C",
   rightAxisName = "%",
+  limitSensors,
+  theme = "dark",
 }: {
   points: TimeSeriesPoint[];
   sensors: SensorKey[];
@@ -43,6 +44,8 @@ export function TimeSeriesChart({
   rightAxisSensors?: SensorKey[];
   leftAxisName?: string;
   rightAxisName?: string;
+  limitSensors?: SensorKey[];
+  theme?: "dark" | "print";
 }) {
   const chartRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<ECharts | null>(null);
@@ -50,13 +53,20 @@ export function TimeSeriesChart({
   const option = useMemo<EChartsCoreOption>(() => {
     const leftSensors = sensors.filter((sensor) => !rightAxisSensors.includes(sensor));
     const rightSensors = sensors.filter((sensor) => rightAxisSensors.includes(sensor));
-    const leftBounds = getAxisBounds(points, leftSensors, limits);
-    const rightBounds = getAxisBounds(points, rightSensors, limits);
+    const shownLimitSensors = limitSensors ?? sensors;
+    const leftBounds = getAxisBounds(points, leftSensors, limits, shownLimitSensors);
+    const rightBounds = getAxisBounds(points, rightSensors, limits, []);
+    const isPrint = theme === "print";
+    const textColor = isPrint ? "#111827" : "#d8dce3";
+    const mutedColor = isPrint ? "#4b5563" : "#9aa3b2";
+    const gridColor = isPrint ? "#d1d5db" : "#2a3038";
+    const axisColor = isPrint ? "#6b7280" : "#3a424f";
 
     const series = sensors.map((sensor) => {
       const definition = sensorByKey[sensor];
-      const limit = limits[sensor];
       const useRightAxis = rightAxisSensors.includes(sensor);
+      const showLimit = shownLimitSensors.includes(sensor);
+      const limit = limits[sensor];
 
       return {
         name: definition.shortLabel,
@@ -70,29 +80,29 @@ export function TimeSeriesChart({
           color: definition.color,
         },
         areaStyle: {
-          color: withAlpha(definition.color, 0.07),
+          color: withAlpha(definition.color, 0.06),
           opacity: 1,
         },
         itemStyle: {
           color: definition.color,
         },
-        markLine: {
-          symbol: "none" as const,
-          silent: true,
-          lineStyle: {
-            type: "dashed" as const,
-            width: 1,
-            color: definition.color,
-            opacity: 0.55,
-          },
-          label: {
-            show: false,
-          },
-          data: [
-            { name: `${definition.shortLabel} Upper`, yAxis: limit.upper },
-            { name: `${definition.shortLabel} Lower`, yAxis: limit.lower },
-          ],
-        },
+        markLine: showLimit
+          ? {
+              symbol: "none" as const,
+              silent: true,
+              lineStyle: {
+                type: "dashed" as const,
+                width: 1,
+                color: definition.color,
+                opacity: 0.62,
+              },
+              label: { show: false },
+              data: [
+                { name: `${definition.shortLabel} Upper`, yAxis: limit.upper },
+                { name: `${definition.shortLabel} Lower`, yAxis: limit.lower },
+              ],
+            }
+          : undefined,
       };
     });
 
@@ -104,41 +114,41 @@ export function TimeSeriesChart({
         textStyle: {
           fontSize: 15,
           fontWeight: 700,
-          color: "#d8dce3",
+          color: textColor,
         },
       },
-      backgroundColor: "transparent",
+      backgroundColor: isPrint ? "#ffffff" : "transparent",
       color: sensors.map((sensor) => sensorByKey[sensor].color),
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "cross" },
-        backgroundColor: "#111820",
-        borderColor: "#3a424f",
-        textStyle: { color: "#d8dce3" },
+        backgroundColor: isPrint ? "#ffffff" : "#111820",
+        borderColor: axisColor,
+        textStyle: { color: textColor },
         valueFormatter: (value: unknown) => (typeof value === "number" ? value.toFixed(1) : String(value)),
       },
       legend: {
         top: 28,
         type: "scroll",
-        textStyle: { color: "#9aa3b2" },
+        textStyle: { color: mutedColor },
       },
       grid: {
         left: 54,
-        right: 64,
+        right: rightSensors.length ? 64 : 28,
         top: 74,
         bottom: realtime ? 38 : 72,
       },
       xAxis: {
         type: "time",
         axisLabel: {
-          color: "#9aa3b2",
-          formatter: (value: number) => formatDateTime(new Date(value)),
+          color: mutedColor,
+          formatter: (value: number) => formatShortDateTime(new Date(value)),
         },
-        axisLine: { lineStyle: { color: "#3a424f" } },
-        axisTick: { lineStyle: { color: "#3a424f" } },
+        axisLine: { lineStyle: { color: axisColor } },
+        axisTick: { lineStyle: { color: axisColor } },
         splitLine: {
           show: true,
-          lineStyle: { color: "#2a3038" },
+          lineStyle: { color: gridColor },
         },
       },
       yAxis: [
@@ -147,21 +157,22 @@ export function TimeSeriesChart({
           name: leftAxisName,
           min: leftBounds.min,
           max: leftBounds.max,
-          nameTextStyle: { color: "#9aa3b2" },
-          axisLabel: { color: "#9aa3b2" },
-          axisLine: { lineStyle: { color: "#3a424f" } },
-          axisTick: { lineStyle: { color: "#3a424f" } },
-          splitLine: { lineStyle: { color: "#2a3038" } },
+          nameTextStyle: { color: mutedColor },
+          axisLabel: { color: mutedColor },
+          axisLine: { lineStyle: { color: axisColor } },
+          axisTick: { lineStyle: { color: axisColor } },
+          splitLine: { lineStyle: { color: gridColor } },
         },
         {
           type: "value",
           name: rightAxisName,
           min: rightBounds.min,
           max: rightBounds.max,
-          nameTextStyle: { color: "#9aa3b2" },
-          axisLabel: { color: "#9aa3b2" },
-          axisLine: { lineStyle: { color: "#3a424f" } },
-          axisTick: { lineStyle: { color: "#3a424f" } },
+          show: rightSensors.length > 0,
+          nameTextStyle: { color: mutedColor },
+          axisLabel: { color: mutedColor },
+          axisLine: { lineStyle: { color: axisColor } },
+          axisTick: { lineStyle: { color: axisColor } },
           splitLine: { show: false },
         },
       ],
@@ -173,15 +184,15 @@ export function TimeSeriesChart({
               type: "slider",
               height: 24,
               bottom: 22,
-              borderColor: "#2a3038",
+              borderColor: gridColor,
               fillerColor: "rgba(87, 148, 242, 0.18)",
-              backgroundColor: "#111820",
-              textStyle: { color: "#9aa3b2" },
+              backgroundColor: isPrint ? "#f9fafb" : "#111820",
+              textStyle: { color: mutedColor },
             },
           ],
       series,
     };
-  }, [leftAxisName, limits, points, realtime, rightAxisName, rightAxisSensors, sensors, title]);
+  }, [leftAxisName, limitSensors, limits, points, realtime, rightAxisName, rightAxisSensors, sensors, theme, title]);
 
   useEffect(() => {
     if (!chartRef.current) return;
@@ -206,6 +217,16 @@ export function TimeSeriesChart({
   return <div className="time-series-chart" ref={chartRef} role="img" aria-label={title} />;
 }
 
+function formatShortDateTime(value: Date): string {
+  return new Intl.DateTimeFormat("th-TH", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Bangkok",
+  }).format(value);
+}
+
 function withAlpha(hex: string, alpha: number): string {
   const normalized = hex.replace("#", "");
   if (normalized.length !== 6) return hex;
@@ -217,16 +238,20 @@ function withAlpha(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-function getAxisBounds(points: TimeSeriesPoint[], sensors: SensorKey[], limits: LimitMap): { min: number; max: number } {
-  if (!sensors.length) {
+function getAxisBounds(
+  points: TimeSeriesPoint[],
+  sensors: SensorKey[],
+  limits: LimitMap,
+  limitSensors: SensorKey[],
+): { min: number; max: number } {
+  if (!sensors.length && !limitSensors.length) {
     return { min: 0, max: 100 };
   }
 
-  const values = sensors.flatMap((sensor) => [
-    ...points.map((point) => point[sensor]),
-    limits[sensor].lower,
-    limits[sensor].upper,
-  ]);
+  const values = [
+    ...sensors.flatMap((sensor) => points.map((point) => point[sensor])),
+    ...limitSensors.flatMap((sensor) => [limits[sensor].lower, limits[sensor].upper]),
+  ];
   const minValue = Math.min(...values);
   const maxValue = Math.max(...values);
   const spread = Math.max(maxValue - minValue, 1);

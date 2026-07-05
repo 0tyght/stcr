@@ -1,4 +1,4 @@
-import { AlertTriangle, Flame, Gauge, Power, Search, WifiOff } from "lucide-react";
+import { Gauge, PauseCircle, Power, Search, WifiOff, Wrench } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useAppData } from "../app/providers";
 import { OvenCard } from "../features/ovens/OvenCard";
@@ -11,9 +11,8 @@ const filters: { label: string; value: OvenStatusFilter }[] = [
   { label: "ทั้งหมด", value: "all" },
   { label: "เปิด", value: "open" },
   { label: "ปิด", value: "closed" },
-  { label: "เตือน", value: "warning" },
-  { label: "อันตราย", value: "danger" },
   { label: "ขาดการเชื่อมต่อ", value: "offline" },
+  { label: "ปิดใช้งาน", value: "disabled" },
 ];
 
 export function DashboardPage() {
@@ -25,9 +24,9 @@ export function DashboardPage() {
     return {
       total: ovens.length,
       open: ovens.filter((oven) => oven.status === "open").length,
-      warning: ovens.filter((oven) => oven.status === "warning").length,
-      danger: ovens.filter((oven) => oven.status === "danger").length,
+      closed: ovens.filter((oven) => oven.status === "closed").length,
       offline: ovens.filter((oven) => oven.status === "offline").length,
+      disabled: ovens.filter((oven) => oven.status === "disabled").length,
     };
   }, [ovens]);
 
@@ -50,15 +49,15 @@ export function DashboardPage() {
     <>
       <PageHeader
         title="Dashboard"
-        description="ภาพรวมสถานะเตาอบยางทั้งหมด พร้อมค้นหาและกรองตามสถานะ"
+        description="ภาพรวมสถานะจริงของเตา พร้อมค่าล่าสุดแบบย่อเฉพาะเตาที่กำลังเปิด"
       />
 
       <section className="summary-grid" aria-label="สรุปสถานะเตา">
         <SummaryCard label="เตาทั้งหมด" value={summary.total} icon={<Gauge size={24} />} />
-        <SummaryCard label="เปิดใช้งาน" value={summary.open} tone="open" icon={<Power size={24} />} />
-        <SummaryCard label="เตือน" value={summary.warning} tone="warning" icon={<AlertTriangle size={24} />} />
-        <SummaryCard label="อันตราย" value={summary.danger} tone="danger" icon={<Flame size={24} />} />
+        <SummaryCard label="กำลังอบ" value={summary.open} tone="open" icon={<Power size={24} />} />
+        <SummaryCard label="ปิดเตา" value={summary.closed} icon={<PauseCircle size={24} />} />
         <SummaryCard label="ขาดการเชื่อมต่อ" value={summary.offline} tone="offline" icon={<WifiOff size={24} />} />
+        <SummaryCard label="ปิดใช้งาน" value={summary.disabled} tone="disabled" icon={<Wrench size={24} />} />
       </section>
 
       <section className="panel dashboard-toolbar">
@@ -106,7 +105,7 @@ function SummaryCard({
   label: string;
   value: number;
   icon: React.ReactNode;
-  tone?: "default" | "open" | "warning" | "danger" | "offline";
+  tone?: "default" | "open" | "warning" | "danger" | "offline" | "disabled";
 }) {
   return (
     <article className={`summary-card tone-${tone}`}>

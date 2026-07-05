@@ -1,98 +1,119 @@
-import { CalendarRange, Download, FileDown, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Download, FileDown, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAppData } from "../app/providers";
-import { ThresholdLegend } from "../components/charts/ThresholdLegend";
 import { TimeSeriesChart } from "../components/charts/TimeSeriesChart";
 import { EmptyState } from "../components/ui/EmptyState";
 import { PageHeader } from "../components/ui/PageHeader";
 import { apiClient } from "../services/apiClient";
-import { downloadCsv, printReport } from "../services/reportExport";
-import type { SensorKey, TimeSeriesPoint } from "../types";
-import { formatNumber, toDateInputValue } from "../utils/format";
-import { summarizeHistory } from "../utils/report";
-import { REPORT_CYCLE_DAYS, getDefaultCycleRange } from "../utils/reportCycle";
-import { allSensorKeys, sensorByKey } from "../utils/sensors";
+import { downloadElementAsLandscapePdf } from "../services/pdfExport";
+import { downloadCsv } from "../services/reportExport";
+import type { Oven, SensorKey, TimeSeriesPoint } from "../types";
+import { formatNumber } from "../utils/format";
+import { clampCycleStart, REPORT_CYCLE_DAYS, REPORT_CYCLE_MS } from "../utils/reportCycle";
+import { sensorByKey } from "../utils/sensors";
+
+type ReportMode = "current" | "history";
+
+const reportSensors: SensorKey[] = ["chamberTemp", "humidity"];
 
 export function ReportPage() {
   const { ovens } = useAppData();
   const [searchParams] = useSearchParams();
-  const requestedOvenId = searchParams.get("ovenId");
-  const [appliedQueryOvenId, setAppliedQueryOvenId] = useState<string | null>(null);
-  const [ovenId, setOvenId] = useState(requestedOvenId ?? "");
-  const [startAt, setStartAt] = useState(() => toDateInputValue(getDefaultCycleRange().start));
-  const [endAt, setEndAt] = useState(() => toDateInputValue(getDefaultCycleRange().end));
-  const [selectedSensors, setSelectedSensors] = useState<SensorKey[]>(allSensorKeys);
+  const ovenId = searchParams.get("ovenId") ?? "";
+  const mode: ReportMode = searchParams.get("mode") === "history" ? "history" : "current";
+  const autoPdf = searchParams.get("auto") === "pdf";
+  const oven = ovens.find((item) => item.id === ovenId);
+  const [selectedCycle, setSelectedCycle] = useState<number | null>(null);
   const [points, setPoints] = useState<TimeSeriesPoint[]>([]);
+  const [loadingReport, setLoadingReport] = useState(false);
+  const [autoDownloaded, setAutoDownloaded] = useState(false);
+  const reportRef = useRef<HTMLDivElement | null>(null);
 
-  const oven = ovens.find((item) => item.id === ovenId) ?? ovens[0];
+  const cycleOptions = useMemo(() => {
+    if (!oven) return [];
+    const latest = oven.cycleCount || 1;
+    const count = Math.min(latest, 12);
+    return Array.from({ length: count }, (_, index) => latest - index);
+  }, [oven]);
 
   useEffect(() => {
-    if (requestedOvenId && appliedQueryOvenId !== requestedOvenId && ovens.some((item) => item.id === requestedOvenId)) {
-      setOvenId(requestedOvenId);
-      setAppliedQueryOvenId(requestedOvenId);
-      return;
-    }
+    if (!oven) return;
+    setSelectedCycle(mode === "current" ? oven.cycleCount : Math.max(1, oven.cycleCount - 1));
+  }, [mode, oven?.id, oven?.cycleCount]);
 
-    if (!ovenId && ovens[0]) {
-      setOvenId(ovens[0].id);
-    }
-  }, [appliedQueryOvenId, ovenId, ovens, requestedOvenId]);
+  const cycleRange = useMemo(() => {
+    if (!oven || selectedCycle == null) return null;
+    return getCycleRange(oven, mode, selectedCycle);
+  }, [mode, oven, selectedCycle]);
 
   const loadReport = useCallback(async () => {
-    if (!oven) return;
-    setPoints(
-      await apiClient
-      .getHistory({
-        ovenId: oven.id,
-        preset: "custom",
-        startAt: new Date(startAt).toISOString(),
-        endAt: new Date(endAt).toISOString(),
-        sensors: selectedSensors,
-      }),
-    );
-  }, [endAt, oven, selectedSensors, startAt]);
+    if (!oven || !cycleRange) return;
+    setLoadingReport(true);
+    const nextPoints = await apiClient.getHistory({
+      ovenId: oven.id,
+      preset: "custom",
+      startAt: cycleRange.start.toISOString(),
+      endAt: cycleRange.end.toISOString(),
+      cycleNumber: selectedCycle ?? undefined,
+      sensors: reportSensors,
+    });
+    setPoints(nextPoints);
+    setLoadingReport(false);
+  }, [cycleRange, oven, selectedCycle]);
 
   useEffect(() => {
     void loadReport();
   }, [loadReport]);
 
-  const summaries = useMemo(() => {
-    if (!oven) return [];
-    return summarizeHistory(points, selectedSensors, oven.limits);
-  }, [oven, points, selectedSensors]);
+  const summaries = useMemo(() => summarizeReport(points), [points]);
 
-  function toggleSensor(sensor: SensorKey) {
-    setSelectedSensors((current) => {
-      if (current.includes(sensor)) {
-        return current.length === 1 ? current : current.filter((item) => item !== sensor);
-      }
-      return [...current, sensor];
-    });
-  }
+  const downloadPdf = useCallback(async () => {
+    if (!oven || !cycleRange || !reportRef.current) return;
+    await downloadElementAsLandscapePdf(
+      reportRef.current,
+      `OVEN${oven.number}_Cycle${selectedCycle ?? oven.cycleCount}_${formatFileDate(cycleRange.start)}_to_${formatFileDate(
+        cycleRange.end,
+      )}.pdf`,
+    );
+  }, [cycleRange, oven, selectedCycle]);
 
-  function applyCycleRange() {
-    const range = getDefaultCycleRange();
-    setStartAt(toDateInputValue(range.start));
-    setEndAt(toDateInputValue(range.end));
-  }
+  useEffect(() => {
+    if (!autoPdf || autoDownloaded || loadingReport || !points.length) return;
+    setAutoDownloaded(true);
+    window.setTimeout(() => {
+      void downloadPdf();
+    }, 450);
+  }, [autoDownloaded, autoPdf, downloadPdf, loadingReport, points.length]);
 
   if (!oven) {
-    return <EmptyState title="ยังไม่มีข้อมูลเตา" description="เพิ่มเตาในหน้า Setting ก่อนออกรายงาน" />;
+    return (
+      <EmptyState
+        title="ไม่พบเตาสำหรับรายงาน"
+        description="เปิดรายงานจากหน้ารายละเอียดเตา เพื่อให้ระบบล็อกเตาและรอบอบถูกต้อง"
+      />
+    );
+  }
+
+  if (!cycleRange) {
+    return <EmptyState title="ยังไม่มีรอบอบสำหรับรายงาน" description="เตานี้ยังไม่มีข้อมูลรอบอบให้สร้างรายงาน" />;
   }
 
   return (
     <>
       <PageHeader
-        title="Report"
-        description={`รายงานหนึ่งรอบการอบใช้ช่วงกราฟ ${REPORT_CYCLE_DAYS} วัน และสามารถปรับช่วงเวลาเองได้`}
+        title={mode === "current" ? "รายงานรอบปัจจุบัน" : "รายงานย้อนหลัง"}
+        description={`${oven.name} · รอบ ${selectedCycle ?? oven.cycleCount} · 1 กราฟต่อ 1 รอบอบ (${REPORT_CYCLE_DAYS} วันหรือต่ำกว่า)`}
         actions={
           <>
-            <button className="button button-primary" type="button" onClick={printReport}>
+            <Link className="button" to={`/ovens/${oven.id}`}>
+              กลับหน้าเตา
+            </Link>
+            <button className="button button-primary" type="button" onClick={() => void downloadPdf()}>
               <FileDown size={17} />
               ดาวน์โหลด PDF
             </button>
-            <button className="button" type="button" onClick={() => downloadCsv(`${oven.name}-report.csv`, points, selectedSensors)}>
+            <button className="button" type="button" onClick={() => downloadCsv(`${oven.name}-cycle-report.csv`, points, reportSensors)}>
               <Download size={17} />
               ส่งออก CSV
             </button>
@@ -100,89 +121,151 @@ export function ReportPage() {
         }
       />
 
-      <section className="report-layout">
-        <aside className="panel report-filter">
-          <div className="panel-heading">
-            <div>
-              <h2>เงื่อนไขรายงาน</h2>
-              <p>ใช้ชุดตัวกรองเดียวกับกราฟย้อนหลัง</p>
-            </div>
-          </div>
-          <label className="field">
-            <span>เตา</span>
-            <select value={oven.id} onChange={(event) => setOvenId(event.target.value)}>
-              {ovens.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
+      <section className="panel report-filter report-cycle-toolbar">
+        <div>
+          <strong>{oven.name}</strong>
+          <span>
+            {formatReportDateTime(cycleRange.start)} ถึง {formatReportDateTime(cycleRange.end)}
+          </span>
+        </div>
+        {mode === "history" ? (
+          <label className="field compact-field">
+            <span>เลือกรอบย้อนหลัง</span>
+            <select value={selectedCycle ?? ""} onChange={(event) => setSelectedCycle(Number(event.target.value))}>
+              {cycleOptions.map((cycle) => (
+                <option key={cycle} value={cycle}>
+                  รอบ {cycle}
                 </option>
               ))}
             </select>
           </label>
-          <label className="field">
-            <span>เริ่มต้น</span>
-            <input type="datetime-local" value={startAt} onChange={(event) => setStartAt(event.target.value)} />
-          </label>
-          <label className="field">
-            <span>สิ้นสุด</span>
-            <input type="datetime-local" value={endAt} onChange={(event) => setEndAt(event.target.value)} />
-          </label>
-          <button className="button button-dark" type="button" onClick={applyCycleRange}>
-            <CalendarRange size={17} />
-            ใช้ช่วง 1 รอบ ({REPORT_CYCLE_DAYS} วัน)
-          </button>
-          <p className="cycle-note">PDF และ CSV จะใช้ช่วงเวลาที่เลือกอยู่ตรงนี้เป็นหลัก</p>
-          <div className="field">
-            <span>ประเภทข้อมูล</span>
-            <div className="metric-toggles">
-              {allSensorKeys.map((sensor) => (
-                <label key={sensor} className="check-pill">
-                  <input
-                    type="checkbox"
-                    checked={selectedSensors.includes(sensor)}
-                    onChange={() => toggleSensor(sensor)}
-                  />
-                  {sensorByKey[sensor].shortLabel}
-                </label>
-              ))}
+        ) : null}
+        <button className="button button-dark" type="button" onClick={() => void loadReport()} disabled={loadingReport}>
+          <RefreshCw size={17} />
+          โหลดรายงานใหม่
+        </button>
+      </section>
+
+      <section className="report-page-shell">
+        <div className="report-sheet" ref={reportRef}>
+          <header className="report-sheet-header">
+            <h1>รายงานการตรวจสอบอุณหภูมิและความชื้น หน้า 1/1 OVEN{oven.number}</h1>
+          </header>
+
+          <section className="report-meta-grid">
+            <div>
+              <p>ชนิดยาง : ........................</p>
+              <p>ปริมาณน้ำหนักยางเข้าเตา (ก.ก.) : ........................</p>
+              <p>ปริมาณน้ำหนักยางออกเตา (ก.ก.) : ........................</p>
             </div>
-          </div>
-          <button className="button button-dark" type="button" onClick={() => void loadReport()}>
-            <RefreshCw size={17} />
-            โหลดตัวอย่างรายงาน
-          </button>
-        </aside>
+            <div>
+              <p>
+                เริ่มอบวันที่ : {formatReportDate(cycleRange.start)} &nbsp; เวลา: {formatReportTime(cycleRange.start)}
+              </p>
+              <p>ระยะเวลาการอบ : {formatDuration(cycleRange.start, cycleRange.end)}</p>
+              <p>รอบการอบ/ปี : {selectedCycle ?? oven.cycleCount}</p>
+            </div>
+            <div>
+              <p>
+                หยุดอบวันที่ : {formatReportDate(cycleRange.end)} &nbsp; เวลา : {formatReportTime(cycleRange.end)}
+              </p>
+            </div>
+          </section>
 
-        <section className="report-preview">
-          <div className="print-header">
-            <h1>รายงาน {oven.name}</h1>
-            <p>
-              1 รอบการอบ ({REPORT_CYCLE_DAYS} วัน) · ช่วงเวลา {startAt} ถึง {endAt}
-            </p>
-          </div>
-
-          <div className="report-summary">
-            {summaries.map((summary) => (
-              <article key={summary.sensor} className="mini-card">
-                <span>{sensorByKey[summary.sensor].label}</span>
-                <strong>{formatNumber(summary.average)}</strong>
-                <small>
-                  Min {formatNumber(summary.min)} · Max {formatNumber(summary.max)} · เกิน {summary.exceedCount} ครั้ง
-                </small>
-              </article>
-            ))}
-          </div>
-
-          <section className="panel chart-panel">
-            <ThresholdLegend sensors={selectedSensors} limits={oven.limits} />
+          <div className="report-chart-title">Temperature and Humidity Variation 1</div>
+          <div className="report-chart-frame">
             <TimeSeriesChart
               points={points}
-              sensors={selectedSensors}
+              sensors={reportSensors}
               limits={oven.limits}
-              title={`Report Preview - ${oven.name} (${REPORT_CYCLE_DAYS} วัน)`}
+              title=""
+              realtime={mode === "current"}
+              rightAxisSensors={[]}
+              leftAxisName="Temperature Oven / Humidity Oven"
+              rightAxisName=""
+              limitSensors={["chamberTemp"]}
+              theme="print"
             />
-          </section>
-        </section>
+          </div>
+
+          <div className="report-summary-row">
+            {summaries.map((summary) => {
+              const definition = sensorByKey[summary.sensor];
+              const unit = definition.unit === "C" ? "°C" : "%";
+              return (
+                <div key={summary.sensor}>
+                  <strong>{definition.label}</strong>
+                  <span>
+                    Avg {formatNumber(summary.average)} {unit} · Min {formatNumber(summary.min)} · Max {formatNumber(summary.max)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <footer className="report-signatures">
+            <p>
+              ผู้รายงาน <span />
+            </p>
+            <p>
+              หัวหน้าฝ่ายผลิต <span />
+            </p>
+          </footer>
+        </div>
       </section>
     </>
   );
+}
+
+function getCycleRange(oven: Oven, mode: ReportMode, cycleNumber: number): { start: Date; end: Date } {
+  const now = new Date();
+  if (mode === "current" && oven.startedAt && oven.status === "open") {
+    const end = now;
+    return { start: clampCycleStart(new Date(oven.startedAt), end), end };
+  }
+
+  const latestCycle = Math.max(oven.cycleCount, 1);
+  const cycleOffset = Math.max(0, latestCycle - cycleNumber);
+  const baseEnd = new Date(oven.stoppedAt ?? oven.lastUpdatedAt ?? now);
+  const end = new Date(baseEnd.getTime() - cycleOffset * (REPORT_CYCLE_MS + 12 * 60 * 60 * 1000));
+  const start = new Date(end.getTime() - REPORT_CYCLE_MS);
+  return { start, end };
+}
+
+function summarizeReport(points: TimeSeriesPoint[]) {
+  return reportSensors.map((sensor) => {
+    const values = points.map((point) => point[sensor]);
+    if (!values.length) return { sensor, min: 0, max: 0, average: 0 };
+    const total = values.reduce((sum, value) => sum + value, 0);
+    return {
+      sensor,
+      min: Math.min(...values),
+      max: Math.max(...values),
+      average: total / values.length,
+    };
+  });
+}
+
+function formatReportDate(value: Date): string {
+  return `${String(value.getDate()).padStart(2, "0")}-${String(value.getMonth() + 1).padStart(2, "0")}-${value.getFullYear()}`;
+}
+
+function formatFileDate(value: Date): string {
+  return formatReportDate(value).replaceAll("-", "");
+}
+
+function formatReportTime(value: Date): string {
+  return `${String(value.getHours()).padStart(2, "0")}.${String(value.getMinutes()).padStart(2, "0")}`;
+}
+
+function formatReportDateTime(value: Date): string {
+  return `${formatReportDate(value)} ${formatReportTime(value)}`;
+}
+
+function formatDuration(start: Date, end: Date): string {
+  const totalMinutes = Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  return `${days} วัน ${hours} ชั่วโมง ${minutes} นาที`;
 }

@@ -6,15 +6,15 @@ import { useAppData } from "../../app/providers";
 
 export function Sidebar() {
   const { ovens } = useAppData();
-  const [collapsed, setCollapsed] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   return (
-    <aside className={`sidebar ${collapsed ? "is-collapsed" : ""}`}>
+    <aside className={`sidebar ${expanded ? "is-expanded" : ""}`}>
       <div className="brand-row">
         <NavLink to="/" className="brand-mark" aria-label="กลับ Dashboard">
           GR
         </NavLink>
-        <button className="icon-button" type="button" onClick={() => setCollapsed((value) => !value)} aria-label="ย่อเมนู">
+        <button className="icon-button" type="button" onClick={() => setExpanded((value) => !value)} aria-label="เปิดหรือย่อเมนู">
           <Menu size={20} />
         </button>
       </div>
@@ -35,7 +35,10 @@ export function Sidebar() {
         {ovens.map((oven) => (
           <NavLink key={oven.id} className="oven-link" to={`/ovens/${oven.id}`}>
             <PackageOpen size={17} />
-            <span className="oven-label">เตา {oven.number}</span>
+            <span className="oven-label">
+              <span className="oven-word">เตา </span>
+              {oven.number}
+            </span>
             <span className={`mini-status status-${oven.status}`} />
           </NavLink>
         ))}

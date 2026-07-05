@@ -1,5 +1,5 @@
 import type { HistoryQuery, Oven, SensorKey, TimeSeriesPoint } from "../types";
-import { REPORT_CYCLE_DAYS } from "../utils/reportCycle";
+import { REPORT_CYCLE_MS } from "../utils/reportCycle";
 
 function seededNoise(seed: number): number {
   const x = Math.sin(seed) * 10000;
@@ -16,7 +16,7 @@ function getRange(query: HistoryQuery): { start: Date; end: Date; stepMs: number
       today.setHours(0, 0, 0, 0);
       return today;
     }
-    if (query.preset === "cycle") return new Date(end.getTime() - REPORT_CYCLE_DAYS * 24 * 60 * 60 * 1000);
+    if (query.preset === "cycle") return new Date(end.getTime() - REPORT_CYCLE_MS);
     if (query.preset === "7d") return new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
     if (query.preset === "30d") return new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
     return new Date(end.getTime() - 24 * 60 * 60 * 1000);

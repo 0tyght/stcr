@@ -1,6 +1,6 @@
 import type { LimitMap, Oven, OvenStatus, SensorKey, SensorSnapshot } from "../types";
 import { allSensorKeys, sensorByKey } from "../utils/sensors";
-import { buildLimitAlarms, getReadingState, getWorstSeverity, isStale } from "../utils/limits";
+import { isStale } from "../utils/limits";
 
 type OvenSeed = {
   number: number;
@@ -17,7 +17,7 @@ export function createDefaultLimits(): LimitMap {
     chamberTemp: { sensor: "chamberTemp", lower: 30, upper: 60 },
     humidity: { sensor: "humidity", lower: 45, upper: 70 },
     furnaceTemp: { sensor: "furnaceTemp", lower: 140, upper: 450 },
-    blowerTemp: { sensor: "blowerTemp", lower: 0, upper: 95 },
+    blowerTemp: { sensor: "blowerTemp", lower: 140, upper: 450 },
   };
 }
 
@@ -65,7 +65,7 @@ export function createMockOvens(now = new Date()): Oven[] {
       ? new Date(now.getTime() - seed.stoppedHoursAgo * 60 * 60 * 1000).toISOString()
       : undefined;
 
-    return {
+    const oven = {
       id: `oven-${seed.number}`,
       number: seed.number,
       name: `เตา ${seed.number}`,
@@ -80,20 +80,17 @@ export function createMockOvens(now = new Date()): Oven[] {
       readings: createSensorSnapshot(seed.readings, updatedAt),
       limits: createDefaultLimits(),
     };
+
+    return {
+      ...oven,
+      status: deriveOvenStatus(oven),
+    };
   });
 }
 
 export function deriveOvenStatus(oven: Oven): OvenStatus {
   if (!oven.enabled) return "disabled";
   if (isStale(oven.lastUpdatedAt)) return "offline";
-
-  const alarms = buildLimitAlarms(oven.id, oven.name, oven.readings, oven.limits);
-  const severity = getWorstSeverity(
-    alarms.map((alarm) => (alarm.severity === "offline" ? "danger" : alarm.severity)),
-  );
-
-  if (severity === "danger") return "danger";
-  if (severity === "warning") return "warning";
   return oven.startedAt && !oven.stoppedAt ? "open" : "closed";
 }
 

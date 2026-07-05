@@ -17,7 +17,9 @@ export function SensorGauge({ sensor, value, limit }: { sensor: SensorKey; value
       </div>
       <div className="gauge-visual">
         <svg className="gauge-svg" viewBox="0 0 120 72" aria-hidden="true">
-          <path className="gauge-zone gauge-zone-normal" d="M 14 62 A 46 46 0 0 1 106 62" pathLength={100} />
+          <path className="gauge-threshold gauge-threshold-low" d="M 14 62 A 46 46 0 0 1 106 62" pathLength={100} />
+          <path className="gauge-threshold gauge-threshold-ok" d="M 14 62 A 46 46 0 0 1 106 62" pathLength={100} />
+          <path className="gauge-threshold gauge-threshold-high" d="M 14 62 A 46 46 0 0 1 106 62" pathLength={100} />
           <path className="gauge-bg" d="M 14 62 A 46 46 0 0 1 106 62" pathLength={100} />
           <path
             className="gauge-fill"

@@ -3,8 +3,22 @@ import { sensorByKey } from "./sensors";
 
 export type ReadingState = "normal" | "warning" | "danger";
 
+export const temperatureLimitSensors: SensorKey[] = ["chamberTemp", "furnaceTemp"];
+
+export function usesTemperatureLimit(sensor: SensorKey): boolean {
+  return sensor === "chamberTemp" || sensor === "furnaceTemp" || sensor === "blowerTemp";
+}
+
+export function getLimitSourceSensor(sensor: SensorKey): SensorKey | null {
+  if (sensor === "chamberTemp") return "chamberTemp";
+  if (sensor === "furnaceTemp" || sensor === "blowerTemp") return "furnaceTemp";
+  return null;
+}
+
 export function getReadingState(value: number, sensor: SensorKey, limits: LimitMap): ReadingState {
-  const limit = limits[sensor];
+  const sourceSensor = getLimitSourceSensor(sensor);
+  if (!sourceSensor) return "normal";
+  const limit = limits[sourceSensor];
   const upperDanger = limit.upper + Math.max((limit.upper - limit.lower) * 0.12, 5);
   const lowerDanger = limit.lower - Math.max((limit.upper - limit.lower) * 0.12, 5);
 
@@ -36,10 +50,14 @@ export function buildLimitAlarms(
   limits: LimitMap,
 ): Alarm[] {
   return Object.values(readings).flatMap((reading) => {
+    if (!usesTemperatureLimit(reading.key)) return [];
+
     const state = getReadingState(reading.value, reading.key, limits);
     if (state === "normal") return [];
 
-    const limit = limits[reading.key];
+    const sourceSensor = getLimitSourceSensor(reading.key);
+    if (!sourceSensor) return [];
+    const limit = limits[sourceSensor];
     const isUpper = reading.value > limit.upper;
     const threshold = isUpper ? limit.upper : limit.lower;
     const severity: AlarmSeverity = state;

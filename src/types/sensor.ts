@@ -42,5 +42,6 @@ export type HistoryQuery = {
   preset: HistoryRangePreset;
   startAt?: string;
   endAt?: string;
+  cycleNumber?: number;
   sensors: SensorKey[];
 };

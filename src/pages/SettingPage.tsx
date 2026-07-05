@@ -7,7 +7,9 @@ import { PageHeader } from "../components/ui/PageHeader";
 import { StatusBadge } from "../components/ui/StatusBadge";
 import type { LimitMap, OvenUpdateInput, SensorKey } from "../types";
 import { formatDateTime } from "../utils/format";
-import { allSensorKeys, sensorByKey } from "../utils/sensors";
+import { sensorByKey } from "../utils/sensors";
+
+const editableLimitSensors: SensorKey[] = ["chamberTemp", "furnaceTemp"];
 
 export function SettingPage() {
   const { ovens, auditEvents, saveLimits, updateOven, addOven } = useAppData();
@@ -57,13 +59,33 @@ export function SettingPage() {
     event.preventDefault();
     if (!oven || !limits) return;
     setSaving(true);
-    await saveLimits(oven.id, limits);
+    await saveLimits(oven.id, {
+      ...limits,
+      blowerTemp: {
+        ...limits.blowerTemp,
+        lower: limits.furnaceTemp.lower,
+        upper: limits.furnaceTemp.upper,
+      },
+    });
     setSaving(false);
   }
 
   function updateLimit(sensor: SensorKey, field: "lower" | "upper", value: string) {
     setLimits((current) => {
       if (!current) return current;
+      if (sensor === "furnaceTemp") {
+        return {
+          ...current,
+          furnaceTemp: {
+            ...current.furnaceTemp,
+            [field]: Number(value),
+          },
+          blowerTemp: {
+            ...current.blowerTemp,
+            [field]: Number(value),
+          },
+        };
+      }
       return {
         ...current,
         [sensor]: {
@@ -171,9 +193,9 @@ export function SettingPage() {
               </div>
             </div>
             <div className="limit-form">
-              {allSensorKeys.map((sensor) => (
+              {editableLimitSensors.map((sensor) => (
                 <div className="limit-row" key={sensor}>
-                  <strong>{sensorByKey[sensor].label}</strong>
+                  <strong>{sensor === "furnaceTemp" ? "อุณหภูมิเตาเผา / Blower" : sensorByKey[sensor].label}</strong>
                   <label className="field">
                     <span>Lower</span>
                     <input
