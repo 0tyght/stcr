@@ -92,6 +92,7 @@ a {
 .workspace {
   min-width: 0;
   overflow: hidden;
+  padding-top: 48px;
 }
 
 .view-root {
@@ -347,15 +348,25 @@ a {
    Topbar
    ========================= */
 
+/* =========================
+ Topbar
+ ========================= */
+
 .topbar {
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 20;
+  right: 0;
+  left: var(--sidebar-width);
+  z-index: 100;
   display: flex;
+  height: 48px;
   min-height: 48px;
+  max-height: 48px;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 12px;
+  overflow: hidden;
+  flex-wrap: nowrap;
   padding: 6px 16px;
   border-bottom: 1px solid var(--line);
   background: rgba(17, 22, 29, 0.97);
@@ -363,36 +374,49 @@ a {
 }
 
 .topbar-left {
-  display: grid;
-  grid-template-columns: max-content minmax(260px, 500px);
-  align-items: center;
-  gap: 18px;
+  display: flex;
   min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 14px;
+  overflow: hidden;
 }
 
 .breadcrumbs {
   display: flex;
   min-width: 0;
+  max-width: min(34vw, 360px);
+  flex: 0 1 auto;
   align-items: center;
   gap: 8px;
+  overflow: hidden;
   color: var(--muted);
   font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
 }
 
+.breadcrumbs span,
 .breadcrumbs strong {
+  min-width: 0;
   overflow: hidden;
-  color: var(--ink);
+  white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.breadcrumbs strong {
+  color: var(--ink);
 }
 
 .global-search {
   display: flex;
-  min-height: 34px;
-  min-width: 0;
+  height: 34px;
+  min-width: 160px;
+  max-width: 520px;
+  flex: 1 1 240px;
   align-items: center;
   gap: 8px;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: #0d1117;
@@ -401,6 +425,8 @@ a {
 }
 
 .global-search input {
+  width: 100%;
+  min-width: 0;
   min-height: 30px;
   border: 0;
   background: transparent;
@@ -413,14 +439,31 @@ a {
 }
 
 kbd {
+  flex: 0 0 auto;
   border: 1px solid var(--line);
   border-radius: 3px;
   color: var(--muted-soft);
   font-size: 11px;
   padding: 1px 5px;
+  white-space: nowrap;
 }
 
-.topbar-actions,
+.topbar-actions {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.topbar-actions > * {
+  flex: 0 0 auto;
+}
+
 .page-actions,
 .download-row {
   display: flex;
@@ -440,16 +483,77 @@ kbd {
 .user-chip {
   display: inline-flex;
   min-height: 32px;
+  max-width: 150px;
   align-items: center;
   gap: 7px;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: #111820;
   color: var(--muted);
   padding: 0 9px;
   font-weight: 650;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
+.theme-switch,
+.toolbar-button,
+.icon-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 1280px) {
+  .topbar {
+    gap: 10px;
+    padding: 6px 12px;
+  }
+
+  .topbar-left {
+    gap: 12px;
+  }
+
+  .global-search {
+    max-width: 360px;
+    min-width: 140px;
+  }
+
+  .topbar-actions .toolbar-button:first-child {
+    display: none;
+  }
+}
+
+@media (max-width: 1160px) {
+  .breadcrumbs {
+    max-width: 250px;
+  }
+
+  .topbar-actions .toolbar-button:nth-child(2),
+  .topbar-actions .icon-button[aria-label="Display mode"],
+  .topbar-actions .icon-button[aria-label="Help"] {
+    display: none;
+  }
+
+  .theme-switch > span:last-child {
+    display: none;
+  }
+}
+
+@media (max-width: 980px) {
+  .breadcrumbs span:not(:first-child),
+  .breadcrumbs strong {
+    display: none;
+  }
+
+  .global-search {
+    max-width: 280px;
+  }
+
+  .live-clock {
+    display: none;
+  }
+}
 /* =========================
    Page Header
    ========================= */
