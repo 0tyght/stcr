@@ -8,13 +8,13 @@ const SVG_WIDTH = 220;
 const SVG_HEIGHT = 118;
 
 const CENTER_X = 110;
-const CENTER_Y = 100;
+const CENTER_Y = 104;
 
-const OUTER_RADIUS = 62;
-const INNER_RADIUS = 51;
+const OUTER_RADIUS = 74;
+const INNER_RADIUS = 61;
 
-const OUTER_STROKE_WIDTH = 5;
-const INNER_STROKE_WIDTH = 16;
+const OUTER_STROKE_WIDTH = 6;
+const INNER_STROKE_WIDTH = 18;
 
 export function SensorGauge({
   sensor,
@@ -81,6 +81,15 @@ export function SensorGauge({
           role="img"
           aria-label={`${definition.label} ${formattedValue}${unit}`}
         >
+          <path
+            d={describeGaugeArc(OUTER_RADIUS, 0, 1)}
+            fill="none"
+            stroke="var(--surface-strong)"
+            strokeWidth={OUTER_STROKE_WIDTH}
+            strokeLinecap="round"
+            opacity={0.9}
+          />
+
           {outerSegments.map((segment, index) => {
             const fromRatio = clamp(
               (segment.from - scale.min) / Math.max(scale.max - scale.min, 1),
@@ -104,7 +113,7 @@ export function SensorGauge({
                 stroke={segment.color}
                 strokeWidth={OUTER_STROKE_WIDTH}
                 strokeLinecap="round"
-                opacity={0.96}
+                opacity={0.95}
               />
             );
           })}
@@ -149,7 +158,7 @@ export function SensorGauge({
 
 function getLimitScale(limit: LimitRule): { min: number; max: number } {
   const range = Math.max(limit.upper - limit.lower, 1);
-  const padding = Math.max(range * 0.35, 10);
+  const padding = Math.max(range * 0.28, 8);
 
   return {
     min: Math.max(0, limit.lower - padding),
@@ -176,10 +185,9 @@ function getGaugeTone(value: number, lower: number, upper: number): GaugeTone {
   if (value < lower) return "warning";
 
   const range = Math.max(upper - lower, 1);
-  const warningHigh = upper - range * 0.08;
-  const warningLow = lower + range * 0.08;
+  const warningGap = range * 0.08;
 
-  if (value >= warningHigh || value <= warningLow) {
+  if (value >= upper - warningGap || value <= lower + warningGap) {
     return "warning";
   }
 
@@ -202,13 +210,6 @@ function describeGaugeArc(radius: number, fromRatio: number, toRatio: number): s
   const start = pointOnGauge(radius, fromRatio);
   const end = pointOnGauge(radius, toRatio);
 
-  // เกจตัวนี้วาดเป็นครึ่งวงกลมเท่านั้น (กวาดมุมสูงสุด 180°)
-  // จึงไม่มีกรณีที่ส่วนโค้งจะเกิน 180° เลย (ซึ่งเป็นเงื่อนไขเดียวที่ต้องใช้ large-arc-flag = 1)
-  // เดิมโค้ดเช็ค toRatio - fromRatio > 0.5 ซึ่งผิด เพราะ 0.5 ของ ratio
-  // เทียบเท่ามุมแค่ 90° ไม่ใช่ 180° ทำให้บาง segment ถูกวาดอ้อมไปทางไกล (reflex arc)
-  // กลายเป็นวงที่บิดเบี้ยว จึงต้องล็อกให้เป็น "0" เสมอ
-  const largeArcFlag = "0";
-
   return [
     "M",
     start.x.toFixed(3),
@@ -217,7 +218,7 @@ function describeGaugeArc(radius: number, fromRatio: number, toRatio: number): s
     radius,
     radius,
     0,
-    largeArcFlag,
+    "0",
     1,
     end.x.toFixed(3),
     end.y.toFixed(3),
