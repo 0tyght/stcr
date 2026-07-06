@@ -67,6 +67,10 @@ a {
   color: inherit;
 }
 
+/* =========================
+   Layout
+   ========================= */
+
 .app-shell {
   display: grid;
   min-height: 100vh;
@@ -74,19 +78,51 @@ a {
   background: var(--bg);
 }
 
+.workspace {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.view-root {
+  min-height: calc(100vh - 48px);
+  padding: 14px 16px 22px;
+  overflow-x: auto;
+}
+
+/* =========================
+   Fixed Sidebar
+   ========================= */
+
 .sidebar {
   position: sticky;
   top: 0;
   z-index: 30;
   display: flex;
   width: var(--sidebar-width);
-  height: 100vh;
   min-width: var(--sidebar-width);
+  max-width: var(--sidebar-width);
+  height: 100vh;
   flex-direction: column;
   overflow: hidden;
   border-right: 1px solid var(--line);
   background: #11161d;
   color: var(--ink);
+  transition: none;
+  box-shadow: none;
+}
+
+.sidebar:hover,
+.sidebar:focus-within,
+.sidebar.is-expanded {
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  max-width: var(--sidebar-width);
+  box-shadow: none;
+}
+
+/* กันกรณีมีปุ่ม hamburger หลุดมาจากไฟล์เก่า */
+.brand-row .icon-button {
+  display: none !important;
 }
 
 .brand-row {
@@ -116,9 +152,10 @@ a {
 }
 
 .brand-text {
-  display: grid;
-  gap: 1px;
+  display: flex;
   min-width: 0;
+  flex-direction: column;
+  line-height: 1.15;
 }
 
 .brand-text strong {
@@ -127,9 +164,8 @@ a {
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.02em;
-  line-height: 1.1;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .brand-text span {
@@ -137,9 +173,125 @@ a {
   color: var(--muted-soft);
   font-size: 11px;
   font-weight: 700;
+  white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.primary-nav {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.nav-item,
+.oven-link {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  border-left: 3px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+  text-decoration: none;
+}
+
+.nav-item {
+  min-height: 42px;
+  justify-content: flex-start;
+  padding: 0 15px;
+  font-weight: 650;
+}
+
+.nav-item span {
+  display: inline;
+  opacity: 1;
+  visibility: visible;
+  white-space: nowrap;
+  transition: none;
+}
+
+.nav-item:hover,
+.nav-item:focus-visible,
+.oven-link:hover,
+.oven-link:focus-visible {
+  background: #171d25;
+  color: var(--ink-strong);
+  outline: none;
+}
+
+.nav-item.active,
+.oven-link.active {
+  border-left-color: var(--orange);
+  background: #1b222c;
+  color: var(--ink-strong);
+}
+
+.oven-nav {
+  display: block;
+  overflow: auto;
+  padding: 6px 0;
+}
+
+.oven-link {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  justify-content: flex-start;
+  padding: 0 11px;
+  border-right: 0;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.oven-label {
+  display: inline-flex;
+  color: var(--ink);
+  opacity: 1;
+  visibility: visible;
   white-space: nowrap;
 }
+
+.oven-word {
+  display: inline;
+}
+
+.mini-status {
+  display: inline-flex;
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-radius: 999px;
+  background: var(--muted-soft);
+  opacity: 1;
+}
+
+.sidebar-footer {
+  display: block;
+  margin-top: auto;
+  padding: 14px 12px 18px;
+  border-top: 1px solid var(--line);
+  color: var(--muted-soft);
+  font-size: 11px;
+  line-height: 1.35;
+  opacity: 1;
+  visibility: visible;
+  white-space: nowrap;
+  transition: none;
+}
+
+.sidebar-footer strong,
+.sidebar-footer span {
+  display: block;
+}
+
+/* =========================
+   Buttons / Toolbar
+   ========================= */
 
 .icon-button,
 .toolbar-button {
@@ -170,104 +322,9 @@ a {
   outline: none;
 }
 
-.primary-nav {
-  display: grid;
-  gap: 2px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.nav-item,
-.oven-link {
-  display: flex;
-  width: 100%;
-  min-height: 42px;
-  align-items: center;
-  gap: 12px;
-  border: 0;
-  border-left: 3px solid transparent;
-  background: transparent;
-  color: var(--muted);
-  text-align: left;
-  text-decoration: none;
-}
-
-.nav-item {
-  padding: 0 15px;
-  font-weight: 650;
-}
-
-.nav-item:hover,
-.nav-item:focus-visible,
-.oven-link:hover,
-.oven-link:focus-visible {
-  background: #171d25;
-  color: var(--ink-strong);
-  outline: none;
-}
-
-.nav-item.active,
-.oven-link.active {
-  border-left-color: var(--orange);
-  background: #1b222c;
-  color: var(--ink-strong);
-}
-
-.nav-item span,
-.sidebar-footer {
-  opacity: 1;
-  white-space: nowrap;
-}
-
-.oven-label {
-  color: var(--ink);
-  opacity: 1;
-  white-space: nowrap;
-}
-
-.oven-word {
-  display: inline;
-}
-
-.oven-nav {
-  overflow: auto;
-  padding: 6px 0;
-}
-
-.oven-link {
-  position: relative;
-  min-height: 34px;
-  padding: 0 11px;
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.mini-status {
-  width: 7px;
-  height: 7px;
-  margin-left: auto;
-  border-radius: 999px;
-  background: var(--muted-soft);
-  opacity: 1;
-}
-
-.sidebar-footer {
-  margin-top: auto;
-  padding: 14px 12px 18px;
-  border-top: 1px solid var(--line);
-  color: var(--muted-soft);
-  font-size: 11px;
-  line-height: 1.35;
-}
-
-.sidebar-footer strong,
-.sidebar-footer span {
-  display: block;
-}
-
-.workspace {
-  min-width: 0;
-}
+/* =========================
+   Topbar
+   ========================= */
 
 .topbar {
   position: sticky;
@@ -372,10 +429,9 @@ kbd {
   font-weight: 650;
 }
 
-.view-root {
-  min-height: calc(100vh - 48px);
-  padding: 14px 16px 22px;
-}
+/* =========================
+   Page Header
+   ========================= */
 
 .page-header {
   display: flex;
@@ -419,6 +475,10 @@ kbd {
   font-size: 11px;
   font-weight: 700;
 }
+
+/* =========================
+   Panels / Cards
+   ========================= */
 
 .panel,
 .metric-card,
@@ -523,6 +583,10 @@ kbd {
 .tone-disabled strong {
   color: var(--purple);
 }
+
+/* =========================
+   Forms / Inputs
+   ========================= */
 
 .dashboard-toolbar,
 .toolbar-grid {
@@ -642,6 +706,10 @@ select:focus {
   color: var(--ink-strong);
 }
 
+/* =========================
+   Status
+   ========================= */
+
 .status-badge {
   display: inline-flex;
   min-height: 24px;
@@ -710,6 +778,10 @@ select:focus {
 .mini-status.status-disabled {
   background: var(--purple);
 }
+
+/* =========================
+   Oven Cards
+   ========================= */
 
 .oven-grid {
   display: grid;
@@ -897,6 +969,10 @@ select:focus {
   width: 100%;
 }
 
+/* =========================
+   Detail / Operation
+   ========================= */
+
 .detail-grid,
 .detail-overview-grid {
   display: grid;
@@ -945,6 +1021,10 @@ select:focus {
   color: var(--ink-strong);
   font-size: 14px;
 }
+
+/* =========================
+   Status Banner / Range
+   ========================= */
 
 .status-banner {
   display: grid;
@@ -1043,6 +1123,10 @@ select:focus {
   font-size: 12px;
   font-weight: 650;
 }
+
+/* =========================
+   Metrics / Gauge
+   ========================= */
 
 .metrics-grid {
   display: grid;
@@ -1313,6 +1397,10 @@ select:focus {
   color: var(--offline);
 }
 
+/* =========================
+   Chart
+   ========================= */
+
 .chart-panel {
   margin-bottom: 8px;
 }
@@ -1467,6 +1555,10 @@ select:focus {
   border-top: 1px dashed;
 }
 
+/* =========================
+   Alarm / Table
+   ========================= */
+
 .alarm-list,
 .settings-stack,
 .audit-list,
@@ -1554,6 +1646,10 @@ tbody tr:hover {
   color: var(--muted-soft);
   font-size: 11px;
 }
+
+/* =========================
+   Report
+   ========================= */
 
 .report-layout {
   display: grid;
@@ -1747,6 +1843,10 @@ tbody tr:hover {
   border-bottom: 1px solid #111827;
 }
 
+/* =========================
+   Settings
+   ========================= */
+
 .settings-layout {
   display: grid;
   grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.1fr);
@@ -1803,6 +1903,10 @@ tbody tr:hover {
   color: var(--muted);
   font-size: 12px;
 }
+
+/* =========================
+   Empty / Loading / Login
+   ========================= */
 
 .empty-state,
 .loading-state {
@@ -1888,6 +1992,10 @@ tbody tr:hover {
   display: none;
 }
 
+/* =========================
+   Responsive
+   ========================= */
+
 @media (max-width: 1240px) {
   .topbar-left {
     grid-template-columns: 1fr;
@@ -1922,59 +2030,86 @@ tbody tr:hover {
 }
 
 @media (max-width: 860px) {
+  body {
+    min-width: 860px;
+  }
+
   .app-shell {
-    display: block;
+    display: grid;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   }
 
   .sidebar {
-    position: relative;
-    width: 100%;
-    height: auto;
+    position: sticky;
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    max-width: var(--sidebar-width);
+    height: 100vh;
   }
 
+  .sidebar.is-expanded {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    max-width: var(--sidebar-width);
+    box-shadow: none;
+  }
 
   .brand-row {
-    min-height: 48px;
     justify-content: flex-start;
-    padding: 0 12px;
+  }
+
+  .brand-row .icon-button {
+    display: none !important;
   }
 
   .primary-nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    padding: 10px 0;
   }
 
   .nav-item {
     justify-content: flex-start;
     min-height: 42px;
-    padding: 0 12px;
+    padding: 0 15px;
   }
 
-  .oven-nav {
-    display: flex;
-    overflow-x: auto;
-    padding: 0;
-  }
-
-  .oven-link {
-    width: auto;
-    min-width: 78px;
-    justify-content: center;
-    padding: 0 10px;
-    border-right: 1px solid var(--line);
-    border-left: 0;
-  }
-
-  .oven-label {
+  .nav-item span {
+    display: inline;
     opacity: 1;
   }
 
+  .oven-nav {
+    display: block;
+    overflow: auto;
+    padding: 6px 0;
+  }
+
+  .oven-link {
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-start;
+    padding: 0 11px;
+    border-right: 0;
+    border-left: 3px solid transparent;
+  }
+
+  .oven-link.active {
+    border-left-color: var(--orange);
+  }
+
+  .oven-link .mini-status {
+    display: inline-flex;
+  }
+
+  .sidebar-footer {
+    display: block;
+    opacity: 1;
+  }
 
   .topbar {
-    position: relative;
-    align-items: flex-start;
-    flex-direction: column;
-    padding: 12px;
+    position: sticky;
+    top: 0;
   }
 
   .topbar-actions {
@@ -2041,6 +2176,10 @@ tbody tr:hover {
   }
 }
 
+/* =========================
+   Print
+   ========================= */
+
 @media print {
   body {
     background: #ffffff;
@@ -2086,209 +2225,5 @@ tbody tr:hover {
 
   .time-series-chart {
     height: 290px;
-  }
-}
-/* =========================================================
-   Fixed Sidebar: ไม่ย่อ / ไม่ hover ขยาย / ไม่บังเนื้อหา
-   ========================================================= */
-
-:root {
-  --sidebar-width: 232px;
-  --sidebar-expanded: 232px;
-}
-
-.app-shell {
-  display: grid;
-  min-height: 100vh;
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  background: var(--bg);
-}
-
-.sidebar {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  display: flex;
-  width: var(--sidebar-width);
-  min-width: var(--sidebar-width);
-  max-width: var(--sidebar-width);
-  height: 100vh;
-  flex-direction: column;
-  overflow: hidden;
-  border-right: 1px solid var(--line);
-  background: #11161d;
-  color: var(--ink);
-  transition: none;
-  box-shadow: none;
-}
-
-/* ปิดระบบ hover แล้วขยายเอง */
-.sidebar:hover,
-.sidebar:focus-within,
-.sidebar.is-expanded {
-  width: var(--sidebar-width);
-  min-width: var(--sidebar-width);
-  max-width: var(--sidebar-width);
-  box-shadow: none;
-}
-
-/* หัวโลโก้ */
-.brand-row {
-  display: flex;
-  min-height: 48px;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-  padding: 0 10px;
-  border-bottom: 1px solid var(--line);
-  background: #10151b;
-}
-
-.brand-mark {
-  flex: 0 0 34px;
-}
-
-.brand-text {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  line-height: 1.15;
-}
-
-.brand-text strong {
-  overflow: hidden;
-  color: var(--ink-strong);
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.brand-text span {
-  overflow: hidden;
-  color: var(--muted-soft);
-  font-size: 11px;
-  font-weight: 650;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-/* เมนูหลักให้แสดงข้อความตลอด */
-.nav-item span,
-.sidebar-footer {
-  opacity: 1;
-  white-space: nowrap;
-  transition: none;
-}
-
-.sidebar:hover .nav-item span,
-.sidebar:focus-within .nav-item span,
-.sidebar.is-expanded .nav-item span,
-.sidebar:hover .sidebar-footer,
-.sidebar:focus-within .sidebar-footer,
-.sidebar.is-expanded .sidebar-footer {
-  opacity: 1;
-}
-
-/* รายการเตาให้แสดงคำว่า เตา ตลอด */
-.oven-word {
-  display: inline;
-}
-
-.sidebar:hover .oven-word,
-.sidebar:focus-within .oven-word,
-.sidebar.is-expanded .oven-word {
-  display: inline;
-}
-
-.oven-label {
-  opacity: 1;
-  white-space: nowrap;
-}
-
-/* กันไม่ให้เนื้อหาถูกบัง */
-.workspace {
-  min-width: 0;
-  overflow: hidden;
-}
-
-.view-root {
-  min-height: calc(100vh - 48px);
-  padding: 14px 16px 22px;
-  overflow-x: auto;
-}
-
-/* ปรับ mobile ไม่ให้กลับไปซ่อนข้อความ */
-@media (max-width: 860px) {
-  .app-shell {
-    display: grid;
-    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  }
-
-  .sidebar {
-    position: sticky;
-    width: var(--sidebar-width);
-    min-width: var(--sidebar-width);
-    max-width: var(--sidebar-width);
-    height: 100vh;
-  }
-
-  .sidebar.is-expanded {
-    width: var(--sidebar-width);
-    box-shadow: none;
-  }
-
-  .brand-row {
-    justify-content: flex-start;
-  }
-
-  .primary-nav {
-    display: grid;
-    grid-template-columns: 1fr;
-    padding: 10px 0;
-  }
-
-  .nav-item {
-    justify-content: flex-start;
-    min-height: 42px;
-    padding: 0 15px;
-  }
-
-  .nav-item span {
-    display: inline;
-    opacity: 1;
-  }
-
-  .oven-nav {
-    display: block;
-    overflow: auto;
-    padding: 6px 0;
-  }
-
-  .oven-link {
-    width: 100%;
-    min-width: 0;
-    justify-content: flex-start;
-    padding: 0 11px;
-    border-right: 0;
-    border-left: 3px solid transparent;
-  }
-
-  .oven-link.active {
-    border-left-color: var(--orange);
-  }
-
-  .oven-link .mini-status {
-    display: inline-flex;
-  }
-
-  .sidebar-footer {
-    display: block;
-    opacity: 1;
-  }
-
-  .topbar {
-    position: sticky;
-    top: 0;
   }
 }
