@@ -1,20 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
 import type { LimitRule, SensorKey } from "../../types";
 import { formatNumber } from "../../utils/format";
 import { sensorByKey } from "../../utils/sensors";
 
 type GaugeTone = "normal" | "warning" | "danger";
-type UiTheme = "dark" | "company";
 
 const SVG_WIDTH = 220;
-const SVG_HEIGHT = 140;
+const SVG_HEIGHT = 128;
+
 const CENTER_X = 110;
-const CENTER_Y = 112;
-const OUTER_RADIUS = 78;
-const INNER_RADIUS = 66;
-const START_ANGLE = 210;
-const END_ANGLE = 330;
-const TOTAL_SWEEP = END_ANGLE - START_ANGLE;
+const CENTER_Y = 104;
+
+const OUTER_RADIUS = 84;
+const INNER_RADIUS = 70;
 
 export function SensorGauge({
   sensor,
@@ -30,13 +27,13 @@ export function SensorGauge({
   const definition = sensorByKey[sensor];
   const unit = definition.unit === "C" ? "°C" : "%";
   const formattedValue = formatNumber(value, sensor === "furnaceTemp" ? 0 : 1);
-  const theme = usePageTheme();
 
   const hasLimit = showLimit && !!limit;
   const scale = hasLimit ? getLimitScale(limit) : getDefaultScale(sensor, value);
-  const tone = hasLimit ? getGaugeTone(value, limit.lower, limit.upper) : "normal";
-
   const ratio = clamp((value - scale.min) / Math.max(scale.max - scale.min, 1), 0, 1);
+
+  const tone = hasLimit ? getGaugeTone(value, limit.lower, limit.upper) : "normal";
+  const progressColor = hasLimit ? getToneColor(tone) : definition.color;
 
   const outerSegments = hasLimit
     ? [
@@ -60,86 +57,42 @@ export function SensorGauge({
         {
           from: scale.min,
           to: scale.max,
-          color: withAlpha(definition.color, 0.55),
+          color: withAlpha(definition.color, 0.72),
         },
       ];
 
-  const palette = getGaugePalette(theme);
-  const progressColor = hasLimit ? getToneColor(tone) : definition.color;
-  const toneLabel = hasLimit ? getToneLabel(tone) : "ปกติ";
-  const progressEndAngle = START_ANGLE + TOTAL_SWEEP * ratio;
-
-  const gaugeId = useMemo(
-    () =>
-      `gauge-grad-${sensor}-${Math.round(value * 10)}-${
-        hasLimit ? `${limit?.lower}-${limit?.upper}` : "nolimit"
-      }`,
-    [sensor, value, hasLimit, limit?.lower, limit?.upper],
-  );
-
   return (
-    <article
-      className="sensor-gauge"
-      style={{
-        border: `1px solid ${palette.cardBorder}`,
-        background: palette.cardBackground,
-        borderRadius: 8,
-        padding: 10,
-        minHeight: 130,
-      }}
-    >
-      <div
-        className="sensor-gauge-head"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 8,
-          marginBottom: 6,
-        }}
-      >
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 700,
-            color: palette.label,
-          }}
-        >
-          {definition.label}
-        </span>
-
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 800,
-            color: getToneTextColor(tone),
-          }}
-        >
-          {toneLabel}
-        </span>
+    <article className={`gauge-card tone-${tone} ${hasLimit ? "" : "no-limit"}`}>
+      <div className="gauge-card-head">
+        <span>{definition.label}</span>
+        <strong style={{ color: hasLimit ? getToneColor(tone) : definition.color }}>
+          {hasLimit ? getToneLabel(tone) : "ปกติ"}
+        </strong>
       </div>
 
       <div
-        className="sensor-gauge-body"
+        className="gauge-visual"
         style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
+          minHeight: 124,
+          height: 124,
+          marginTop: 2,
+          overflow: "hidden",
         }}
       >
         <svg
-          width="100%"
+          className="gauge-svg"
           viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
+          width="220"
+          height="128"
           role="img"
           aria-label={`${definition.label} ${formattedValue}${unit}`}
+          style={{
+            width: "220px",
+            maxWidth: "100%",
+            height: "128px",
+            display: "block",
+          }}
         >
-          <defs>
-            <linearGradient id={gaugeId} x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor={withAlpha(progressColor, 0.72)} />
-              <stop offset="100%" stopColor={progressColor} />
-            </linearGradient>
-          </defs>
-
           {outerSegments.map((segment, index) => {
             const fromRatio = clamp(
               (segment.from - scale.min) / Math.max(scale.max - scale.min, 1),
@@ -153,57 +106,57 @@ export function SensorGauge({
               1,
             );
 
-            const startAngle = START_ANGLE + TOTAL_SWEEP * fromRatio;
-            const endAngle = START_ANGLE + TOTAL_SWEEP * toRatio;
-
             if (toRatio <= fromRatio) return null;
 
             return (
               <path
                 key={`${segment.color}-${index}`}
-                d={describeArc(CENTER_X, CENTER_Y, OUTER_RADIUS, startAngle, endAngle)}
+                d={describeGaugeArc(OUTER_RADIUS, fromRatio, toRatio)}
                 fill="none"
                 stroke={segment.color}
-                strokeWidth={6}
+                strokeWidth={5}
                 strokeLinecap="round"
-                opacity={0.95}
+                opacity={0.96}
               />
             );
           })}
 
           <path
-            d={describeArc(CENTER_X, CENTER_Y, INNER_RADIUS, START_ANGLE, END_ANGLE)}
+            d={describeGaugeArc(INNER_RADIUS, 0, 1)}
             fill="none"
-            stroke={palette.track}
+            stroke="var(--surface-strong)"
             strokeWidth={18}
             strokeLinecap="round"
+            opacity={1}
           />
 
           <path
-            d={describeArc(CENTER_X, CENTER_Y, INNER_RADIUS, START_ANGLE, progressEndAngle)}
+            d={describeGaugeArc(INNER_RADIUS, 0, ratio)}
             fill="none"
-            stroke={`url(#${gaugeId})`}
+            stroke={progressColor}
             strokeWidth={18}
             strokeLinecap="round"
+            opacity={1}
           />
 
           <text
             x={CENTER_X}
-            y={74}
+            y={70}
             textAnchor="middle"
+            dominantBaseline="middle"
             style={{
-              fontSize: 20,
-              fontWeight: 800,
-              fill: palette.value,
+              fill: "var(--ink-strong)",
+              fontSize: 24,
+              fontWeight: 850,
             }}
           >
             {formattedValue}
             <tspan
-              dx="3"
+              dx="4"
               style={{
-                fontSize: 10,
-                fontWeight: 700,
-                fill: palette.unit,
+                fill: "var(--muted)",
+                fontSize: 12,
+                fontWeight: 800,
               }}
             >
               {unit}
@@ -214,10 +167,11 @@ export function SensorGauge({
             x={CENTER_X}
             y={92}
             textAnchor="middle"
+            dominantBaseline="middle"
             style={{
-              fontSize: 13,
-              fontWeight: 700,
-              fill: palette.caption,
+              fill: "var(--muted)",
+              fontSize: 15,
+              fontWeight: 800,
             }}
           >
             {definition.shortLabel}
@@ -225,12 +179,13 @@ export function SensorGauge({
 
           <text
             x={CENTER_X}
-            y={112}
+            y={116}
             textAnchor="middle"
+            dominantBaseline="middle"
             style={{
-              fontSize: 10,
-              fontWeight: 600,
-              fill: palette.helper,
+              fill: "var(--muted-soft)",
+              fontSize: 11,
+              fontWeight: 700,
             }}
           >
             {hasLimit
@@ -245,79 +200,22 @@ export function SensorGauge({
   );
 }
 
-function usePageTheme(): UiTheme {
-  const [theme, setTheme] = useState<UiTheme>(() => getCurrentTheme());
-
-  useEffect(() => {
-    const root = document.documentElement;
-
-    const sync = () => {
-      setTheme(getCurrentTheme());
-    };
-
-    sync();
-
-    const observer = new MutationObserver(sync);
-
-    observer.observe(root, {
-      attributes: true,
-      attributeFilter: ["data-ui-theme"],
-    });
-
-    window.addEventListener("storage", sync);
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("storage", sync);
-    };
-  }, []);
-
-  return theme;
-}
-
-function getCurrentTheme(): UiTheme {
-  const rootTheme = document.documentElement.dataset.uiTheme;
-  return rootTheme === "company" ? "company" : "dark";
-}
-
-function getGaugePalette(theme: UiTheme) {
-  if (theme === "company") {
-    return {
-      cardBackground: "#ffffff",
-      cardBorder: "#d9e2ec",
-      label: "#6b7280",
-      track: "#253042",
-      value: "#253042",
-      unit: "#64748b",
-      caption: "#374151",
-      helper: "#94a3b8",
-    };
-  }
-
-  return {
-    cardBackground: "transparent",
-    cardBorder: "#1f2937",
-    label: "#cbd5e1",
-    track: "#273142",
-    value: "#f8fafc",
-    unit: "#cbd5e1",
-    caption: "#d8dee9",
-    helper: "#94a3b8",
-  };
-}
-
 function getLimitScale(limit: LimitRule): { min: number; max: number } {
   const range = Math.max(limit.upper - limit.lower, 1);
+  const extra = Math.max(range * 0.25, 10);
 
   return {
     min: 0,
-    max: limit.upper + range,
+    max: limit.upper + extra,
   };
 }
 
 function getDefaultScale(sensor: SensorKey, value: number): { min: number; max: number } {
   if (sensor === "humidity") {
-    return { min: 0, max: 100 };
+    return {
+      min: 0,
+      max: 100,
+    };
   }
 
   return {
@@ -344,49 +242,32 @@ function getToneColor(tone: GaugeTone): string {
   return "#22c55e";
 }
 
-function getToneTextColor(tone: GaugeTone): string {
-  if (tone === "danger") return "#ef4444";
-  if (tone === "warning") return "#eab308";
-  return "#22c55e";
-}
-
-function describeArc(
-  cx: number,
-  cy: number,
-  radius: number,
-  startAngle: number,
-  endAngle: number,
-): string {
-  const start = polarToCartesian(cx, cy, radius, startAngle);
-  const end = polarToCartesian(cx, cy, radius, endAngle);
-  const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+function describeGaugeArc(radius: number, fromRatio: number, toRatio: number): string {
+  const start = pointOnGauge(radius, fromRatio);
+  const end = pointOnGauge(radius, toRatio);
+  const largeArcFlag = toRatio - fromRatio > 0.5 ? "1" : "0";
 
   return [
     "M",
-    start.x,
-    start.y,
+    start.x.toFixed(3),
+    start.y.toFixed(3),
     "A",
     radius,
     radius,
     0,
     largeArcFlag,
     1,
-    end.x,
-    end.y,
+    end.x.toFixed(3),
+    end.y.toFixed(3),
   ].join(" ");
 }
 
-function polarToCartesian(
-  cx: number,
-  cy: number,
-  radius: number,
-  angleInDegrees: number,
-) {
-  const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180;
+function pointOnGauge(radius: number, ratio: number) {
+  const angle = Math.PI + Math.PI * clamp(ratio, 0, 1);
 
   return {
-    x: cx + radius * Math.cos(angleInRadians),
-    y: cy + radius * Math.sin(angleInRadians),
+    x: CENTER_X + radius * Math.cos(angle),
+    y: CENTER_Y + radius * Math.sin(angle),
   };
 }
 
