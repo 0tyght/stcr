@@ -296,3 +296,17 @@
   background: #ffffff;
   color: var(--ink-strong);
 }
+/* =========================
+   Light Theme Open Oven Background
+   ใช้แค่พื้นหลังไล่สีเขียวจางด้านบนแล้วเฟดลงไป
+   ไม่แก้หัวการ์ด
+   ========================= */
+
+:root[data-ui-theme="company"] .oven-card.status-open {
+  background: linear-gradient(
+    180deg,
+    rgba(115, 191, 105, 0.1) 0%,
+    rgba(115, 191, 105, 0.055) 24%,
+    #ffffff 52%
+  ) !important;
+}
