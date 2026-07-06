@@ -8,17 +8,13 @@ const SVG_WIDTH = 220;
 const SVG_HEIGHT = 118;
 
 const CENTER_X = 110;
-const CENTER_Y = 106;
+const CENTER_Y = 100;
 
-const START_ANGLE = 205;
-const END_ANGLE = 335;
-const TOTAL_ANGLE = END_ANGLE - START_ANGLE;
+const OUTER_RADIUS = 62;
+const INNER_RADIUS = 51;
 
-const OUTER_RADIUS = 72;
-const INNER_RADIUS = 61;
-
-const OUTER_WIDTH = 4;
-const INNER_WIDTH = 16;
+const OUTER_STROKE_WIDTH = 5;
+const INNER_STROKE_WIDTH = 16;
 
 export function SensorGauge({
   sensor,
@@ -37,12 +33,12 @@ export function SensorGauge({
 
   const hasLimit = showLimit && !!limit;
   const scale = hasLimit ? getLimitScale(limit) : getDefaultScale(sensor, value);
-
   const ratio = clamp((value - scale.min) / Math.max(scale.max - scale.min, 1), 0, 1);
+
   const tone = hasLimit ? getGaugeTone(value, limit.lower, limit.upper) : "normal";
   const progressColor = hasLimit ? getToneColor(tone) : definition.color;
 
-  const zones = hasLimit
+  const outerSegments = hasLimit
     ? [
         {
           from: scale.min,
@@ -64,7 +60,7 @@ export function SensorGauge({
         {
           from: scale.min,
           to: scale.max,
-          color: definition.color,
+          color: withAlpha(definition.color, 0.72),
         },
       ];
 
@@ -85,23 +81,15 @@ export function SensorGauge({
           role="img"
           aria-label={`${definition.label} ${formattedValue}${unit}`}
         >
-          <path
-            d={describeArc(INNER_RADIUS, 0, 1)}
-            fill="none"
-            stroke="var(--surface-strong)"
-            strokeWidth={INNER_WIDTH}
-            strokeLinecap="round"
-          />
-
-          {zones.map((zone, index) => {
+          {outerSegments.map((segment, index) => {
             const fromRatio = clamp(
-              (zone.from - scale.min) / Math.max(scale.max - scale.min, 1),
+              (segment.from - scale.min) / Math.max(scale.max - scale.min, 1),
               0,
               1,
             );
 
             const toRatio = clamp(
-              (zone.to - scale.min) / Math.max(scale.max - scale.min, 1),
+              (segment.to - scale.min) / Math.max(scale.max - scale.min, 1),
               0,
               1,
             );
@@ -110,22 +98,30 @@ export function SensorGauge({
 
             return (
               <path
-                key={`${zone.color}-${index}`}
-                d={describeArc(OUTER_RADIUS, fromRatio, toRatio)}
+                key={`${segment.color}-${index}`}
+                d={describeGaugeArc(OUTER_RADIUS, fromRatio, toRatio)}
                 fill="none"
-                stroke={zone.color}
-                strokeWidth={OUTER_WIDTH}
+                stroke={segment.color}
+                strokeWidth={OUTER_STROKE_WIDTH}
                 strokeLinecap="round"
-                opacity={hasLimit ? 0.95 : 0.55}
+                opacity={0.96}
               />
             );
           })}
 
           <path
-            d={describeArc(INNER_RADIUS, 0, ratio)}
+            d={describeGaugeArc(INNER_RADIUS, 0, 1)}
+            fill="none"
+            stroke="var(--surface-strong)"
+            strokeWidth={INNER_STROKE_WIDTH}
+            strokeLinecap="round"
+          />
+
+          <path
+            d={describeGaugeArc(INNER_RADIUS, 0, ratio)}
             fill="none"
             stroke={progressColor}
-            strokeWidth={INNER_WIDTH}
+            strokeWidth={INNER_STROKE_WIDTH}
             strokeLinecap="round"
           />
         </svg>
@@ -153,7 +149,7 @@ export function SensorGauge({
 
 function getLimitScale(limit: LimitRule): { min: number; max: number } {
   const range = Math.max(limit.upper - limit.lower, 1);
-  const padding = Math.max(range * 0.3, 8);
+  const padding = Math.max(range * 0.35, 10);
 
   return {
     min: Math.max(0, limit.lower - padding),
@@ -180,9 +176,10 @@ function getGaugeTone(value: number, lower: number, upper: number): GaugeTone {
   if (value < lower) return "warning";
 
   const range = Math.max(upper - lower, 1);
-  const warningGap = range * 0.08;
+  const warningHigh = upper - range * 0.08;
+  const warningLow = lower + range * 0.08;
 
-  if (value >= upper - warningGap || value <= lower + warningGap) {
+  if (value >= warningHigh || value <= warningLow) {
     return "warning";
   }
 
@@ -201,10 +198,16 @@ function getToneColor(tone: GaugeTone): string {
   return "#22c55e";
 }
 
-function describeArc(radius: number, fromRatio: number, toRatio: number): string {
-  const start = pointOnArc(radius, fromRatio);
-  const end = pointOnArc(radius, toRatio);
-  const largeArcFlag = toRatio - fromRatio > 0.5 ? "1" : "0";
+function describeGaugeArc(radius: number, fromRatio: number, toRatio: number): string {
+  const start = pointOnGauge(radius, fromRatio);
+  const end = pointOnGauge(radius, toRatio);
+
+  // เกจตัวนี้วาดเป็นครึ่งวงกลมเท่านั้น (กวาดมุมสูงสุด 180°)
+  // จึงไม่มีกรณีที่ส่วนโค้งจะเกิน 180° เลย (ซึ่งเป็นเงื่อนไขเดียวที่ต้องใช้ large-arc-flag = 1)
+  // เดิมโค้ดเช็ค toRatio - fromRatio > 0.5 ซึ่งผิด เพราะ 0.5 ของ ratio
+  // เทียบเท่ามุมแค่ 90° ไม่ใช่ 180° ทำให้บาง segment ถูกวาดอ้อมไปทางไกล (reflex arc)
+  // กลายเป็นวงที่บิดเบี้ยว จึงต้องล็อกให้เป็น "0" เสมอ
+  const largeArcFlag = "0";
 
   return [
     "M",
@@ -221,14 +224,25 @@ function describeArc(radius: number, fromRatio: number, toRatio: number): string
   ].join(" ");
 }
 
-function pointOnArc(radius: number, ratio: number) {
-  const angle = START_ANGLE + TOTAL_ANGLE * clamp(ratio, 0, 1);
-  const radians = (angle * Math.PI) / 180;
+function pointOnGauge(radius: number, ratio: number) {
+  const angle = Math.PI + Math.PI * clamp(ratio, 0, 1);
 
   return {
-    x: CENTER_X + radius * Math.cos(radians),
-    y: CENTER_Y + radius * Math.sin(radians),
+    x: CENTER_X + radius * Math.cos(angle),
+    y: CENTER_Y + radius * Math.sin(angle),
   };
+}
+
+function withAlpha(hex: string, alpha: number): string {
+  const normalized = hex.replace("#", "");
+
+  if (normalized.length !== 6) return hex;
+
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function clamp(value: number, min: number, max: number): number {
