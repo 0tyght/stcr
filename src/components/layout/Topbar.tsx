@@ -1,138 +1,169 @@
-import {
-  Clock3,
-  HelpCircle,
-  LogOut,
-  Monitor,
-  Palette,
-  RefreshCw,
-  Search,
-  UserRound,
-} from "lucide-react";
+import { Clock3, LogOut, Palette, Search, User } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { formatDateTime } from "../../utils/format";
+import { Link, useLocation } from "react-router-dom";
 
-type ThemeMode = "company" | "dark";
-type CompanyKey = "gr" | "ttn";
-
-const THEME_STORAGE_KEY = "stcr-theme-mode";
 const ACCOUNT_STORAGE_KEY = "stcr-account";
+const THEME_STORAGE_KEY = "stcr-theme-mode";
 
-function getStoredAccount(): string {
-  return localStorage.getItem(ACCOUNT_STORAGE_KEY) || "gr_dev_admin";
+type ThemeMode = "dark" | "company";
+type CompanyCode = "gr" | "ttn";
+
+type Crumb = {
+  label: string;
+  to?: string;
+};
+
+type TopbarProps = {
+  onLogout: () => void;
+};
+
+function getCompanyFromAccount(account: string): CompanyCode {
+  return account.toLowerCase().startsWith("ttn") ? "ttn" : "gr";
 }
 
-function getInitialThemeMode(): ThemeMode {
-  const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-
-  if (savedTheme === "dark") return "dark";
-  return "company";
+function getOvenNumberFromPath(pathname: string): string | null {
+  const match = pathname.match(/^\/ovens\/oven-(\d+)/);
+  return match ? match[1] : null;
 }
 
-function getCompanyFromAccount(account: string): CompanyKey {
-  const normalized = account.toLowerCase();
+function buildBreadcrumbs(pathname: string): Crumb[] {
+  if (pathname === "/") {
+    return [{ label: "Home" }, { label: "Dashboard" }];
+  }
 
-  if (normalized.includes("ttn")) return "ttn";
-  return "gr";
+  if (pathname.startsWith("/ovens/")) {
+    const ovenNumber = getOvenNumberFromPath(pathname);
+
+    return [
+      { label: "Home", to: "/" },
+      { label: "Dashboard", to: "/" },
+      { label: ovenNumber ? `เตา ${ovenNumber}` : "รายละเอียดเตา" },
+    ];
+  }
+
+  if (pathname.startsWith("/alarms")) {
+    return [{ label: "Home", to: "/" }, { label: "Alarms" }];
+  }
+
+  if (pathname.startsWith("/reports")) {
+    return [{ label: "Home", to: "/" }, { label: "Reports" }];
+  }
+
+  if (pathname.startsWith("/settings")) {
+    return [{ label: "Home", to: "/" }, { label: "Settings" }];
+  }
+
+  return [{ label: "Home", to: "/" }, { label: "Dashboard" }];
 }
 
-export function Topbar({ onLogout }: { onLogout: () => void }) {
+export function Topbar({ onLogout }: TopbarProps) {
+  const location = useLocation();
+
   const [now, setNow] = useState(() => new Date());
-  const [account] = useState(() => getStoredAccount());
-  const [themeMode, setThemeMode] = useState<ThemeMode>(() =>
-    getInitialThemeMode(),
+  const [account, setAccount] = useState(
+    () => localStorage.getItem(ACCOUNT_STORAGE_KEY) || "gr_dev_admin",
   );
 
-  const company = useMemo(() => getCompanyFromAccount(account), [account]);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
+    return saved === "company" ? "company" : "dark";
+  });
+
+  const company = useMemo<CompanyCode>(() => getCompanyFromAccount(account), [account]);
+  const breadcrumbs = useMemo(() => buildBreadcrumbs(location.pathname), [location.pathname]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 1000);
+    const timer = window.setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+
     return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
-    document.documentElement.dataset.company = company;
+    const savedAccount = localStorage.getItem(ACCOUNT_STORAGE_KEY) || "gr_dev_admin";
+    setAccount(savedAccount);
+  }, [location.pathname]);
+
+  useEffect(() => {
     document.documentElement.dataset.uiTheme = themeMode;
+    document.documentElement.dataset.company = company;
 
     localStorage.setItem(THEME_STORAGE_KEY, themeMode);
-    localStorage.setItem(ACCOUNT_STORAGE_KEY, account);
-  }, [account, company, themeMode]);
+  }, [company, themeMode]);
 
   function toggleTheme() {
-    setThemeMode((current) => (current === "company" ? "dark" : "company"));
+    setThemeMode((current) => (current === "dark" ? "company" : "dark"));
   }
 
   return (
     <header className="topbar">
       <div className="topbar-left">
-        <div className="breadcrumbs" aria-label="breadcrumb">
-          <span>Home</span>
-          <span>/</span>
-          <span>Dashboards</span>
-          <span>/</span>
-          <strong>Smoking Temperature Control</strong>
-        </div>
+        <nav className="breadcrumbs" aria-label="Breadcrumb">
+          {breadcrumbs.map((crumb, index) => {
+            const isLast = index === breadcrumbs.length - 1;
 
-        <label className="global-search">
-          <Search size={17} />
-          <input
-            placeholder="Search or jump to..."
-            aria-label="Search or jump to"
-          />
+            return (
+              <span key={`${crumb.label}-${index}`} className="breadcrumb-item">
+                {crumb.to && !isLast ? (
+                  <Link to={crumb.to}>{crumb.label}</Link>
+                ) : isLast ? (
+                  <strong>{crumb.label}</strong>
+                ) : (
+                  <span>{crumb.label}</span>
+                )}
+
+                {!isLast ? <span className="breadcrumb-sep">/</span> : null}
+              </span>
+            );
+          })}
+        </nav>
+
+        <label className="global-search" aria-label="Global search">
+          <Search size={15} />
+          <input type="text" placeholder="Search or jump to..." />
           <kbd>cmd+k</kbd>
         </label>
       </div>
 
       <div className="topbar-actions">
         <button
-          className="toolbar-button"
           type="button"
-          aria-label="Refresh dashboard"
-        >
-          <RefreshCw size={16} />
-          <span>1m</span>
-        </button>
-
-        <span className="toolbar-button">
-          <Clock3 size={16} />
-          Last 1 hour
-        </span>
-
-        <button
           className={`theme-switch is-${themeMode}`}
-          type="button"
           onClick={toggleTheme}
-          aria-label="สลับธีมสี"
-          aria-pressed={themeMode === "dark"}
+          aria-label="สลับธีม"
+          title="สลับธีม"
         >
           <Palette size={15} />
+          <span>{themeMode === "dark" ? "ธีมมืด" : "ธีมบริษัท"}</span>
+
           <span className="theme-switch-track">
             <span className="theme-switch-dot" />
           </span>
-          <span>{themeMode === "company" ? "ธีมบริษัท" : "ธีมมืด"}</span>
         </button>
 
-        <span className="live-clock">{formatDateTime(now)}</span>
-
-        <button className="icon-button" type="button" aria-label="Display mode">
-          <Monitor size={17} />
-        </button>
-
-        <button className="icon-button" type="button" aria-label="Help">
-          <HelpCircle size={17} />
-        </button>
+        <span className="live-clock">
+          <Clock3 size={14} style={{ marginRight: 6, verticalAlign: "text-bottom" }} />
+          {new Intl.DateTimeFormat("th-TH", {
+            dateStyle: "medium",
+            timeStyle: "medium",
+            timeZone: "Asia/Bangkok",
+          }).format(now)}
+        </span>
 
         <span className="user-chip">
-          <UserRound size={18} />
+          <User size={14} />
           {account}
         </span>
 
         <button
-          className="icon-button"
           type="button"
+          className="icon-button"
           onClick={onLogout}
           aria-label="ออกจากระบบ"
+          title="ออกจากระบบ"
         >
-          <LogOut size={18} />
+          <LogOut size={15} />
         </button>
       </div>
     </header>

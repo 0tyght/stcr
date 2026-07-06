@@ -51,6 +51,10 @@
 }
 
 .theme-switch.is-dark .theme-switch-dot {
+  transform: translateX(0);
+}
+
+.theme-switch.is-company .theme-switch-dot {
   transform: translateX(16px);
 }
 
@@ -62,42 +66,30 @@
   color-scheme: light;
 
   --company-primary: #ecd92f;
-  --company-primary-soft: #fff8b8;
-  --company-primary-muted: #f4e766;
+  --company-primary-soft: #fff9bf;
+  --company-primary-strong: #d9c81f;
 
-  --company-accent: #50545a;
-  --company-accent-hover: #3f444a;
+  --company-accent: #5b6068;
+  --company-accent-hover: #4b5058;
   --company-on-accent: #ffffff;
 
-  --company-sidebar: #343a40;
-  --company-sidebar-head: #343a40;
+  --company-sidebar: #3a4047;
+  --company-sidebar-head: #3a4047;
   --company-sidebar-text: #ffffff;
-  --company-sidebar-muted: rgba(255, 255, 255, 0.76);
+  --company-sidebar-muted: rgba(255, 255, 255, 0.78);
 
-  --bg: #eef1f3;
+  --bg: #eef1f4;
   --surface: #ffffff;
   --surface-soft: #f8fafc;
-  --surface-strong: #e5e7eb;
+  --surface-strong: #edf0f4;
 
-  --ink: #374151;
+  --ink: #394150;
   --ink-strong: #1f2937;
   --muted: #6b7280;
   --muted-soft: #9ca3af;
 
-  --line: #d9dde3;
-  --line-strong: #c4c9d1;
-
-  --status-open-main: #ecd92f;
-  --status-open-soft: #fff8b8;
-  --status-open-text: #2f332f;
-
-  --status-closed-main: #9ca3af;
-  --status-closed-soft: #e5e7eb;
-  --status-closed-text: #4b5563;
-
-  --status-offline-main: #6b7280;
-  --status-offline-soft: #d1d5db;
-  --status-offline-text: #374151;
+  --line: #d8dde5;
+  --line-strong: #c7ced7;
 }
 
 /* =========================
@@ -109,10 +101,10 @@
 
   --company-primary: #a784f6;
   --company-primary-soft: #efe7ff;
-  --company-primary-muted: #c6adff;
+  --company-primary-strong: #8e67eb;
 
-  --company-accent: #f2c45f;
-  --company-accent-hover: #e1ad36;
+  --company-accent: #f0c35c;
+  --company-accent-hover: #deac34;
   --company-on-accent: #ffffff;
 
   --company-sidebar: #a784f6;
@@ -123,7 +115,7 @@
   --bg: #f3f6f8;
   --surface: #ffffff;
   --surface-soft: #fbf9ff;
-  --surface-strong: #efe7ff;
+  --surface-strong: #f3edff;
 
   --ink: #3f4550;
   --ink-strong: #30343b;
@@ -131,19 +123,7 @@
   --muted-soft: #a5a8b2;
 
   --line: #e1d8fa;
-  --line-strong: #c9b8f4;
-
-  --status-open-main: #a784f6;
-  --status-open-soft: #efe7ff;
-  --status-open-text: #3f3561;
-
-  --status-closed-main: #9ca3af;
-  --status-closed-soft: #e5e7eb;
-  --status-closed-text: #4b5563;
-
-  --status-offline-main: #6b7280;
-  --status-offline-soft: #d1d5db;
-  --status-offline-text: #374151;
+  --line-strong: #cdbef6;
 }
 
 /* =========================
@@ -160,13 +140,17 @@
 
 :root[data-ui-theme="company"] .page-title h1,
 :root[data-ui-theme="company"] .topbar h1,
-:root[data-ui-theme="company"] .panel-heading h2 {
+:root[data-ui-theme="company"] .panel-heading h2,
+:root[data-ui-theme="company"] .report-cycle-toolbar strong {
   color: var(--ink-strong);
 }
 
 :root[data-ui-theme="company"] .page-title p,
 :root[data-ui-theme="company"] .panel-heading p,
-:root[data-ui-theme="company"] .eyebrow {
+:root[data-ui-theme="company"] .eyebrow,
+:root[data-ui-theme="company"] .report-cycle-toolbar span,
+:root[data-ui-theme="company"] .field span,
+:root[data-ui-theme="company"] .search-field span {
   color: var(--muted);
 }
 
@@ -175,14 +159,14 @@
 }
 
 /* =========================
-   Topbar
+   Topbar / Breadcrumb
    ========================= */
 
 :root[data-ui-theme="company"] .topbar {
-  border-bottom-color: rgba(17, 24, 39, 0.14);
+  border-bottom-color: rgba(17, 24, 39, 0.1);
   background: #ffffff;
   color: var(--ink);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1);
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
   backdrop-filter: none;
 }
 
@@ -190,14 +174,32 @@
   color: var(--muted);
 }
 
-:root[data-ui-theme="company"] .breadcrumbs strong {
+:root[data-ui-theme="company"] .breadcrumb-item a,
+:root[data-ui-theme="company"] .breadcrumb-item span {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+:root[data-ui-theme="company"] .breadcrumb-item a:hover {
   color: var(--ink-strong);
+}
+
+:root[data-ui-theme="company"] .breadcrumb-item strong {
+  color: var(--ink-strong);
+}
+
+:root[data-ui-theme="company"] .breadcrumb-sep {
+  margin: 0 8px;
+  color: var(--muted-soft);
 }
 
 :root[data-ui-theme="company"] .global-search,
 :root[data-ui-theme="company"] .toolbar-button,
 :root[data-ui-theme="company"] .icon-button,
-:root[data-ui-theme="company"] .user-chip {
+:root[data-ui-theme="company"] .user-chip,
+:root[data-ui-theme="company"] .panel-mode-chip,
+:root[data-ui-theme="company"] .threshold-item,
+:root[data-ui-theme="company"] .check-pill {
   border-color: var(--line);
   background: #ffffff;
   color: var(--muted);
@@ -228,18 +230,18 @@
 :root[data-ui-theme="company"] .theme-switch {
   border-color: var(--company-primary);
   background: var(--company-primary);
-  color: var(--status-open-text);
+  color: var(--ink-strong);
 }
 
 :root[data-ui-theme="company"] .theme-switch:hover,
 :root[data-ui-theme="company"] .theme-switch:focus-visible {
-  border-color: var(--company-primary);
+  border-color: var(--company-primary-strong);
   background: var(--company-primary-soft);
-  color: var(--status-open-text);
+  color: var(--ink-strong);
 }
 
 :root[data-ui-theme="company"] .theme-switch-track {
-  background: rgba(255, 255, 255, 0.52);
+  background: rgba(255, 255, 255, 0.56);
 }
 
 /* =========================
@@ -247,13 +249,13 @@
    ========================= */
 
 :root[data-ui-theme="company"] .sidebar {
-  border-right-color: rgba(0, 0, 0, 0.12);
+  border-right-color: rgba(0, 0, 0, 0.08);
   background: var(--company-sidebar);
   color: var(--company-sidebar-text);
 }
 
 :root[data-ui-theme="company"] .brand-row {
-  border-bottom-color: rgba(255, 255, 255, 0.2);
+  border-bottom-color: rgba(255, 255, 255, 0.18);
   background: var(--company-sidebar-head);
 }
 
@@ -261,17 +263,17 @@
   color: var(--company-primary);
 }
 
-:root[data-ui-theme="company"] .brand-text strong {
+:root[data-ui-theme="company"] .brand-text strong,
+:root[data-ui-theme="company"] .brand-text span {
   color: var(--company-sidebar-text);
 }
 
-:root[data-ui-theme="company"] .brand-text span,
 :root[data-ui-theme="company"] .sidebar-footer {
   color: var(--company-sidebar-muted);
 }
 
 :root[data-ui-theme="company"] .primary-nav {
-  border-bottom-color: rgba(255, 255, 255, 0.18);
+  border-bottom-color: rgba(255, 255, 255, 0.16);
 }
 
 :root[data-ui-theme="company"] .nav-item,
@@ -285,7 +287,7 @@
 
 :root[data-ui-theme="company"] .nav-item:hover,
 :root[data-ui-theme="company"] .oven-link:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
   color: #ffffff;
 }
 
@@ -293,7 +295,7 @@
 :root[data-ui-theme="company"] .oven-link.active {
   border-left-color: var(--company-primary);
   background: var(--company-primary-soft);
-  color: var(--status-open-text);
+  color: var(--ink-strong);
 }
 
 /* =========================
@@ -310,97 +312,39 @@
 :root[data-ui-theme="company"] .history-stat-card,
 :root[data-ui-theme="company"] .status-banner,
 :root[data-ui-theme="company"] .status-range-card,
-:root[data-ui-theme="company"] .alarm-item {
+:root[data-ui-theme="company"] .alarm-item,
+:root[data-ui-theme="company"] .table-wrap {
   border-color: var(--line);
   background: #ffffff;
   color: var(--ink);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
-/* =========================
-   Summary
-   ========================= */
+:root[data-ui-theme="company"] .summary-card {
+  background: #ffffff;
+}
 
 :root[data-ui-theme="company"] .summary-card span,
-:root[data-ui-theme="company"] .mini-card span {
+:root[data-ui-theme="company"] .mini-card span,
+:root[data-ui-theme="company"] .metric-card h3,
+:root[data-ui-theme="company"] .history-stat-card span,
+:root[data-ui-theme="company"] .gauge-card-head span {
   color: var(--muted);
 }
 
-:root[data-ui-theme="company"] .summary-card strong {
+:root[data-ui-theme="company"] .summary-card strong,
+:root[data-ui-theme="company"] .metric-value strong,
+:root[data-ui-theme="company"] .mini-card strong,
+:root[data-ui-theme="company"] .history-stat-card strong {
   color: var(--ink-strong);
 }
 
 :root[data-ui-theme="company"] .summary-icon {
   background: var(--surface-soft);
-  color: var(--muted);
-}
-
-:root[data-ui-theme="company"] .tone-open .summary-icon,
-:root[data-ui-theme="company"] .tone-open strong {
-  color: var(--status-open-main);
-}
-
-:root[data-ui-theme="company"] .tone-closed .summary-icon,
-:root[data-ui-theme="company"] .tone-closed strong {
-  color: var(--status-closed-main);
-}
-
-:root[data-ui-theme="company"] .tone-offline .summary-icon,
-:root[data-ui-theme="company"] .tone-offline strong {
-  color: var(--status-offline-main);
 }
 
 /* =========================
-   Status Badge
-   ========================= */
-
-:root[data-ui-theme="company"] .status-badge {
-  border: 1px solid var(--line);
-  background: #ffffff;
-  color: var(--ink);
-}
-
-:root[data-ui-theme="company"] .status-badge.status-open,
-:root[data-ui-theme="company"] .status-badge.status-normal {
-  border-color: var(--status-open-main);
-  background: var(--status-open-soft);
-  color: var(--status-open-text);
-}
-
-:root[data-ui-theme="company"] .status-badge.status-closed,
-:root[data-ui-theme="company"] .status-badge.status-acknowledged {
-  border-color: var(--status-closed-main);
-  background: var(--status-closed-soft);
-  color: var(--status-closed-text);
-}
-
-:root[data-ui-theme="company"] .status-badge.status-offline {
-  border-color: var(--status-offline-main);
-  background: var(--status-offline-soft);
-  color: var(--status-offline-text);
-}
-
-:root[data-ui-theme="company"] .status-badge.status-warning {
-  border-color: var(--yellow);
-  background: var(--yellow-soft);
-  color: #8a6b00;
-}
-
-:root[data-ui-theme="company"] .status-badge.status-danger,
-:root[data-ui-theme="company"] .status-badge.status-active {
-  border-color: var(--red);
-  background: var(--red-soft);
-  color: var(--red);
-}
-
-:root[data-ui-theme="company"] .status-badge.status-resolved {
-  border-color: var(--green);
-  background: var(--green-soft);
-  color: var(--green);
-}
-
-/* =========================
-   Dashboard Controls
+   Buttons / Inputs / Tabs
    ========================= */
 
 :root[data-ui-theme="company"] .dashboard-toolbar,
@@ -423,11 +367,7 @@
 }
 
 :root[data-ui-theme="company"] .segment,
-:root[data-ui-theme="company"] .tab,
-:root[data-ui-theme="company"] .button,
-:root[data-ui-theme="company"] .check-pill,
-:root[data-ui-theme="company"] .panel-mode-chip,
-:root[data-ui-theme="company"] .threshold-item {
+:root[data-ui-theme="company"] .button {
   border-color: var(--line);
   background: #ffffff;
   color: var(--ink);
@@ -436,12 +376,106 @@
 :root[data-ui-theme="company"] .segment:hover,
 :root[data-ui-theme="company"] .segment:focus-visible,
 :root[data-ui-theme="company"] .segment.is-active,
-:root[data-ui-theme="company"] .tab.is-active,
 :root[data-ui-theme="company"] .button:hover,
 :root[data-ui-theme="company"] .button:focus-visible {
   border-color: var(--company-primary);
   background: var(--company-primary-soft);
   color: var(--ink-strong);
+}
+
+:root[data-ui-theme="company"] .tabs {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+:root[data-ui-theme="company"] .tab {
+  border: 1px solid var(--line-strong);
+  background: #ffffff;
+  color: var(--ink);
+}
+
+:root[data-ui-theme="company"] .tab:hover,
+:root[data-ui-theme="company"] .tab:focus-visible {
+  border-color: var(--company-primary);
+  background: var(--company-primary-soft);
+  color: var(--ink-strong);
+}
+
+:root[data-ui-theme="company"] .tab.is-active {
+  border-color: var(--company-primary);
+  background: var(--company-primary-soft);
+  color: var(--ink-strong);
+}
+
+:root[data-ui-theme="company"] .button-dark {
+  border-color: #8d95a3;
+  background: #7b8492;
+  color: #ffffff;
+}
+
+:root[data-ui-theme="company"] .button-primary,
+:root[data-ui-theme="company"] .oven-card-footer .button {
+  border-color: var(--company-accent);
+  background: var(--company-accent);
+  color: var(--company-on-accent);
+}
+
+:root[data-ui-theme="company"] .button-primary:hover,
+:root[data-ui-theme="company"] .oven-card-footer .button:hover {
+  border-color: var(--company-accent-hover);
+  background: var(--company-accent-hover);
+  color: var(--company-on-accent);
+}
+
+/* =========================
+   Status Badge
+   ต้องใช้สีสถานะเหมือนธีมมืด
+   ========================= */
+
+:root[data-ui-theme="company"] .status-badge {
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--ink);
+}
+
+:root[data-ui-theme="company"] .status-badge.status-open,
+:root[data-ui-theme="company"] .status-badge.status-normal {
+  border-color: var(--green) !important;
+  background: var(--green-soft) !important;
+  color: var(--green) !important;
+}
+
+:root[data-ui-theme="company"] .status-badge.status-closed,
+:root[data-ui-theme="company"] .status-badge.status-acknowledged {
+  border-color: var(--muted-soft) !important;
+  background: var(--offline-soft) !important;
+  color: var(--muted) !important;
+}
+
+:root[data-ui-theme="company"] .status-badge.status-offline {
+  border-color: var(--offline) !important;
+  background: var(--offline-soft) !important;
+  color: var(--offline) !important;
+}
+
+:root[data-ui-theme="company"] .status-badge.status-warning {
+  border-color: var(--yellow) !important;
+  background: var(--yellow-soft) !important;
+  color: #8a6b00 !important;
+}
+
+:root[data-ui-theme="company"] .status-badge.status-danger,
+:root[data-ui-theme="company"] .status-badge.status-active {
+  border-color: var(--red) !important;
+  background: var(--red-soft) !important;
+  color: var(--red) !important;
+}
+
+:root[data-ui-theme="company"] .status-badge.status-resolved {
+  border-color: var(--green) !important;
+  background: var(--green-soft) !important;
+  color: var(--green) !important;
 }
 
 /* =========================
@@ -451,11 +485,11 @@
 :root[data-ui-theme="company"] .oven-card {
   border-color: var(--line);
   background: #ffffff;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
 :root[data-ui-theme="company"] .oven-card-header {
-  border-bottom: 3px solid var(--line-strong);
+  border-bottom: 2px solid var(--line-strong);
   background: var(--surface-strong);
   box-shadow: none;
 }
@@ -487,49 +521,63 @@
   color: var(--muted);
 }
 
-/* เปิด = สีบริษัท */
+:root[data-ui-theme="company"] .oven-mini-strip {
+  border-color: var(--line);
+  background: var(--line);
+}
+
+:root[data-ui-theme="company"] .oven-mini-strip span {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
 :root[data-ui-theme="company"] .oven-card.status-open {
-  border-color: var(--status-open-main);
+  border-color: var(--company-primary);
 }
 
 :root[data-ui-theme="company"] .oven-card.status-open .oven-card-header,
 :root[data-ui-theme="company"] .oven-card-header.status-open {
-  border-bottom-color: var(--status-open-main);
-  background: var(--status-open-soft);
+  border-bottom-color: var(--company-primary);
+  background: var(--company-primary-soft);
 }
 
 :root[data-ui-theme="company"] .oven-card.status-open .cycle-box strong {
-  color: var(--status-open-main);
+  color: var(--company-primary-strong);
 }
 
-/* ปิด = เทา */
 :root[data-ui-theme="company"] .oven-card.status-closed {
-  border-color: var(--status-closed-soft);
+  border-color: #d6dbe3;
 }
 
 :root[data-ui-theme="company"] .oven-card.status-closed .oven-card-header,
 :root[data-ui-theme="company"] .oven-card-header.status-closed {
-  border-bottom-color: var(--status-closed-main);
-  background: var(--status-closed-soft);
+  border-bottom-color: #9ca3af;
+  background: #eef1f4;
 }
 
 :root[data-ui-theme="company"] .oven-card.status-closed .cycle-box strong {
-  color: var(--status-closed-main);
+  color: #7b8492;
 }
 
-/* ขาดการเชื่อมต่อ = เทาเข้ม */
 :root[data-ui-theme="company"] .oven-card.status-offline {
-  border-color: var(--status-offline-soft);
+  border-color: #d1d5db;
 }
 
 :root[data-ui-theme="company"] .oven-card.status-offline .oven-card-header,
 :root[data-ui-theme="company"] .oven-card-header.status-offline {
-  border-bottom-color: var(--status-offline-main);
-  background: var(--status-offline-soft);
+  border-bottom-color: #6b7280;
+  background: #eef1f4;
 }
 
 :root[data-ui-theme="company"] .oven-card.status-offline .cycle-box strong {
-  color: var(--status-offline-main);
+  color: #6b7280;
+}
+
+:root[data-ui-theme="company"] .oven-card.status-closed .oven-card-footer .button,
+:root[data-ui-theme="company"] .oven-card.status-offline .oven-card-footer .button {
+  border-color: #7b8492;
+  background: #7b8492;
+  color: #ffffff;
 }
 
 /* =========================
@@ -537,7 +585,7 @@
    ========================= */
 
 :root[data-ui-theme="company"] .reading-inline.tone-normal {
-  color: var(--status-open-main);
+  color: var(--green) !important;
 }
 
 :root[data-ui-theme="company"] .reading-inline.tone-warning {
@@ -553,7 +601,7 @@
 }
 
 :root[data-ui-theme="company"] .metric-card.tone-normal .metric-value strong {
-  color: var(--status-open-main);
+  color: var(--green);
 }
 
 :root[data-ui-theme="company"] .metric-card.tone-warning .metric-value strong {
@@ -565,80 +613,28 @@
 }
 
 :root[data-ui-theme="company"] .metric-card.tone-offline .metric-value strong {
-  color: var(--status-offline-main);
+  color: var(--offline);
 }
 
 /* =========================
-   Mini Strip
+   Chart / Table
    ========================= */
 
-:root[data-ui-theme="company"] .oven-mini-strip {
-  border-color: var(--line);
-  background: var(--line);
-}
-
-:root[data-ui-theme="company"] .oven-mini-strip span {
-  background: var(--surface-soft);
-  color: var(--ink);
-}
-
-/* =========================
-   Buttons
-   ========================= */
-
-:root[data-ui-theme="company"] .button-primary,
-:root[data-ui-theme="company"] .oven-card-footer .button {
-  border-color: var(--company-accent);
-  background: var(--company-accent);
-  color: var(--company-on-accent);
-}
-
-:root[data-ui-theme="company"] .button-primary:hover,
-:root[data-ui-theme="company"] .oven-card-footer .button:hover {
-  border-color: var(--company-accent-hover);
-  background: var(--company-accent-hover);
-  color: var(--company-on-accent);
-}
-
-:root[data-ui-theme="company"] .oven-card.status-open .oven-card-footer .button {
-  border-color: var(--company-accent);
-  background: var(--company-accent);
-  color: var(--company-on-accent);
-}
-
-:root[data-ui-theme="company"] .oven-card.status-closed .oven-card-footer .button,
-:root[data-ui-theme="company"] .oven-card.status-offline .oven-card-footer .button {
-  border-color: #9ca3af;
-  background: #9ca3af;
-  color: #ffffff;
-}
-
-/* =========================
-   Charts
-   ========================= */
-
-:root[data-ui-theme="company"] .time-series-chart {
+:root[data-ui-theme="company"] .time-series-chart,
+:root[data-ui-theme="company"] .report-page-shell {
   border-color: var(--line);
   background: #ffffff;
 }
 
 :root[data-ui-theme="company"] .chart-panel,
 :root[data-ui-theme="company"] .grafana-chart-panel {
-  background: #ffffff;
   border-color: var(--line);
-}
-
-:root[data-ui-theme="company"] .threshold-item {
   background: #ffffff;
 }
 
 :root[data-ui-theme="company"] .threshold-item strong {
   color: var(--ink-strong);
 }
-
-/* =========================
-   Tables
-   ========================= */
 
 :root[data-ui-theme="company"] .table-wrap {
   border-color: var(--line);
@@ -662,20 +658,32 @@
    Status Panels
    ========================= */
 
+:root[data-ui-theme="company"] .status-banner p,
+:root[data-ui-theme="company"] .status-banner span,
+:root[data-ui-theme="company"] .status-range-card p,
+:root[data-ui-theme="company"] .status-range-card span {
+  color: var(--muted);
+}
+
+:root[data-ui-theme="company"] .status-banner strong,
+:root[data-ui-theme="company"] .status-range-card strong {
+  color: var(--ink-strong);
+}
+
 :root[data-ui-theme="company"] .status-banner.status-open {
-  box-shadow: inset 4px 0 0 var(--status-open-main);
+  box-shadow: inset 4px 0 0 var(--green);
 }
 
 :root[data-ui-theme="company"] .status-banner.status-closed {
-  box-shadow: inset 4px 0 0 var(--status-closed-main);
+  box-shadow: inset 4px 0 0 #9ca3af;
 }
 
 :root[data-ui-theme="company"] .status-banner.status-offline {
-  box-shadow: inset 4px 0 0 var(--status-offline-main);
+  box-shadow: inset 4px 0 0 #6b7280;
 }
 
 :root[data-ui-theme="company"] .status-range-card.status-normal {
-  box-shadow: inset 4px 0 0 var(--status-open-main);
+  box-shadow: inset 4px 0 0 var(--green);
 }
 
 :root[data-ui-theme="company"] .status-range-card.status-warning {
@@ -707,12 +715,16 @@
   color: var(--ink-strong);
 }
 
+:root[data-ui-theme="company"] .login-panel label {
+  color: var(--muted);
+}
+
 :root[data-ui-theme="company"] .login-brand {
   color: var(--company-primary);
 }
 
-:root[data-ui-theme="company"] .login-brand-ttn {
-  color: #a784f6;
+:root[data-ui-theme="company"][data-company="ttn"] .login-brand {
+  color: var(--company-primary);
 }
 
 .login-theme-switch {

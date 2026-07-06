@@ -14,8 +14,8 @@ export function Sidebar() {
         </NavLink>
 
         <div className="brand-text">
-          <strong>GRAND RUBBER</strong>
-          <span>Smoking Control</span>
+          <strong>Smoking</strong>
+          <span>Temperature Control</span>
         </div>
       </div>
 
@@ -53,8 +53,8 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
-        <strong>GRAND RUBBER</strong>
-        <span>Smoking Control</span>
+        <strong>Smoking</strong>
+        <span>Temperature Control</span>
       </div>
     </aside>
   );
