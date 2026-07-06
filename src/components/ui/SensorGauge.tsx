@@ -5,18 +5,13 @@ import { sensorByKey } from "../../utils/sensors";
 type GaugeTone = "normal" | "warning" | "danger";
 
 const SVG_WIDTH = 220;
-const SVG_HEIGHT = 118;
+const SVG_HEIGHT = 134;
 
 const CENTER_X = 110;
+const CENTER_Y = 112;
 
-/*
-  ยก CENTER_Y ขึ้น เพื่อให้โค้งไม่ทับตัวเลข
-  แล้วเพิ่ม radius เพื่อให้เกจดูใหญ่ขึ้น
-*/
-const CENTER_Y = 104;
-
-const OUTER_RADIUS = 84;
-const INNER_RADIUS = 69;
+const OUTER_RADIUS = 88;
+const INNER_RADIUS = 71;
 
 const OUTER_STROKE_WIDTH = 6;
 const INNER_STROKE_WIDTH = 18;
@@ -79,12 +74,27 @@ export function SensorGauge({
         </strong>
       </div>
 
-      <div className="gauge-visual">
+      <div
+        className="gauge-visual"
+        style={{
+          minHeight: 132,
+          height: 132,
+          display: "grid",
+          placeItems: "center",
+          overflow: "hidden",
+        }}
+      >
         <svg
           className="gauge-svg"
           viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
           role="img"
           aria-label={`${definition.label} ${formattedValue}${unit}`}
+          style={{
+            width: 245,
+            maxWidth: "100%",
+            height: 132,
+            display: "block",
+          }}
         >
           <path
             d={describeGaugeArc(OUTER_RADIUS, 0, 1)}
@@ -138,14 +148,45 @@ export function SensorGauge({
             strokeWidth={INNER_STROKE_WIDTH}
             strokeLinecap="round"
           />
+
+          <text
+            x={CENTER_X}
+            y="75"
+            textAnchor="middle"
+            dominantBaseline="middle"
+            style={{
+              fill: "var(--ink-strong)",
+              fontSize: 24,
+              fontWeight: 850,
+            }}
+          >
+            {formattedValue}
+            <tspan
+              dx="4"
+              style={{
+                fill: "var(--muted)",
+                fontSize: 12,
+                fontWeight: 800,
+              }}
+            >
+              {unit}
+            </tspan>
+          </text>
+
+          <text
+            x={CENTER_X}
+            y="98"
+            textAnchor="middle"
+            dominantBaseline="middle"
+            style={{
+              fill: "var(--muted)",
+              fontSize: 15,
+              fontWeight: 800,
+            }}
+          >
+            {definition.shortLabel}
+          </text>
         </svg>
-
-        <strong>
-          {formattedValue}
-          <span>{unit}</span>
-        </strong>
-
-        <em>{definition.shortLabel}</em>
       </div>
 
       <div className="gauge-meta">

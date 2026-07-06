@@ -72,12 +72,12 @@
   --company-accent-hover: #4b5058;
   --company-on-accent: #ffffff;
 
-  --company-sidebar: #3a4047;
-  --company-sidebar-head: #3a4047;
+  --company-sidebar: #3c3e42;
+  --company-sidebar-head: #3c3e42;
   --company-sidebar-text: #ffffff;
   --company-sidebar-muted: rgba(255, 255, 255, 0.78);
 
-  --bg: #eef1f4;
+  --bg: #dfdfd9;
   --surface: #ffffff;
   --surface-soft: #f8fafc;
   --surface-strong: #edf0f4;
@@ -98,7 +98,7 @@
 :root[data-ui-theme="company"][data-company="ttn"] {
   color-scheme: light;
 
-  --company-primary: #a784f6;
+  --company-primary: #ab84fe;
   --company-primary-soft: #efe7ff;
   --company-primary-strong: #8e67eb;
 
@@ -106,12 +106,12 @@
   --company-accent-hover: #deac34;
   --company-on-accent: #ffffff;
 
-  --company-sidebar: #a784f6;
-  --company-sidebar-head: #a784f6;
+  --company-sidebar: #ab84fe;
+  --company-sidebar-head: #ab84fe;
   --company-sidebar-text: #ffffff;
   --company-sidebar-muted: rgba(255, 255, 255, 0.84);
 
-  --bg: #f3f6f8;
+  --bg: #f3f8fb;
   --surface: #ffffff;
   --surface-soft: #fbf9ff;
   --surface-strong: #f3edff;
@@ -560,7 +560,7 @@
 :root[data-ui-theme="company"] .oven-card.status-closed .oven-card-header,
 :root[data-ui-theme="company"] .oven-card-header.status-closed {
   border-bottom-color: #9ca3af;
-  background: #eef1f4;
+  background: #dfdfd9;
 }
 
 :root[data-ui-theme="company"] .oven-card.status-closed .cycle-box strong {
@@ -574,7 +574,7 @@
 :root[data-ui-theme="company"] .oven-card.status-offline .oven-card-header,
 :root[data-ui-theme="company"] .oven-card-header.status-offline {
   border-bottom-color: #6b7280;
-  background: #eef1f4;
+  background: #dfdfd9;
 }
 
 :root[data-ui-theme="company"] .oven-card.status-offline .cycle-box strong {

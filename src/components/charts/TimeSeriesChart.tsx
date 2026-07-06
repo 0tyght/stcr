@@ -3,13 +3,12 @@ import {
   DataZoomComponent,
   GridComponent,
   LegendComponent,
-  MarkLineComponent,
   TitleComponent,
   TooltipComponent,
 } from "echarts/components";
 import { init, use, type ECharts, type EChartsCoreOption } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LimitMap, SensorKey, TimeSeriesPoint } from "../../types";
 import { sensorByKey } from "../../utils/sensors";
 
@@ -20,11 +19,21 @@ use([
   GridComponent,
   LegendComponent,
   DataZoomComponent,
-  MarkLineComponent,
   CanvasRenderer,
 ]);
 
 type ChartTheme = "dark" | "company" | "print";
+
+type OverlayLine = {
+  id: string;
+  x1: number;
+  x2: number;
+  y: number;
+  color: string;
+  label: "Upper" | "Lower";
+  labelX: number;
+  labelY: number;
+};
 
 export function TimeSeriesChart({
   points,
@@ -53,8 +62,11 @@ export function TimeSeriesChart({
 }) {
   const chartRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<ECharts | null>(null);
+  const updateOverlayRef = useRef<() => void>(() => undefined);
 
   const [pageTheme, setPageTheme] = useState<"dark" | "company">(() => getCurrentPageTheme());
+  const [overlayBox, setOverlayBox] = useState({ width: 0, height: 0 });
+  const [overlayLines, setOverlayLines] = useState<OverlayLine[]>([]);
 
   useEffect(() => {
     if (theme === "print") return;
@@ -85,6 +97,8 @@ export function TimeSeriesChart({
   const resolvedTheme: ChartTheme = theme === "print" ? "print" : theme ?? pageTheme;
   const effectiveShowDataZoom = showDataZoom ?? resolvedTheme !== "print";
 
+  const palette = useMemo(() => getChartPalette(resolvedTheme), [resolvedTheme]);
+
   const option = useMemo<EChartsCoreOption>(() => {
     const leftSensors = sensors.filter((sensor) => !rightAxisSensors.includes(sensor));
     const rightSensors = sensors.filter((sensor) => rightAxisSensors.includes(sensor));
@@ -93,19 +107,16 @@ export function TimeSeriesChart({
     const leftBounds = getAxisBounds(points, leftSensors, limits, shownLimitSensors);
     const rightBounds = getAxisBounds(points, rightSensors, limits, []);
 
-    const palette = getChartPalette(resolvedTheme);
-
     const series = sensors.map((sensor) => {
       const definition = sensorByKey[sensor];
       const useRightAxis = rightAxisSensors.includes(sensor);
-      const showLimit = shownLimitSensors.includes(sensor);
-      const limit = limits[sensor];
 
       return {
         name: definition.shortLabel,
         type: "line" as const,
         showSymbol: false,
         smooth: true,
+        hoverAnimation: false,
         yAxisIndex: useRightAxis ? 1 : 0,
         data: points.map((point) => [point.timestamp, point[sensor]]),
         lineStyle: {
@@ -121,40 +132,8 @@ export function TimeSeriesChart({
           color: definition.color,
         },
         emphasis: {
-          focus: "series" as const,
+          disabled: true,
         },
-        markLine: showLimit
-          ? {
-              symbol: "none" as const,
-              silent: true,
-              animation: false,
-              lineStyle: {
-                type: "dashed" as const,
-                width: 1,
-                color: definition.color,
-                opacity: palette.markLineOpacity,
-              },
-              label: {
-                show: true,
-                position: "insideEndTop",
-                formatter: "{b}",
-                color: definition.color,
-                fontSize: 11,
-                fontWeight: 800,
-                backgroundColor: palette.markLabelBackground,
-                borderColor: palette.markLabelBorder,
-                borderWidth: 1,
-                borderRadius: 2,
-                padding: [3, 6],
-                shadowColor: palette.markLabelShadow,
-                shadowBlur: palette.markLabelShadowBlur,
-              },
-              data: [
-                { name: "Upper", yAxis: limit.upper },
-                { name: "Lower", yAxis: limit.lower },
-              ],
-            }
-          : undefined,
       };
     });
 
@@ -210,6 +189,7 @@ export function TimeSeriesChart({
       legend: {
         top: 28,
         type: "scroll",
+        selectedMode: false,
         textStyle: {
           color: palette.muted,
         },
@@ -357,14 +337,71 @@ export function TimeSeriesChart({
     leftAxisName,
     limitSensors,
     limits,
+    palette,
     points,
     realtime,
-    resolvedTheme,
     rightAxisName,
     rightAxisSensors,
     sensors,
     title,
   ]);
+
+  const updateOverlayLines = useCallback(() => {
+    const chart = instanceRef.current;
+    const element = chartRef.current;
+
+    if (!chart || !element) {
+      setOverlayLines([]);
+      return;
+    }
+
+    const rect = element.getBoundingClientRect();
+
+    if (!rect.width || !rect.height) {
+      setOverlayLines([]);
+      return;
+    }
+
+    const rightSensors = sensors.filter((sensor) => rightAxisSensors.includes(sensor));
+    const shownLimitSensors = limitSensors ?? sensors;
+    const x1 = 54;
+    const x2 = rect.width - (rightSensors.length ? 64 : 54);
+
+    if (x2 <= x1) {
+      setOverlayLines([]);
+      return;
+    }
+
+    const lines: OverlayLine[] = [];
+
+    shownLimitSensors.forEach((sensor) => {
+      const limit = limits[sensor];
+      const definition = sensorByKey[sensor];
+      const yAxisIndex = rightAxisSensors.includes(sensor) ? 1 : 0;
+
+      const upperY = Number(chart.convertToPixel({ yAxisIndex }, limit.upper));
+      const lowerY = Number(chart.convertToPixel({ yAxisIndex }, limit.lower));
+
+      if (Number.isFinite(upperY)) {
+        lines.push(createOverlayLine(sensor, "Upper", upperY, x1, x2, definition.color));
+      }
+
+      if (Number.isFinite(lowerY)) {
+        lines.push(createOverlayLine(sensor, "Lower", lowerY, x1, x2, definition.color));
+      }
+    });
+
+    setOverlayBox({
+      width: rect.width,
+      height: rect.height,
+    });
+
+    setOverlayLines(lines);
+  }, [limitSensors, limits, rightAxisSensors, sensors]);
+
+  useEffect(() => {
+    updateOverlayRef.current = updateOverlayLines;
+  }, [updateOverlayLines]);
 
   useEffect(() => {
     if (!chartRef.current) return;
@@ -374,6 +411,10 @@ export function TimeSeriesChart({
 
     const resizeObserver = new ResizeObserver(() => {
       instanceRef.current?.resize();
+
+      window.requestAnimationFrame(() => {
+        updateOverlayRef.current();
+      });
     });
 
     resizeObserver.observe(chartRef.current);
@@ -390,9 +431,114 @@ export function TimeSeriesChart({
 
     instanceRef.current.setOption(option, true);
     instanceRef.current.resize();
+
+    window.requestAnimationFrame(() => {
+      updateOverlayRef.current();
+    });
   }, [option]);
 
-  return <div className="time-series-chart" ref={chartRef} role="img" aria-label={title} />;
+  return (
+    <div
+      className="time-series-chart-wrap"
+      style={{
+        position: "relative",
+      }}
+    >
+      <div className="time-series-chart" ref={chartRef} role="img" aria-label={title} />
+
+      {overlayLines.length ? (
+        <svg
+          aria-hidden="true"
+          viewBox={`0 0 ${overlayBox.width} ${overlayBox.height}`}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            pointerEvents: "none",
+            overflow: "hidden",
+          }}
+        >
+          <style>
+            {`
+              @keyframes stcrDashMove {
+                from {
+                  stroke-dashoffset: 0;
+                }
+                to {
+                  stroke-dashoffset: -30;
+                }
+              }
+            `}
+          </style>
+
+          {overlayLines.map((line) => (
+            <g key={line.id}>
+              <line
+                x1={line.x1}
+                x2={line.x2}
+                y1={line.y}
+                y2={line.y}
+                stroke={line.color}
+                strokeWidth="1"
+                strokeDasharray="8 7"
+                opacity={palette.markLineOpacity}
+                style={{
+                  animation: "stcrDashMove 0.9s linear infinite",
+                }}
+              />
+
+              <rect
+                x={line.labelX - 6}
+                y={line.labelY - 14}
+                width="54"
+                height="20"
+                rx="2"
+                fill={palette.markLabelBackground}
+                stroke={palette.markLabelBorder}
+                strokeWidth="1"
+                opacity="0.98"
+              />
+
+              <text
+                x={line.labelX}
+                y={line.labelY}
+                fill={line.color}
+                fontSize="11"
+                fontWeight="800"
+              >
+                {line.label}
+              </text>
+            </g>
+          ))}
+        </svg>
+      ) : null}
+    </div>
+  );
+}
+
+function createOverlayLine(
+  sensor: SensorKey,
+  label: "Upper" | "Lower",
+  y: number,
+  x1: number,
+  x2: number,
+  color: string,
+): OverlayLine {
+  const safeY = Math.max(20, y);
+  const labelX = Math.max(x1 + 8, x2 - 48);
+  const labelY = Math.max(18, safeY - 8);
+
+  return {
+    id: `${sensor}-${label}`,
+    x1,
+    x2,
+    y: safeY,
+    color,
+    label,
+    labelX,
+    labelY,
+  };
 }
 
 function getCurrentPageTheme(): "dark" | "company" {
@@ -421,8 +567,6 @@ function getChartPalette(theme: ChartTheme) {
       tooltipBorder: "#d1d5db",
       markLabelBackground: "rgba(255, 255, 255, 0.94)",
       markLabelBorder: "#d1d5db",
-      markLabelShadow: "rgba(15, 23, 42, 0.12)",
-      markLabelShadowBlur: 4,
       markLineOpacity: 0.86,
       areaAlpha: 0.07,
       zoomBackground: "#f9fafb",
@@ -445,8 +589,6 @@ function getChartPalette(theme: ChartTheme) {
       tooltipBorder: "#d8dde5",
       markLabelBackground: "rgba(255, 255, 255, 0.94)",
       markLabelBorder: "#d8dde5",
-      markLabelShadow: "rgba(15, 23, 42, 0.12)",
-      markLabelShadowBlur: 4,
       markLineOpacity: 0.85,
       areaAlpha: 0.08,
       zoomBackground: "#f8fafc",
@@ -468,8 +610,6 @@ function getChartPalette(theme: ChartTheme) {
     tooltipBorder: "#3a424f",
     markLabelBackground: "rgba(8, 13, 20, 0.92)",
     markLabelBorder: "rgba(255, 255, 255, 0.16)",
-    markLabelShadow: "rgba(0, 0, 0, 0.5)",
-    markLabelShadowBlur: 5,
     markLineOpacity: 0.72,
     areaAlpha: 0.06,
     zoomBackground: "#111820",
