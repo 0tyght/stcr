@@ -32,6 +32,13 @@ type ChartMode = "realtime" | "historical";
 const environmentSensors: SensorKey[] = ["chamberTemp", "humidity"];
 const heatSensors: SensorKey[] = ["furnaceTemp", "blowerTemp"];
 
+const realtimeGaugeOrder: SensorKey[] = [
+  "furnaceTemp",
+  "blowerTemp",
+  "chamberTemp",
+  "humidity",
+];
+
 export function OvenDetailPage() {
   const { ovenId = "" } = useParams();
   const { ovens, alarms, loading, refresh } = useAppData();
@@ -200,7 +207,7 @@ export function OvenDetailPage() {
 
       {effectiveMode === "realtime" ? (
         <section className="realtime-gauge-grid" aria-label="ค่า realtime จากเซนเซอร์">
-          {allSensorKeys.map((sensor) => (
+          {realtimeGaugeOrder.map((sensor) => (
             <SensorGauge
               key={sensor}
               sensor={sensor}
