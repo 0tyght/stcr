@@ -8,10 +8,13 @@ const SVG_WIDTH = 220;
 const SVG_HEIGHT = 118;
 
 const CENTER_X = 110;
-const CENTER_Y = 104;
+const CENTER_Y = 100;
 
-const OUTER_RADIUS = 78;
-const INNER_RADIUS = 66;
+const OUTER_RADIUS = 62;
+const INNER_RADIUS = 51;
+
+const OUTER_STROKE_WIDTH = 5;
+const INNER_STROKE_WIDTH = 16;
 
 export function SensorGauge({
   sensor,
@@ -99,7 +102,7 @@ export function SensorGauge({
                 d={describeGaugeArc(OUTER_RADIUS, fromRatio, toRatio)}
                 fill="none"
                 stroke={segment.color}
-                strokeWidth={5}
+                strokeWidth={OUTER_STROKE_WIDTH}
                 strokeLinecap="round"
                 opacity={0.96}
               />
@@ -110,7 +113,7 @@ export function SensorGauge({
             d={describeGaugeArc(INNER_RADIUS, 0, 1)}
             fill="none"
             stroke="var(--surface-strong)"
-            strokeWidth={18}
+            strokeWidth={INNER_STROKE_WIDTH}
             strokeLinecap="round"
           />
 
@@ -118,7 +121,7 @@ export function SensorGauge({
             d={describeGaugeArc(INNER_RADIUS, 0, ratio)}
             fill="none"
             stroke={progressColor}
-            strokeWidth={18}
+            strokeWidth={INNER_STROKE_WIDTH}
             strokeLinecap="round"
           />
         </svg>
@@ -146,7 +149,7 @@ export function SensorGauge({
 
 function getLimitScale(limit: LimitRule): { min: number; max: number } {
   const range = Math.max(limit.upper - limit.lower, 1);
-  const padding = range * 0.5;
+  const padding = Math.max(range * 0.35, 10);
 
   return {
     min: Math.max(0, limit.lower - padding),
