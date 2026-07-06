@@ -67,6 +67,7 @@ export function OvenDetailPage() {
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [calendarCursor, setCalendarCursor] = useState<Date>(() => new Date());
   const [points, setPoints] = useState<TimeSeriesPoint[]>([]);
+  const [currentReportFrameSrc, setCurrentReportFrameSrc] = useState<string | null>(null);
 
   const realtimeAvailable = oven ? canUseRealtime(oven.status) : false;
 
@@ -225,6 +226,18 @@ export function OvenDetailPage() {
     }
   }
 
+  function handleDownloadCurrentReport() {
+    if (!oven) return;
+
+    const reportUrl = createReportFrameUrl({
+      ovenId: oven.id,
+      mode: "current",
+      cycle: oven.cycleCount,
+    });
+
+    setCurrentReportFrameSrc(reportUrl);
+  }
+
   const currentCycleLabel =
     effectiveMode === "realtime"
       ? `รอบปัจจุบัน ${oven.cycleCount}`
@@ -332,19 +345,26 @@ export function OvenDetailPage() {
           </div>
 
           <div className="download-row">
-            <Link
-              className="button button-primary"
-              to={`/reports?ovenId=${oven.id}&mode=${
-                effectiveMode === "realtime" ? "current" : "history"
-              }&cycle=${
-                effectiveMode === "realtime"
-                  ? oven.cycleCount
-                  : selectedCycle ?? getDefaultHistoricalCycle(oven)
-              }&auto=pdf`}
-            >
-              <FileDown size={17} />
-              {effectiveMode === "realtime" ? "รายงานรอบปัจจุบัน" : "รายงานย้อนหลัง"}
-            </Link>
+            {effectiveMode === "realtime" ? (
+              <button
+                className="button button-primary"
+                type="button"
+                onClick={handleDownloadCurrentReport}
+              >
+                <FileDown size={17} />
+                โหลดรายงานปัจจุบัน
+              </button>
+            ) : (
+              <Link
+                className="button button-primary"
+                to={`/reports?ovenId=${oven.id}&mode=history&cycle=${
+                  selectedCycle ?? getDefaultHistoricalCycle(oven)
+                }`}
+              >
+                <FileDown size={17} />
+                เปิดหน้ารายงานย้อนหลัง
+              </Link>
+            )}
 
             <button
               className="button"
@@ -488,6 +508,24 @@ export function OvenDetailPage() {
           <EmptyState title="ไม่มี Alarm ของเตานี้" description="ค่าปัจจุบันอยู่ในช่วงมาตรฐาน" />
         )}
       </section>
+
+      {currentReportFrameSrc ? (
+        <iframe
+          key={currentReportFrameSrc}
+          title="ดาวน์โหลดรายงานปัจจุบัน"
+          src={currentReportFrameSrc}
+          style={{
+            position: "fixed",
+            width: 1,
+            height: 1,
+            right: 0,
+            bottom: 0,
+            opacity: 0,
+            pointerEvents: "none",
+            border: 0,
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -767,9 +805,9 @@ function CalendarPicker({
               title={hasCycle ? `${recordsForDate.length} รอบที่เกี่ยวข้อง` : "ไม่มีข้อมูลรอบอบ"}
               style={{
                 ...styles.calendarDay,
-                ...(isSelectedDate ? styles.calendarDaySelected : {}),
-                ...(isInSelectedCycle && !isSelectedDate ? styles.calendarDayInCycle : {}),
                 ...(!isCurrentMonth ? styles.calendarDayMuted : {}),
+                ...(isInSelectedCycle && !isSelectedDate ? styles.calendarDayInCycle : {}),
+                ...(isSelectedDate ? styles.calendarDaySelected : {}),
                 ...(!hasCycle ? styles.calendarDayDisabled : {}),
               }}
             >
@@ -989,6 +1027,26 @@ function formatShortThaiDateTime(value: Date): string {
     minute: "2-digit",
     timeZone: "Asia/Bangkok",
   }).format(value);
+}
+
+function createReportFrameUrl({
+  ovenId,
+  mode,
+  cycle,
+}: {
+  ovenId: string;
+  mode: "current" | "history";
+  cycle: number;
+}): string {
+  const params = new URLSearchParams({
+    ovenId,
+    mode,
+    cycle: String(cycle),
+    auto: "pdf",
+    t: String(Date.now()),
+  });
+
+  return `${window.location.origin}${window.location.pathname}#/reports?${params.toString()}`;
 }
 
 const styles = {
