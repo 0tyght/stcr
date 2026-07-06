@@ -26,6 +26,9 @@ use([
 
 type ChartTheme = "dark" | "company" | "print";
 
+const DASH_ANIMATION_INTERVAL_MS = 120;
+const DASH_ANIMATION_LOOP = 24;
+
 export function TimeSeriesChart({
   points,
   sensors,
@@ -55,6 +58,7 @@ export function TimeSeriesChart({
   const instanceRef = useRef<ECharts | null>(null);
 
   const [pageTheme, setPageTheme] = useState<"dark" | "company">(() => getCurrentPageTheme());
+  const [dashOffset, setDashOffset] = useState(0);
 
   useEffect(() => {
     if (theme === "print") return;
@@ -79,6 +83,18 @@ export function TimeSeriesChart({
     return () => {
       observer.disconnect();
       window.removeEventListener("storage", updateTheme);
+    };
+  }, [theme]);
+
+  useEffect(() => {
+    if (theme === "print") return;
+
+    const timer = window.setInterval(() => {
+      setDashOffset((current) => (current + 1) % DASH_ANIMATION_LOOP);
+    }, DASH_ANIMATION_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(timer);
     };
   }, [theme]);
 
@@ -132,6 +148,7 @@ export function TimeSeriesChart({
                 width: 1,
                 color: definition.color,
                 opacity: palette.markLineOpacity,
+                dashOffset,
               },
               label: {
                 show: true,
@@ -348,6 +365,7 @@ export function TimeSeriesChart({
       series,
     };
   }, [
+    dashOffset,
     effectiveShowDataZoom,
     leftAxisName,
     limitSensors,
@@ -383,7 +401,6 @@ export function TimeSeriesChart({
   useEffect(() => {
     if (!instanceRef.current) return;
 
-    instanceRef.current.clear();
     instanceRef.current.setOption(option, true);
     instanceRef.current.resize();
   }, [option]);
