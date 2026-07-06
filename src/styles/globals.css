@@ -2088,3 +2088,207 @@ tbody tr:hover {
     height: 290px;
   }
 }
+/* =========================================================
+   Fixed Sidebar: ไม่ย่อ / ไม่ hover ขยาย / ไม่บังเนื้อหา
+   ========================================================= */
+
+:root {
+  --sidebar-width: 232px;
+  --sidebar-expanded: 232px;
+}
+
+.app-shell {
+  display: grid;
+  min-height: 100vh;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  background: var(--bg);
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  max-width: var(--sidebar-width);
+  height: 100vh;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--line);
+  background: #11161d;
+  color: var(--ink);
+  transition: none;
+  box-shadow: none;
+}
+
+/* ปิดระบบ hover แล้วขยายเอง */
+.sidebar:hover,
+.sidebar:focus-within,
+.sidebar.is-expanded {
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  max-width: var(--sidebar-width);
+  box-shadow: none;
+}
+
+/* หัวโลโก้ */
+.brand-row {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--line);
+  background: #10151b;
+}
+
+.brand-mark {
+  flex: 0 0 34px;
+}
+
+.brand-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.brand-text strong {
+  overflow: hidden;
+  color: var(--ink-strong);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.brand-text span {
+  overflow: hidden;
+  color: var(--muted-soft);
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* เมนูหลักให้แสดงข้อความตลอด */
+.nav-item span,
+.sidebar-footer {
+  opacity: 1;
+  white-space: nowrap;
+  transition: none;
+}
+
+.sidebar:hover .nav-item span,
+.sidebar:focus-within .nav-item span,
+.sidebar.is-expanded .nav-item span,
+.sidebar:hover .sidebar-footer,
+.sidebar:focus-within .sidebar-footer,
+.sidebar.is-expanded .sidebar-footer {
+  opacity: 1;
+}
+
+/* รายการเตาให้แสดงคำว่า เตา ตลอด */
+.oven-word {
+  display: inline;
+}
+
+.sidebar:hover .oven-word,
+.sidebar:focus-within .oven-word,
+.sidebar.is-expanded .oven-word {
+  display: inline;
+}
+
+.oven-label {
+  opacity: 1;
+  white-space: nowrap;
+}
+
+/* กันไม่ให้เนื้อหาถูกบัง */
+.workspace {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.view-root {
+  min-height: calc(100vh - 48px);
+  padding: 14px 16px 22px;
+  overflow-x: auto;
+}
+
+/* ปรับ mobile ไม่ให้กลับไปซ่อนข้อความ */
+@media (max-width: 860px) {
+  .app-shell {
+    display: grid;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  }
+
+  .sidebar {
+    position: sticky;
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    max-width: var(--sidebar-width);
+    height: 100vh;
+  }
+
+  .sidebar.is-expanded {
+    width: var(--sidebar-width);
+    box-shadow: none;
+  }
+
+  .brand-row {
+    justify-content: flex-start;
+  }
+
+  .primary-nav {
+    display: grid;
+    grid-template-columns: 1fr;
+    padding: 10px 0;
+  }
+
+  .nav-item {
+    justify-content: flex-start;
+    min-height: 42px;
+    padding: 0 15px;
+  }
+
+  .nav-item span {
+    display: inline;
+    opacity: 1;
+  }
+
+  .oven-nav {
+    display: block;
+    overflow: auto;
+    padding: 6px 0;
+  }
+
+  .oven-link {
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-start;
+    padding: 0 11px;
+    border-right: 0;
+    border-left: 3px solid transparent;
+  }
+
+  .oven-link.active {
+    border-left-color: var(--orange);
+  }
+
+  .oven-link .mini-status {
+    display: inline-flex;
+  }
+
+  .sidebar-footer {
+    display: block;
+    opacity: 1;
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+  }
+}
