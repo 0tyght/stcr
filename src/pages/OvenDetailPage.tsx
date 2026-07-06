@@ -42,7 +42,7 @@ export function OvenDetailPage() {
   useEffect(() => {
     if (!oven) return;
     setMode(canUseRealtime(oven.status) ? "realtime" : "historical");
-    setSelectedCycle(Math.max(1, oven.cycleCount - 1));
+    setSelectedCycle(getDefaultHistoricalCycle(oven));
   }, [oven?.id, oven?.cycleCount, oven?.status]);
 
   useEffect(() => {
@@ -55,7 +55,7 @@ export function OvenDetailPage() {
   const effectiveMode = realtimeAvailable ? mode : "historical";
   const cycleRange = useMemo(() => {
     if (!oven) return null;
-    return getDetailCycleRange(oven, effectiveMode, selectedCycle ?? Math.max(1, oven.cycleCount - 1));
+    return getDetailCycleRange(oven, effectiveMode, selectedCycle ?? getDefaultHistoricalCycle(oven));
   }, [effectiveMode, oven, selectedCycle]);
 
   useEffect(() => {
@@ -154,7 +154,13 @@ export function OvenDetailPage() {
       {effectiveMode === "realtime" ? (
         <section className="realtime-gauge-grid" aria-label="ค่า realtime จากเซนเซอร์">
           {allSensorKeys.map((sensor) => (
-            <SensorGauge key={sensor} sensor={sensor} value={oven.readings[sensor].value} limit={oven.limits[sensor]} />
+            <SensorGauge
+              key={sensor}
+              sensor={sensor}
+              value={oven.readings[sensor].value}
+              limit={getGaugeLimit(oven, sensor)}
+              showLimit={sensor !== "humidity"}
+            />
           ))}
         </section>
       ) : null}
@@ -186,7 +192,9 @@ export function OvenDetailPage() {
           <div className="download-row">
             <Link
               className="button button-primary"
-              to={`/reports?ovenId=${oven.id}&mode=${effectiveMode === "realtime" ? "current" : "history"}&auto=pdf`}
+              to={`/reports?ovenId=${oven.id}&mode=${effectiveMode === "realtime" ? "current" : "history"}&cycle=${
+                effectiveMode === "realtime" ? oven.cycleCount : selectedCycle ?? getDefaultHistoricalCycle(oven)
+              }&auto=pdf`}
             >
               <FileDown size={17} />
               {effectiveMode === "realtime" ? "รายงานรอบปัจจุบัน" : "รายงานย้อนหลัง"}
@@ -232,6 +240,7 @@ export function OvenDetailPage() {
           leftAxisName="อุณหภูมิ °C"
           rightAxisName=""
           limitSensors={["furnaceTemp"]}
+          limitLabel="เตาเผา / Blower"
         />
       </section>
 
@@ -279,6 +288,7 @@ function ChartPanel({
   leftAxisName,
   rightAxisName,
   limitSensors,
+  limitLabel,
 }: {
   title: string;
   description: string;
@@ -290,6 +300,7 @@ function ChartPanel({
   leftAxisName: string;
   rightAxisName: string;
   limitSensors: SensorKey[];
+  limitLabel?: string;
 }) {
   return (
     <section className="panel chart-panel grafana-chart-panel">
@@ -300,7 +311,7 @@ function ChartPanel({
         </div>
         <span className="panel-mode-chip">{mode === "realtime" ? "Live" : "Historical"}</span>
       </div>
-      <ThresholdLegend sensors={limitSensors} limits={limits} />
+      <ThresholdLegend sensors={limitSensors} limits={limits} labelOverrides={limitLabel ? { [limitSensors[0]]: limitLabel } : undefined} />
       <TimeSeriesChart
         points={points}
         sensors={sensors}
@@ -314,6 +325,16 @@ function ChartPanel({
       />
     </section>
   );
+}
+
+function getGaugeLimit(oven: Oven, sensor: SensorKey) {
+  if (sensor === "furnaceTemp" || sensor === "blowerTemp") return oven.limits.furnaceTemp;
+  return oven.limits[sensor];
+}
+
+function getDefaultHistoricalCycle(oven: Oven): number {
+  if (oven.status === "open") return Math.max(1, oven.cycleCount - 1);
+  return Math.max(1, oven.cycleCount);
 }
 
 function TemperatureRangeCard({ oven }: { oven: Oven }) {

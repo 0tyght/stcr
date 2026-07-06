@@ -23,6 +23,7 @@ export function ReportPage() {
   const ovenId = searchParams.get("ovenId") ?? "";
   const mode: ReportMode = searchParams.get("mode") === "history" ? "history" : "current";
   const autoPdf = searchParams.get("auto") === "pdf";
+  const requestedCycle = Number(searchParams.get("cycle"));
   const oven = ovens.find((item) => item.id === ovenId);
   const [selectedCycle, setSelectedCycle] = useState<number | null>(null);
   const [points, setPoints] = useState<TimeSeriesPoint[]>([]);
@@ -39,8 +40,10 @@ export function ReportPage() {
 
   useEffect(() => {
     if (!oven) return;
-    setSelectedCycle(mode === "current" ? oven.cycleCount : Math.max(1, oven.cycleCount - 1));
-  }, [mode, oven?.id, oven?.cycleCount]);
+    const fallbackCycle = mode === "current" ? oven.cycleCount : getDefaultHistoricalCycle(oven);
+    const cycle = Number.isFinite(requestedCycle) && requestedCycle > 0 ? requestedCycle : fallbackCycle;
+    setSelectedCycle(Math.min(Math.max(1, cycle), Math.max(oven.cycleCount, 1)));
+  }, [mode, oven?.id, oven?.cycleCount, requestedCycle]);
 
   const cycleRange = useMemo(() => {
     if (!oven || selectedCycle == null) return null;
@@ -230,6 +233,11 @@ function getCycleRange(oven: Oven, mode: ReportMode, cycleNumber: number): { sta
   const end = new Date(baseEnd.getTime() - cycleOffset * (REPORT_CYCLE_MS + 12 * 60 * 60 * 1000));
   const start = new Date(end.getTime() - REPORT_CYCLE_MS);
   return { start, end };
+}
+
+function getDefaultHistoricalCycle(oven: Oven): number {
+  if (oven.status === "open") return Math.max(1, oven.cycleCount - 1);
+  return Math.max(1, oven.cycleCount);
 }
 
 function summarizeReport(points: TimeSeriesPoint[]) {

@@ -2,11 +2,21 @@ import type { LimitRule, SensorKey } from "../../types";
 import { formatNumber } from "../../utils/format";
 import { sensorByKey } from "../../utils/sensors";
 
-export function SensorGauge({ sensor, value, limit }: { sensor: SensorKey; value: number; limit: LimitRule }) {
+export function SensorGauge({
+  sensor,
+  value,
+  limit,
+  showLimit = true,
+}: {
+  sensor: SensorKey;
+  value: number;
+  limit?: LimitRule;
+  showLimit?: boolean;
+}) {
   const definition = sensorByKey[sensor];
   const unit = definition.unit === "C" ? "°C" : "%";
-  const ratio = getLimitRatio(value, limit.lower, limit.upper);
-  const tone = getGaugeTone(value, limit.lower, limit.upper, ratio);
+  const ratio = showLimit && limit ? getLimitRatio(value, limit.lower, limit.upper) : getValueRatio(sensor, value);
+  const tone = showLimit && limit ? getGaugeTone(value, limit.lower, limit.upper, ratio) : "normal";
   const formattedValue = formatNumber(value, sensor === "furnaceTemp" ? 0 : 1);
 
   return (
@@ -34,12 +44,16 @@ export function SensorGauge({ sensor, value, limit }: { sensor: SensorKey; value
         </strong>
       </div>
       <div className="gauge-meta">
-        <span>{Math.round(ratio)}% ของช่วง limit</span>
-        <small>
-          Lower {limit.lower}
-          {unit} · Upper {limit.upper}
-          {unit}
-        </small>
+        <span>{showLimit ? `${Math.round(ratio)}% ของช่วง limit` : "ค่าปัจจุบัน"}</span>
+        {showLimit && limit ? (
+          <small>
+            Lower {limit.lower}
+            {unit} · Upper {limit.upper}
+            {unit}
+          </small>
+        ) : (
+          <small>ไม่มี Upper/Lower สำหรับค่านี้</small>
+        )}
       </div>
     </article>
   );
@@ -48,6 +62,11 @@ export function SensorGauge({ sensor, value, limit }: { sensor: SensorKey; value
 function getLimitRatio(value: number, lower: number, upper: number): number {
   const range = Math.max(upper - lower, 1);
   return clamp(((value - lower) / range) * 100, 0, 100);
+}
+
+function getValueRatio(sensor: SensorKey, value: number): number {
+  if (sensor === "humidity") return clamp(value, 0, 100);
+  return clamp(value, 0, 100);
 }
 
 function getGaugeTone(value: number, lower: number, upper: number, ratio: number): "normal" | "warning" | "danger" {

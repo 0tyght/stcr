@@ -96,7 +96,15 @@ export function TimeSeriesChart({
                 color: definition.color,
                 opacity: 0.62,
               },
-              label: { show: false },
+              label: {
+                show: true,
+                formatter: "{b}",
+                color: definition.color,
+                fontSize: 11,
+                fontWeight: 700,
+                backgroundColor: isPrint ? "rgba(255,255,255,0.82)" : "rgba(17, 24, 39, 0.76)",
+                padding: [2, 4],
+              },
               data: [
                 { name: `${definition.shortLabel} Upper`, yAxis: limit.upper },
                 { name: `${definition.shortLabel} Lower`, yAxis: limit.lower },

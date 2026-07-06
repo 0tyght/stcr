@@ -1,7 +1,15 @@
 import type { LimitMap, SensorKey } from "../../types";
 import { sensorByKey } from "../../utils/sensors";
 
-export function ThresholdLegend({ sensors, limits }: { sensors: SensorKey[]; limits: LimitMap }) {
+export function ThresholdLegend({
+  sensors,
+  limits,
+  labelOverrides = {},
+}: {
+  sensors: SensorKey[];
+  limits: LimitMap;
+  labelOverrides?: Partial<Record<SensorKey, string>>;
+}) {
   return (
     <div className="threshold-legend" aria-label="คำอธิบายเส้น limit">
       {sensors.map((sensor) => {
@@ -10,7 +18,7 @@ export function ThresholdLegend({ sensors, limits }: { sensors: SensorKey[]; lim
         return (
           <div className="threshold-item" key={sensor}>
             <span className="legend-dot" style={{ backgroundColor: definition.color }} />
-            <strong>{definition.shortLabel}</strong>
+            <strong>{labelOverrides[sensor] ?? definition.shortLabel}</strong>
             <span className="dash-sample" style={{ borderTopColor: definition.color }} />
             <span>
               เส้นปะ Upper {limits[sensor].upper}
