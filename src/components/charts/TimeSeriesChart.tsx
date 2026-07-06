@@ -9,7 +9,7 @@ import {
 } from "echarts/components";
 import { init, use, type ECharts, type EChartsCoreOption } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { LimitMap, SensorKey, TimeSeriesPoint } from "../../types";
 import { sensorByKey } from "../../utils/sensors";
 
@@ -54,16 +54,35 @@ export function TimeSeriesChart({
   const chartRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<ECharts | null>(null);
 
-  const resolvedTheme = useMemo<ChartTheme>(() => {
-    if (theme) return theme;
+  const [pageTheme, setPageTheme] = useState<"dark" | "company">(() => getCurrentPageTheme());
 
-    const rootTheme = document.documentElement.dataset.uiTheme;
-    if (rootTheme === "company") return "company";
+  useEffect(() => {
+    if (theme === "print") return;
 
-    const savedTheme = localStorage.getItem("stcr-theme-mode");
-    return savedTheme === "company" ? "company" : "dark";
+    const root = document.documentElement;
+
+    const updateTheme = () => {
+      setPageTheme(getCurrentPageTheme());
+    };
+
+    updateTheme();
+
+    const observer = new MutationObserver(updateTheme);
+
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ["data-ui-theme", "data-company"],
+    });
+
+    window.addEventListener("storage", updateTheme);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("storage", updateTheme);
+    };
   }, [theme]);
 
+  const resolvedTheme: ChartTheme = theme === "print" ? "print" : theme ?? pageTheme;
   const effectiveShowDataZoom = showDataZoom ?? resolvedTheme !== "print";
 
   const option = useMemo<EChartsCoreOption>(() => {
@@ -74,62 +93,9 @@ export function TimeSeriesChart({
     const leftBounds = getAxisBounds(points, leftSensors, limits, shownLimitSensors);
     const rightBounds = getAxisBounds(points, rightSensors, limits, []);
 
-    const isPrint = resolvedTheme === "print";
-    const isCompany = resolvedTheme === "company";
+    const palette = getChartPalette(resolvedTheme);
 
-    const textColor = isPrint
-      ? "#111827"
-      : isCompany
-        ? "#334155"
-        : "#d8dce3";
-
-    const mutedColor = isPrint
-      ? "#4b5563"
-      : isCompany
-        ? "#64748b"
-        : "#9aa3b2";
-
-    const gridColor = isPrint
-      ? "#d1d5db"
-      : isCompany
-        ? "#e2e8f0"
-        : "#2a3038";
-
-    const axisColor = isPrint
-      ? "#6b7280"
-      : isCompany
-        ? "#cbd5e1"
-        : "#3a424f";
-
-    const chartBackground = isPrint
-      ? "#ffffff"
-      : isCompany
-        ? "#ffffff"
-        : "transparent";
-
-    const tooltipBackground = isPrint
-      ? "#ffffff"
-      : isCompany
-        ? "#ffffff"
-        : "#111820";
-
-    const tooltipBorder = isPrint
-      ? "#d1d5db"
-      : isCompany
-        ? "#d8dde5"
-        : axisColor;
-
-    const sliderFill = isCompany
-      ? "rgba(148, 163, 184, 0.18)"
-      : "rgba(87, 148, 242, 0.18)";
-
-    const sliderBackground = isPrint
-      ? "#f9fafb"
-      : isCompany
-        ? "#f8fafc"
-        : "#111820";
-
-    const lineSeries = sensors.map((sensor) => {
+    const series = sensors.map((sensor) => {
       const definition = sensorByKey[sensor];
       const useRightAxis = rightAxisSensors.includes(sensor);
       const showLimit = shownLimitSensors.includes(sensor);
@@ -148,7 +114,7 @@ export function TimeSeriesChart({
           opacity: 1,
         },
         areaStyle: {
-          color: withAlpha(definition.color, isCompany ? 0.08 : 0.06),
+          color: withAlpha(definition.color, palette.areaAlpha),
           opacity: 1,
         },
         itemStyle: {
@@ -165,7 +131,7 @@ export function TimeSeriesChart({
                 type: "dashed" as const,
                 width: 1,
                 color: definition.color,
-                opacity: isCompany ? 0.85 : 0.62,
+                opacity: palette.markLineOpacity,
               },
               label: {
                 show: true,
@@ -173,11 +139,14 @@ export function TimeSeriesChart({
                 formatter: "{b}",
                 color: definition.color,
                 fontSize: 11,
-                fontWeight: 700,
-                backgroundColor: isPrint || isCompany
-                  ? "rgba(255,255,255,0.88)"
-                  : "rgba(17,24,39,0.76)",
-                padding: [2, 4],
+                fontWeight: 800,
+                backgroundColor: palette.markLabelBackground,
+                borderColor: palette.markLabelBorder,
+                borderWidth: 1,
+                borderRadius: 2,
+                padding: [3, 6],
+                shadowColor: palette.markLabelShadow,
+                shadowBlur: palette.markLabelShadowBlur,
               },
               data: [
                 { name: `${definition.shortLabel} Upper`, yAxis: limit.upper },
@@ -190,7 +159,7 @@ export function TimeSeriesChart({
 
     return {
       animation: false,
-      backgroundColor: chartBackground,
+      backgroundColor: palette.background,
       color: sensors.map((sensor) => sensorByKey[sensor].color),
 
       title: {
@@ -200,7 +169,7 @@ export function TimeSeriesChart({
         textStyle: {
           fontSize: 15,
           fontWeight: 700,
-          color: textColor,
+          color: palette.text,
         },
       },
 
@@ -209,24 +178,26 @@ export function TimeSeriesChart({
         axisPointer: {
           type: "cross",
           lineStyle: {
-            color: axisColor,
+            color: palette.axis,
             width: 1,
-            opacity: isCompany ? 0.7 : 0.5,
+            opacity: palette.axisPointerOpacity,
           },
           crossStyle: {
-            color: axisColor,
+            color: palette.axis,
           },
           label: {
-            backgroundColor: tooltipBackground,
-            color: textColor,
-            borderColor: tooltipBorder,
+            backgroundColor: palette.tooltipBackground,
+            borderColor: palette.tooltipBorder,
             borderWidth: 1,
+            color: palette.text,
           },
         },
-        backgroundColor: tooltipBackground,
-        borderColor: tooltipBorder,
+        backgroundColor: palette.tooltipBackground,
+        borderColor: palette.tooltipBorder,
         borderWidth: 1,
-        textStyle: { color: textColor },
+        textStyle: {
+          color: palette.text,
+        },
         valueFormatter: (value: unknown) =>
           typeof value === "number" ? value.toFixed(1) : String(value),
       },
@@ -234,7 +205,9 @@ export function TimeSeriesChart({
       legend: {
         top: 28,
         type: "scroll",
-        textStyle: { color: mutedColor },
+        textStyle: {
+          color: palette.muted,
+        },
       },
 
       grid: {
@@ -248,17 +221,27 @@ export function TimeSeriesChart({
       xAxis: {
         type: "time",
         axisLabel: {
-          color: mutedColor,
+          color: palette.muted,
           formatter: (value: number) => formatShortDateTime(new Date(value)),
         },
-        axisLine: { lineStyle: { color: axisColor, width: 1 } },
-        axisTick: { lineStyle: { color: axisColor, width: 1 } },
+        axisLine: {
+          lineStyle: {
+            color: palette.axis,
+            width: 1,
+          },
+        },
+        axisTick: {
+          lineStyle: {
+            color: palette.axis,
+            width: 1,
+          },
+        },
         splitLine: {
           show: true,
           lineStyle: {
-            color: gridColor,
+            color: palette.grid,
             width: 1,
-            opacity: isCompany ? 0.85 : 1,
+            opacity: palette.gridOpacity,
           },
         },
       },
@@ -269,15 +252,29 @@ export function TimeSeriesChart({
           name: leftAxisName,
           min: leftBounds.min,
           max: leftBounds.max,
-          nameTextStyle: { color: mutedColor },
-          axisLabel: { color: mutedColor },
-          axisLine: { lineStyle: { color: axisColor, width: 1 } },
-          axisTick: { lineStyle: { color: axisColor, width: 1 } },
+          nameTextStyle: {
+            color: palette.muted,
+          },
+          axisLabel: {
+            color: palette.muted,
+          },
+          axisLine: {
+            lineStyle: {
+              color: palette.axis,
+              width: 1,
+            },
+          },
+          axisTick: {
+            lineStyle: {
+              color: palette.axis,
+              width: 1,
+            },
+          },
           splitLine: {
             lineStyle: {
-              color: gridColor,
+              color: palette.grid,
               width: 1,
-              opacity: isCompany ? 0.85 : 1,
+              opacity: palette.gridOpacity,
             },
           },
         },
@@ -287,11 +284,27 @@ export function TimeSeriesChart({
           min: rightBounds.min,
           max: rightBounds.max,
           show: rightSensors.length > 0,
-          nameTextStyle: { color: mutedColor },
-          axisLabel: { color: mutedColor },
-          axisLine: { lineStyle: { color: axisColor, width: 1 } },
-          axisTick: { lineStyle: { color: axisColor, width: 1 } },
-          splitLine: { show: false },
+          nameTextStyle: {
+            color: palette.muted,
+          },
+          axisLabel: {
+            color: palette.muted,
+          },
+          axisLine: {
+            lineStyle: {
+              color: palette.axis,
+              width: 1,
+            },
+          },
+          axisTick: {
+            lineStyle: {
+              color: palette.axis,
+              width: 1,
+            },
+          },
+          splitLine: {
+            show: false,
+          },
         },
       ],
 
@@ -299,19 +312,40 @@ export function TimeSeriesChart({
         realtime || !effectiveShowDataZoom
           ? []
           : [
-              { type: "inside", throttle: 80 },
+              {
+                type: "inside",
+                throttle: 80,
+              },
               {
                 type: "slider",
                 height: 24,
                 bottom: 22,
-                borderColor: gridColor,
-                fillerColor: sliderFill,
-                backgroundColor: sliderBackground,
-                textStyle: { color: mutedColor },
+                borderColor: palette.zoomBorder,
+                fillerColor: palette.zoomFiller,
+                backgroundColor: palette.zoomBackground,
+                dataBackground: {
+                  lineStyle: {
+                    color: palette.axis,
+                  },
+                  areaStyle: {
+                    color: palette.zoomArea,
+                  },
+                },
+                selectedDataBackground: {
+                  lineStyle: {
+                    color: palette.axis,
+                  },
+                  areaStyle: {
+                    color: palette.zoomFiller,
+                  },
+                },
+                textStyle: {
+                  color: palette.muted,
+                },
               },
             ],
 
-      series: lineSeries,
+      series,
     };
   }, [
     effectiveShowDataZoom,
@@ -348,12 +382,97 @@ export function TimeSeriesChart({
 
   useEffect(() => {
     if (!instanceRef.current) return;
+
     instanceRef.current.clear();
     instanceRef.current.setOption(option, true);
     instanceRef.current.resize();
   }, [option]);
 
   return <div className="time-series-chart" ref={chartRef} role="img" aria-label={title} />;
+}
+
+function getCurrentPageTheme(): "dark" | "company" {
+  const rootTheme = document.documentElement.dataset.uiTheme;
+
+  if (rootTheme === "company") {
+    return "company";
+  }
+
+  const savedTheme = localStorage.getItem("stcr-theme-mode");
+
+  return savedTheme === "company" ? "company" : "dark";
+}
+
+function getChartPalette(theme: ChartTheme) {
+  if (theme === "print") {
+    return {
+      background: "#ffffff",
+      text: "#111827",
+      muted: "#4b5563",
+      grid: "#d1d5db",
+      gridOpacity: 1,
+      axis: "#6b7280",
+      axisPointerOpacity: 0.75,
+      tooltipBackground: "#ffffff",
+      tooltipBorder: "#d1d5db",
+      markLabelBackground: "rgba(255, 255, 255, 0.94)",
+      markLabelBorder: "#d1d5db",
+      markLabelShadow: "rgba(15, 23, 42, 0.12)",
+      markLabelShadowBlur: 4,
+      markLineOpacity: 0.86,
+      areaAlpha: 0.07,
+      zoomBackground: "#f9fafb",
+      zoomBorder: "#d1d5db",
+      zoomFiller: "rgba(148, 163, 184, 0.22)",
+      zoomArea: "rgba(148, 163, 184, 0.14)",
+    };
+  }
+
+  if (theme === "company") {
+    return {
+      background: "#ffffff",
+      text: "#334155",
+      muted: "#64748b",
+      grid: "#e2e8f0",
+      gridOpacity: 0.85,
+      axis: "#cbd5e1",
+      axisPointerOpacity: 0.7,
+      tooltipBackground: "#ffffff",
+      tooltipBorder: "#d8dde5",
+      markLabelBackground: "rgba(255, 255, 255, 0.94)",
+      markLabelBorder: "#d8dde5",
+      markLabelShadow: "rgba(15, 23, 42, 0.12)",
+      markLabelShadowBlur: 4,
+      markLineOpacity: 0.85,
+      areaAlpha: 0.08,
+      zoomBackground: "#f8fafc",
+      zoomBorder: "#e2e8f0",
+      zoomFiller: "rgba(148, 163, 184, 0.18)",
+      zoomArea: "rgba(148, 163, 184, 0.14)",
+    };
+  }
+
+  return {
+    background: "transparent",
+    text: "#d8dce3",
+    muted: "#9aa3b2",
+    grid: "#2a3038",
+    gridOpacity: 1,
+    axis: "#3a424f",
+    axisPointerOpacity: 0.58,
+    tooltipBackground: "#111820",
+    tooltipBorder: "#3a424f",
+    markLabelBackground: "rgba(8, 13, 20, 0.92)",
+    markLabelBorder: "rgba(255, 255, 255, 0.16)",
+    markLabelShadow: "rgba(0, 0, 0, 0.5)",
+    markLabelShadowBlur: 5,
+    markLineOpacity: 0.72,
+    areaAlpha: 0.06,
+    zoomBackground: "#111820",
+    zoomBorder: "#2a3038",
+    zoomFiller: "rgba(87, 148, 242, 0.18)",
+    zoomArea: "rgba(154, 163, 178, 0.12)",
+  };
 }
 
 function formatShortDateTime(value: Date): string {
@@ -368,6 +487,7 @@ function formatShortDateTime(value: Date): string {
 
 function withAlpha(hex: string, alpha: number): string {
   const normalized = hex.replace("#", "");
+
   if (normalized.length !== 6) return hex;
 
   const r = parseInt(normalized.slice(0, 2), 16);
