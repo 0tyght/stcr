@@ -1,31 +1,42 @@
 :root {
   color-scheme: dark;
+
   --bg: #0b0f14;
   --bg-raised: #11161d;
   --surface: #151a21;
   --surface-soft: #191f27;
   --surface-strong: #202733;
+
   --ink: #d8dce3;
   --ink-strong: #f2f4f8;
   --muted: #9aa3b2;
   --muted-soft: #747f90;
+
   --line: #2a3038;
   --line-strong: #3a424f;
+
   --orange: #ff780a;
+
   --blue: #5794f2;
   --blue-soft: rgba(87, 148, 242, 0.16);
+
   --green: #73bf69;
   --green-soft: rgba(115, 191, 105, 0.16);
+
   --red: #f2495c;
   --red-soft: rgba(242, 73, 92, 0.16);
+
   --yellow: #f2cc0c;
   --yellow-soft: rgba(242, 204, 12, 0.14);
-  --purple: #b877d9;
-  --purple-soft: rgba(184, 119, 217, 0.16);
+
   --offline: #8b95a5;
+  --offline-soft: rgba(139, 149, 165, 0.16);
+
   --radius: 3px;
   --shadow: 0 8px 26px rgba(0, 0, 0, 0.35);
+
   --sidebar-width: 232px;
+
   font-family: Inter, "Segoe UI", Tahoma, Arial, sans-serif;
 }
 
@@ -68,7 +79,7 @@ a {
 }
 
 /* =========================
-   Layout
+   App Layout
    ========================= */
 
 .app-shell {
@@ -90,7 +101,7 @@ a {
 }
 
 /* =========================
-   Fixed Sidebar
+   Sidebar
    ========================= */
 
 .sidebar {
@@ -120,11 +131,6 @@ a {
   box-shadow: none;
 }
 
-/* กันกรณีมีปุ่ม hamburger หลุดมาจากไฟล์เก่า */
-.brand-row .icon-button {
-  display: none !important;
-}
-
 .brand-row {
   display: flex;
   min-height: 48px;
@@ -134,6 +140,10 @@ a {
   padding: 0 12px;
   border-bottom: 1px solid var(--line);
   background: #10151b;
+}
+
+.brand-row .icon-button {
+  display: none !important;
 }
 
 .brand-mark {
@@ -238,7 +248,6 @@ a {
 
 .oven-link {
   position: relative;
-  width: 100%;
   min-width: 0;
   min-height: 34px;
   justify-content: flex-start;
@@ -268,6 +277,18 @@ a {
   border-radius: 999px;
   background: var(--muted-soft);
   opacity: 1;
+}
+
+.mini-status.status-open {
+  background: var(--green);
+}
+
+.mini-status.status-closed {
+  background: var(--muted-soft);
+}
+
+.mini-status.status-offline {
+  background: var(--offline);
 }
 
 .sidebar-footer {
@@ -519,7 +540,7 @@ kbd {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(130px, 1fr));
+  grid-template-columns: repeat(4, minmax(130px, 1fr));
   gap: 8px;
   margin-bottom: 8px;
 }
@@ -564,6 +585,11 @@ kbd {
   color: var(--green);
 }
 
+.tone-closed .summary-icon,
+.tone-closed strong {
+  color: var(--muted);
+}
+
 .tone-warning .summary-icon,
 .tone-warning strong {
   color: var(--yellow);
@@ -577,11 +603,6 @@ kbd {
 .tone-offline .summary-icon,
 .tone-offline strong {
   color: var(--offline);
-}
-
-.tone-disabled .summary-icon,
-.tone-disabled strong {
-  color: var(--purple);
 }
 
 /* =========================
@@ -714,6 +735,7 @@ select:focus {
   display: inline-flex;
   min-height: 24px;
   align-items: center;
+  border: 1px solid transparent;
   border-radius: 3px;
   padding: 2px 8px;
   font-size: 12px;
@@ -729,7 +751,7 @@ select:focus {
 
 .status-closed,
 .status-acknowledged {
-  background: rgba(139, 149, 165, 0.13);
+  background: var(--offline-soft);
   color: var(--muted);
 }
 
@@ -745,38 +767,13 @@ select:focus {
 }
 
 .status-offline {
-  background: rgba(139, 149, 165, 0.16);
+  background: var(--offline-soft);
   color: var(--offline);
 }
 
-.status-disabled,
 .status-resolved {
-  background: var(--purple-soft);
-  color: var(--purple);
-}
-
-.mini-status.status-open {
-  background: var(--green);
-}
-
-.mini-status.status-closed {
-  background: var(--muted-soft);
-}
-
-.mini-status.status-warning {
-  background: var(--yellow);
-}
-
-.mini-status.status-danger {
-  background: var(--red);
-}
-
-.mini-status.status-offline {
-  background: var(--offline);
-}
-
-.mini-status.status-disabled {
-  background: var(--purple);
+  background: var(--green-soft);
+  color: var(--green);
 }
 
 /* =========================
@@ -804,24 +801,9 @@ select:focus {
   box-shadow: inset 3px 0 0 var(--muted-soft);
 }
 
-.oven-card.status-warning {
-  background: linear-gradient(180deg, rgba(242, 204, 12, 0.11), #151a21 52%);
-  box-shadow: inset 3px 0 0 var(--yellow);
-}
-
-.oven-card.status-danger {
-  background: linear-gradient(180deg, rgba(242, 73, 92, 0.11), #151a21 52%);
-  box-shadow: inset 3px 0 0 var(--red);
-}
-
 .oven-card.status-offline {
   background: linear-gradient(180deg, rgba(139, 149, 165, 0.12), #151a21 52%);
   box-shadow: inset 3px 0 0 var(--offline);
-}
-
-.oven-card.status-disabled {
-  background: linear-gradient(180deg, rgba(184, 119, 217, 0.1), #151a21 52%);
-  box-shadow: inset 3px 0 0 var(--purple);
 }
 
 .oven-card-header {
@@ -839,20 +821,12 @@ select:focus {
   box-shadow: inset 3px 0 0 var(--green);
 }
 
-.oven-card-header.status-warning {
-  box-shadow: inset 3px 0 0 var(--yellow);
-}
-
-.oven-card-header.status-danger {
-  box-shadow: inset 3px 0 0 var(--red);
+.oven-card-header.status-closed {
+  box-shadow: inset 3px 0 0 var(--muted-soft);
 }
 
 .oven-card-header.status-offline {
   box-shadow: inset 3px 0 0 var(--offline);
-}
-
-.oven-card-header.status-disabled {
-  box-shadow: inset 3px 0 0 var(--purple);
 }
 
 .oven-card-header h2 {
@@ -1050,20 +1024,8 @@ select:focus {
   box-shadow: inset 4px 0 0 var(--muted-soft);
 }
 
-.status-banner.status-warning {
-  box-shadow: inset 4px 0 0 var(--yellow);
-}
-
-.status-banner.status-danger {
-  box-shadow: inset 4px 0 0 var(--red);
-}
-
 .status-banner.status-offline {
   box-shadow: inset 4px 0 0 var(--offline);
-}
-
-.status-banner.status-disabled {
-  box-shadow: inset 4px 0 0 var(--purple);
 }
 
 .status-banner p,
@@ -1853,20 +1815,6 @@ tbody tr:hover {
   gap: 8px;
 }
 
-.switch-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--ink);
-  font-weight: 700;
-}
-
-.switch-row input {
-  width: 16px;
-  min-height: 16px;
-  accent-color: var(--green);
-}
-
 .limit-row {
   display: grid;
   grid-template-columns: minmax(150px, 1fr) repeat(2, minmax(90px, 130px));
@@ -2007,7 +1955,7 @@ tbody tr:hover {
   }
 
   .summary-grid {
-    grid-template-columns: repeat(3, minmax(130px, 1fr));
+    grid-template-columns: repeat(2, minmax(130px, 1fr));
   }
 
   .oven-grid {
@@ -2045,13 +1993,6 @@ tbody tr:hover {
     min-width: var(--sidebar-width);
     max-width: var(--sidebar-width);
     height: 100vh;
-  }
-
-  .sidebar.is-expanded {
-    width: var(--sidebar-width);
-    min-width: var(--sidebar-width);
-    max-width: var(--sidebar-width);
-    box-shadow: none;
   }
 
   .brand-row {
@@ -2226,1071 +2167,4 @@ tbody tr:hover {
   .time-series-chart {
     height: 290px;
   }
-}
-/* =========================================================
-   Company Theme Switch: GR / TTN / Dark
-   วางท้ายสุดของ globals.css
-   ========================================================= */
-
-/* ---------- Theme Switch Button ---------- */
-
-.theme-switch {
-  display: inline-flex;
-  min-height: 32px;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: #111820;
-  color: var(--muted);
-  padding: 0 10px;
-  font-size: 12px;
-  font-weight: 750;
-  white-space: nowrap;
-}
-
-.theme-switch:hover,
-.theme-switch:focus-visible {
-  border-color: var(--line-strong);
-  background: #1d2530;
-  color: var(--ink-strong);
-  outline: none;
-}
-
-.theme-switch-track {
-  position: relative;
-  width: 34px;
-  height: 18px;
-  border-radius: 999px;
-  background: rgba(148, 163, 184, 0.25);
-}
-
-.theme-switch-dot {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  background: #ffffff;
-  transition: transform 0.18s ease;
-}
-
-.theme-switch.is-dark .theme-switch-dot {
-  transform: translateX(16px);
-}
-
-.theme-switch.is-company {
-  border-color: rgba(255, 255, 255, 0.32);
-}
-
-.theme-switch.is-dark {
-  background: #111820;
-  color: #d8dce3;
-}
-
-/* ---------- Company Variables ---------- */
-
-:root[data-ui-theme="company"][data-company="gr"] {
-  color-scheme: light;
-
-  --company-primary: #ecd92f;
-  --company-primary-soft: #fff5a6;
-  --company-accent: #53575d;
-  --company-sidebar: #363b40;
-  --company-sidebar-head: #363b40;
-  --company-sidebar-text: #f3f4f6;
-  --company-sidebar-muted: #d1d5db;
-  --company-active-bg: #ecd92f;
-  --company-active-text: #22252a;
-
-  --bg: #eef1f3;
-  --surface: #ffffff;
-  --surface-soft: #f6f7f9;
-  --surface-strong: #e5e7eb;
-  --ink: #374151;
-  --ink-strong: #24292f;
-  --muted: #6b7280;
-  --muted-soft: #9ca3af;
-  --line: #d9dde3;
-  --line-strong: #c4c9d1;
-}
-
-:root[data-ui-theme="company"][data-company="ttn"] {
-  color-scheme: light;
-
-  --company-primary: #a784f6;
-  --company-primary-soft: #efe7ff;
-  --company-accent: #f2c45f;
-  --company-sidebar: #a784f6;
-  --company-sidebar-head: #a784f6;
-  --company-sidebar-text: #ffffff;
-  --company-sidebar-muted: #f2eaff;
-  --company-active-bg: #efe7ff;
-  --company-active-text: #3f3561;
-
-  --bg: #f3f6f8;
-  --surface: #ffffff;
-  --surface-soft: #fbf9ff;
-  --surface-strong: #efe7ff;
-  --ink: #3f4550;
-  --ink-strong: #30343b;
-  --muted: #7b8190;
-  --muted-soft: #a5a8b2;
-  --line: #e1d8fa;
-  --line-strong: #c9b8f4;
-}
-
-/* ---------- Company Mode Base ---------- */
-
-:root[data-ui-theme="company"] body {
-  background: var(--bg);
-  color: var(--ink);
-}
-
-:root[data-ui-theme="company"] .app-shell,
-:root[data-ui-theme="company"] .workspace {
-  background: var(--bg);
-}
-
-/* ---------- Topbar Company Theme ---------- */
-
-:root[data-ui-theme="company"] .topbar {
-  border-bottom: 1px solid rgba(17, 24, 39, 0.14);
-  background: #ffffff;
-  color: var(--ink);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
-  backdrop-filter: none;
-}
-
-:root[data-ui-theme="company"] .breadcrumbs {
-  color: var(--muted);
-}
-
-:root[data-ui-theme="company"] .breadcrumbs strong {
-  color: var(--ink-strong);
-}
-
-:root[data-ui-theme="company"] .global-search {
-  border-color: #d9dde3;
-  background: #f8fafc;
-  color: var(--muted);
-}
-
-:root[data-ui-theme="company"] .global-search input {
-  color: var(--ink);
-}
-
-:root[data-ui-theme="company"] kbd {
-  border-color: #d1d5db;
-  color: var(--muted);
-  background: #ffffff;
-}
-
-:root[data-ui-theme="company"] .toolbar-button,
-:root[data-ui-theme="company"] .icon-button,
-:root[data-ui-theme="company"] .user-chip {
-  border-color: #d9dde3;
-  background: #ffffff;
-  color: var(--muted);
-}
-
-:root[data-ui-theme="company"] .toolbar-button:hover,
-:root[data-ui-theme="company"] .icon-button:hover,
-:root[data-ui-theme="company"] .user-chip:hover {
-  border-color: var(--company-primary);
-  background: var(--company-primary-soft);
-  color: var(--ink-strong);
-}
-
-:root[data-ui-theme="company"] .live-clock {
-  color: var(--muted);
-}
-
-:root[data-ui-theme="company"] .theme-switch {
-  border-color: var(--company-primary);
-  background: var(--company-primary);
-  color: var(--company-active-text);
-}
-
-:root[data-ui-theme="company"] .theme-switch-track {
-  background: rgba(255, 255, 255, 0.45);
-}
-
-/* ---------- Sidebar Company Theme ---------- */
-
-:root[data-ui-theme="company"] .sidebar {
-  background: var(--company-sidebar);
-  border-right-color: rgba(0, 0, 0, 0.12);
-  color: var(--company-sidebar-text);
-}
-
-:root[data-ui-theme="company"] .brand-row {
-  background: var(--company-sidebar-head);
-  border-bottom-color: rgba(255, 255, 255, 0.22);
-}
-
-:root[data-ui-theme="company"] .brand-mark {
-  color: var(--company-primary);
-}
-
-:root[data-ui-theme="company"][data-company="ttn"] .brand-mark {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.18);
-  color: #ffdb4d;
-}
-
-:root[data-ui-theme="company"] .brand-text strong {
-  color: var(--company-sidebar-text);
-}
-
-:root[data-ui-theme="company"] .brand-text span {
-  color: var(--company-sidebar-muted);
-}
-
-:root[data-ui-theme="company"] .primary-nav {
-  border-bottom-color: rgba(255, 255, 255, 0.18);
-}
-
-:root[data-ui-theme="company"] .nav-item,
-:root[data-ui-theme="company"] .oven-link {
-  color: var(--company-sidebar-muted);
-}
-
-:root[data-ui-theme="company"] .nav-item:hover,
-:root[data-ui-theme="company"] .nav-item:focus-visible,
-:root[data-ui-theme="company"] .oven-link:hover,
-:root[data-ui-theme="company"] .oven-link:focus-visible {
-  background: rgba(255, 255, 255, 0.12);
-  color: var(--company-sidebar-text);
-}
-
-:root[data-ui-theme="company"] .nav-item.active,
-:root[data-ui-theme="company"] .oven-link.active {
-  border-left-color: var(--company-primary);
-  background: var(--company-active-bg);
-  color: var(--company-active-text);
-}
-
-:root[data-ui-theme="company"] .oven-label {
-  color: inherit;
-}
-
-:root[data-ui-theme="company"] .sidebar-footer {
-  border-top-color: rgba(255, 255, 255, 0.18);
-  color: var(--company-sidebar-muted);
-}
-
-/* ---------- Company Cards / Panels ---------- */
-
-:root[data-ui-theme="company"] .panel,
-:root[data-ui-theme="company"] .metric-card,
-:root[data-ui-theme="company"] .summary-card,
-:root[data-ui-theme="company"] .oven-card,
-:root[data-ui-theme="company"] .time-block,
-:root[data-ui-theme="company"] .mini-card,
-:root[data-ui-theme="company"] .gauge-card,
-:root[data-ui-theme="company"] .history-stat-card,
-:root[data-ui-theme="company"] .status-banner,
-:root[data-ui-theme="company"] .status-range-card,
-:root[data-ui-theme="company"] .alarm-item {
-  border-color: var(--line);
-  background: #ffffff;
-  color: var(--ink);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
-}
-
-:root[data-ui-theme="company"] .panel-heading h2,
-:root[data-ui-theme="company"] .page-title h1,
-:root[data-ui-theme="company"] .topbar h1 {
-  color: var(--ink-strong);
-}
-
-:root[data-ui-theme="company"] .panel-heading p,
-:root[data-ui-theme="company"] .page-title p,
-:root[data-ui-theme="company"] .eyebrow {
-  color: var(--muted);
-}
-
-:root[data-ui-theme="company"] .title-rule {
-  background: var(--company-primary);
-}
-
-/* ---------- Oven Card Company ---------- */
-
-:root[data-ui-theme="company"] .oven-card {
-  overflow: hidden;
-  background: #ffffff;
-}
-
-:root[data-ui-theme="company"] .oven-card-header {
-  border-bottom: 3px solid var(--company-primary);
-  background: var(--surface-strong);
-}
-
-:root[data-ui-theme="company"] .oven-card-header h2 {
-  color: var(--ink-strong);
-}
-
-:root[data-ui-theme="company"] .oven-card.status-open,
-:root[data-ui-theme="company"] .oven-card.status-closed,
-:root[data-ui-theme="company"] .oven-card.status-warning,
-:root[data-ui-theme="company"] .oven-card.status-danger,
-:root[data-ui-theme="company"] .oven-card.status-offline,
-:root[data-ui-theme="company"] .oven-card.status-disabled {
-  background: #ffffff;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
-}
-
-:root[data-ui-theme="company"] .oven-meta span,
-:root[data-ui-theme="company"] .summary-card span,
-:root[data-ui-theme="company"] .mini-card span {
-  color: var(--muted);
-}
-
-:root[data-ui-theme="company"] .oven-meta strong,
-:root[data-ui-theme="company"] .metric-value strong {
-  color: var(--ink-strong);
-}
-
-:root[data-ui-theme="company"] .cycle-box {
-  border-left-color: var(--line);
-}
-
-:root[data-ui-theme="company"] .cycle-box strong,
-:root[data-ui-theme="company"] .mini-card strong,
-:root[data-ui-theme="company"] .history-stat-card strong {
-  color: var(--company-primary);
-}
-
-:root[data-ui-theme="company"] .button-primary,
-:root[data-ui-theme="company"] .oven-card-footer .button {
-  border-color: var(--company-primary);
-  background: var(--company-primary);
-  color: var(--company-active-text);
-}
-
-:root[data-ui-theme="company"] .button-primary:hover,
-:root[data-ui-theme="company"] .oven-card-footer .button:hover {
-  border-color: var(--company-primary);
-  background: var(--company-primary-soft);
-  color: var(--ink-strong);
-}
-
-/* ---------- Form / Table / Chart Company ---------- */
-
-:root[data-ui-theme="company"] input,
-:root[data-ui-theme="company"] select {
-  border-color: #d1d5db;
-  background: #ffffff;
-  color: var(--ink);
-}
-
-:root[data-ui-theme="company"] input:focus,
-:root[data-ui-theme="company"] select:focus {
-  border-color: var(--company-primary);
-  box-shadow: 0 0 0 1px var(--company-primary);
-}
-
-:root[data-ui-theme="company"] .dashboard-toolbar,
-:root[data-ui-theme="company"] .toolbar-grid,
-:root[data-ui-theme="company"] .detail-control-bar {
-  background: transparent;
-}
-
-:root[data-ui-theme="company"] .segment,
-:root[data-ui-theme="company"] .tab,
-:root[data-ui-theme="company"] .button,
-:root[data-ui-theme="company"] .check-pill,
-:root[data-ui-theme="company"] .panel-mode-chip,
-:root[data-ui-theme="company"] .threshold-item {
-  border-color: #d9dde3;
-  background: #ffffff;
-  color: var(--ink);
-}
-
-:root[data-ui-theme="company"] .segment:hover,
-:root[data-ui-theme="company"] .segment:focus-visible,
-:root[data-ui-theme="company"] .segment.is-active,
-:root[data-ui-theme="company"] .tab.is-active,
-:root[data-ui-theme="company"] .button:hover,
-:root[data-ui-theme="company"] .button:focus-visible {
-  border-color: var(--company-primary);
-  background: var(--company-primary-soft);
-  color: var(--ink-strong);
-}
-
-:root[data-ui-theme="company"] .time-series-chart {
-  border-color: var(--line);
-  background: #ffffff;
-}
-
-:root[data-ui-theme="company"] .table-wrap {
-  border-color: var(--line);
-  background: #ffffff;
-}
-
-:root[data-ui-theme="company"] th {
-  background: var(--surface-strong);
-  color: var(--muted);
-}
-
-:root[data-ui-theme="company"] td {
-  color: var(--ink);
-}
-
-:root[data-ui-theme="company"] tbody tr:hover {
-  background: var(--surface-soft);
-}
-
-/* ---------- TTN Specific ---------- */
-
-:root[data-ui-theme="company"][data-company="ttn"] .button-primary,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card-footer .button {
-  background: var(--company-accent);
-  border-color: var(--company-accent);
-  color: #ffffff;
-}
-
-:root[data-ui-theme="company"][data-company="ttn"] .cycle-box strong,
-:root[data-ui-theme="company"][data-company="ttn"] .mini-card strong,
-:root[data-ui-theme="company"][data-company="ttn"] .history-stat-card strong {
-  color: var(--company-primary);
-}
-
-/* ---------- GR Specific ---------- */
-
-:root[data-ui-theme="company"][data-company="gr"] .button-primary,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card-footer .button {
-  background: #50545a;
-  border-color: #50545a;
-  color: #ffffff;
-}
-
-:root[data-ui-theme="company"][data-company="gr"] .button-primary:hover,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card-footer .button:hover {
-  background: #3f444a;
-  border-color: #3f444a;
-  color: #ffffff;
-}
-/* =========================================================
-   Theme Consistency Patch
-   Dashboard / OvenCard / Status / Typography
-   วางท้ายสุดของ globals.css
-   ========================================================= */
-
-/* ---------- Company Theme Status Variables ---------- */
-
-:root[data-ui-theme="company"][data-company="gr"] {
-  --company-primary: #ecd92f;
-  --company-primary-soft: #fff8b8;
-  --company-primary-muted: #f4e766;
-  --company-button: #50545a;
-  --company-button-hover: #3f444a;
-  --company-button-text: #ffffff;
-
-  --status-open-main: #ecd92f;
-  --status-open-soft: #fff8b8;
-  --status-open-text: #2f332f;
-
-  --status-closed-main: #9ca3af;
-  --status-closed-soft: #e5e7eb;
-  --status-closed-text: #4b5563;
-
-  --status-offline-main: #6b7280;
-  --status-offline-soft: #d1d5db;
-  --status-offline-text: #374151;
-
-  --status-disabled-main: #b877d9;
-  --status-disabled-soft: #f3e8ff;
-  --status-disabled-text: #7e22ce;
-}
-
-:root[data-ui-theme="company"][data-company="ttn"] {
-  --company-primary: #a784f6;
-  --company-primary-soft: #efe7ff;
-  --company-primary-muted: #c6adff;
-  --company-button: #f2c45f;
-  --company-button-hover: #e1ad36;
-  --company-button-text: #ffffff;
-
-  --status-open-main: #a784f6;
-  --status-open-soft: #efe7ff;
-  --status-open-text: #3f3561;
-
-  --status-closed-main: #b9bbc3;
-  --status-closed-soft: #eeeeF2;
-  --status-closed-text: #5b606b;
-
-  --status-offline-main: #7b8190;
-  --status-offline-soft: #e2e4ea;
-  --status-offline-text: #4b5563;
-
-  --status-disabled-main: #d178d8;
-  --status-disabled-soft: #fae8ff;
-  --status-disabled-text: #a21caf;
-}
-
-/* ---------- Company Base Text / Surface ---------- */
-
-:root[data-ui-theme="company"] body {
-  background: var(--bg);
-  color: var(--ink);
-}
-
-:root[data-ui-theme="company"] .view-root {
-  background: var(--bg);
-}
-
-:root[data-ui-theme="company"] .page-title h1,
-:root[data-ui-theme="company"] .topbar h1,
-:root[data-ui-theme="company"] .panel-heading h2 {
-  color: var(--ink-strong);
-}
-
-:root[data-ui-theme="company"] .page-title p,
-:root[data-ui-theme="company"] .panel-heading p,
-:root[data-ui-theme="company"] .eyebrow {
-  color: var(--muted);
-}
-
-:root[data-ui-theme="company"] .title-rule {
-  background: var(--company-primary);
-}
-
-/* ---------- Topbar / Controls ---------- */
-
-:root[data-ui-theme="company"] .topbar {
-  background: #ffffff;
-  color: var(--ink);
-  border-bottom-color: rgba(17, 24, 39, 0.14);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1);
-}
-
-:root[data-ui-theme="company"] .breadcrumbs {
-  color: var(--muted);
-}
-
-:root[data-ui-theme="company"] .breadcrumbs strong {
-  color: var(--ink-strong);
-}
-
-:root[data-ui-theme="company"] .global-search,
-:root[data-ui-theme="company"] .toolbar-button,
-:root[data-ui-theme="company"] .icon-button,
-:root[data-ui-theme="company"] .user-chip {
-  border-color: var(--line);
-  background: #ffffff;
-  color: var(--muted);
-}
-
-:root[data-ui-theme="company"] .global-search input {
-  color: var(--ink);
-}
-
-:root[data-ui-theme="company"] .toolbar-button:hover,
-:root[data-ui-theme="company"] .icon-button:hover,
-:root[data-ui-theme="company"] .user-chip:hover {
-  border-color: var(--company-primary);
-  background: var(--company-primary-soft);
-  color: var(--ink-strong);
-}
-
-:root[data-ui-theme="company"] .theme-switch {
-  border-color: var(--company-primary);
-  background: var(--company-primary);
-  color: var(--status-open-text);
-}
-
-:root[data-ui-theme="company"] .theme-switch-track {
-  background: rgba(255, 255, 255, 0.5);
-}
-
-/* ---------- Sidebar ---------- */
-
-:root[data-ui-theme="company"] .sidebar {
-  border-right-color: rgba(0, 0, 0, 0.12);
-}
-
-:root[data-ui-theme="company"][data-company="gr"] .sidebar,
-:root[data-ui-theme="company"][data-company="gr"] .brand-row {
-  background: #363b40;
-}
-
-:root[data-ui-theme="company"][data-company="ttn"] .sidebar,
-:root[data-ui-theme="company"][data-company="ttn"] .brand-row {
-  background: #a784f6;
-}
-
-:root[data-ui-theme="company"] .brand-row {
-  border-bottom-color: rgba(255, 255, 255, 0.2);
-}
-
-:root[data-ui-theme="company"] .brand-mark {
-  color: var(--company-primary);
-}
-
-:root[data-ui-theme="company"] .brand-text strong {
-  color: #ffffff;
-}
-
-:root[data-ui-theme="company"] .brand-text span,
-:root[data-ui-theme="company"] .sidebar-footer {
-  color: rgba(255, 255, 255, 0.75);
-}
-
-:root[data-ui-theme="company"] .nav-item,
-:root[data-ui-theme="company"] .oven-link {
-  color: rgba(255, 255, 255, 0.78);
-}
-
-:root[data-ui-theme="company"] .nav-item:hover,
-:root[data-ui-theme="company"] .oven-link:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
-}
-
-:root[data-ui-theme="company"] .nav-item.active,
-:root[data-ui-theme="company"] .oven-link.active {
-  background: var(--company-primary-soft);
-  color: var(--status-open-text);
-  border-left-color: var(--company-primary);
-}
-
-/* ---------- Summary Cards ---------- */
-
-:root[data-ui-theme="company"] .summary-card {
-  background: #ffffff;
-  border-color: var(--line);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
-}
-
-:root[data-ui-theme="company"] .summary-card span {
-  color: var(--muted);
-}
-
-:root[data-ui-theme="company"] .summary-card strong {
-  color: var(--ink-strong);
-}
-
-:root[data-ui-theme="company"] .summary-icon {
-  background: var(--surface-soft);
-  color: var(--muted);
-}
-
-:root[data-ui-theme="company"] .tone-open .summary-icon,
-:root[data-ui-theme="company"] .tone-open strong {
-  color: var(--status-open-main);
-}
-
-:root[data-ui-theme="company"] .tone-offline .summary-icon,
-:root[data-ui-theme="company"] .tone-offline strong {
-  color: var(--status-offline-main);
-}
-
-:root[data-ui-theme="company"] .tone-disabled .summary-icon,
-:root[data-ui-theme="company"] .tone-disabled strong {
-  color: var(--status-disabled-main);
-}
-
-/* ---------- Dashboard Toolbar ---------- */
-
-:root[data-ui-theme="company"] .dashboard-toolbar,
-:root[data-ui-theme="company"] .toolbar-grid,
-:root[data-ui-theme="company"] .detail-control-bar {
-  background: transparent;
-}
-
-:root[data-ui-theme="company"] .panel {
-  background: #ffffff;
-  border-color: var(--line);
-}
-
-:root[data-ui-theme="company"] .segment,
-:root[data-ui-theme="company"] .tab,
-:root[data-ui-theme="company"] .button,
-:root[data-ui-theme="company"] .check-pill {
-  border-color: var(--line);
-  background: #ffffff;
-  color: var(--ink);
-}
-
-:root[data-ui-theme="company"] .segment:hover,
-:root[data-ui-theme="company"] .segment.is-active,
-:root[data-ui-theme="company"] .tab.is-active,
-:root[data-ui-theme="company"] .button:hover {
-  border-color: var(--company-primary);
-  background: var(--company-primary-soft);
-  color: var(--ink-strong);
-}
-
-/* ---------- Oven Cards Base ---------- */
-
-:root[data-ui-theme="company"] .oven-card {
-  background: #ffffff;
-  border-color: var(--line);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
-}
-
-:root[data-ui-theme="company"] .oven-card-header {
-  background: var(--surface-strong);
-  border-bottom: 3px solid var(--line);
-  box-shadow: none;
-}
-
-:root[data-ui-theme="company"] .oven-card-header h2 {
-  color: var(--ink-strong);
-}
-
-:root[data-ui-theme="company"] .oven-meta span {
-  color: var(--muted);
-}
-
-:root[data-ui-theme="company"] .oven-meta strong {
-  color: var(--ink-strong);
-}
-
-:root[data-ui-theme="company"] .cycle-box {
-  border-left-color: var(--line);
-  color: var(--muted);
-}
-
-:root[data-ui-theme="company"] .cycle-box span {
-  color: var(--muted);
-}
-
-:root[data-ui-theme="company"] .oven-state-note {
-  border-color: var(--line);
-  background: #f8fafc;
-  color: var(--muted);
-}
-
-/* ---------- Oven Cards By Status ---------- */
-
-/* เปิด = สีธีมบริษัท */
-:root[data-ui-theme="company"] .oven-card.status-open {
-  background: #ffffff;
-  border-color: color-mix(in srgb, var(--status-open-main) 45%, var(--line));
-}
-
-:root[data-ui-theme="company"] .oven-card.status-open .oven-card-header,
-:root[data-ui-theme="company"] .oven-card-header.status-open {
-  background: var(--status-open-soft);
-  border-bottom-color: var(--status-open-main);
-}
-
-:root[data-ui-theme="company"] .oven-card.status-open .cycle-box strong,
-:root[data-ui-theme="company"] .oven-card.status-open .reading-inline.tone-normal {
-  color: var(--status-open-main);
-}
-
-/* ปิด = เทา */
-:root[data-ui-theme="company"] .oven-card.status-closed {
-  background: #ffffff;
-  border-color: var(--status-closed-soft);
-}
-
-:root[data-ui-theme="company"] .oven-card.status-closed .oven-card-header,
-:root[data-ui-theme="company"] .oven-card-header.status-closed {
-  background: var(--status-closed-soft);
-  border-bottom-color: var(--status-closed-main);
-}
-
-:root[data-ui-theme="company"] .oven-card.status-closed .cycle-box strong {
-  color: var(--status-closed-main);
-}
-
-/* ขาดการเชื่อมต่อ = เทาเข้ม */
-:root[data-ui-theme="company"] .oven-card.status-offline {
-  background: #ffffff;
-  border-color: var(--status-offline-soft);
-}
-
-:root[data-ui-theme="company"] .oven-card.status-offline .oven-card-header,
-:root[data-ui-theme="company"] .oven-card-header.status-offline {
-  background: var(--status-offline-soft);
-  border-bottom-color: var(--status-offline-main);
-}
-
-:root[data-ui-theme="company"] .oven-card.status-offline .cycle-box strong {
-  color: var(--status-offline-main);
-}
-
-/* ปิดใช้งาน = ม่วง muted */
-:root[data-ui-theme="company"] .oven-card.status-disabled {
-  background: #ffffff;
-  border-color: var(--status-disabled-soft);
-}
-
-:root[data-ui-theme="company"] .oven-card.status-disabled .oven-card-header,
-:root[data-ui-theme="company"] .oven-card-header.status-disabled {
-  background: var(--status-disabled-soft);
-  border-bottom-color: var(--status-disabled-main);
-}
-
-:root[data-ui-theme="company"] .oven-card.status-disabled .cycle-box strong {
-  color: var(--status-disabled-main);
-}
-
-/* warning/danger ยังใช้สีแจ้งเตือน ไม่ใช้สีบริษัท */
-:root[data-ui-theme="company"] .oven-card.status-warning .oven-card-header,
-:root[data-ui-theme="company"] .oven-card-header.status-warning {
-  background: var(--yellow-soft);
-  border-bottom-color: var(--yellow);
-}
-
-:root[data-ui-theme="company"] .oven-card.status-danger .oven-card-header,
-:root[data-ui-theme="company"] .oven-card-header.status-danger {
-  background: var(--red-soft);
-  border-bottom-color: var(--red);
-}
-
-/* ---------- Status Badge In Company Theme ---------- */
-
-:root[data-ui-theme="company"] .status-open,
-:root[data-ui-theme="company"] .status-normal {
-  background: var(--status-open-soft);
-  color: var(--status-open-text);
-}
-
-:root[data-ui-theme="company"] .status-closed,
-:root[data-ui-theme="company"] .status-acknowledged {
-  background: var(--status-closed-soft);
-  color: var(--status-closed-text);
-}
-
-:root[data-ui-theme="company"] .status-offline {
-  background: var(--status-offline-soft);
-  color: var(--status-offline-text);
-}
-
-:root[data-ui-theme="company"] .status-disabled,
-:root[data-ui-theme="company"] .status-resolved {
-  background: var(--status-disabled-soft);
-  color: var(--status-disabled-text);
-}
-
-/* ---------- Mini Realtime Strip ---------- */
-
-:root[data-ui-theme="company"] .oven-mini-strip {
-  border-color: var(--line);
-  background: var(--line);
-}
-
-:root[data-ui-theme="company"] .oven-mini-strip span {
-  background: #f8fafc;
-  color: var(--ink);
-}
-
-/* ---------- Buttons In Oven Card ---------- */
-
-:root[data-ui-theme="company"] .oven-card-footer .button {
-  border-color: var(--company-button);
-  background: var(--company-button);
-  color: var(--company-button-text);
-}
-
-:root[data-ui-theme="company"] .oven-card-footer .button:hover {
-  border-color: var(--company-button-hover);
-  background: var(--company-button-hover);
-  color: var(--company-button-text);
-}
-
-/* เปิดเตาให้ปุ่มใช้สีธีมชัดขึ้น */
-:root[data-ui-theme="company"] .oven-card.status-open .oven-card-footer .button {
-  border-color: var(--company-button);
-  background: var(--company-button);
-}
-
-/* ปิดเตาให้ปุ่มเป็นเทา ไม่เด่นเท่าเตาเปิด */
-:root[data-ui-theme="company"] .oven-card.status-closed .oven-card-footer .button {
-  border-color: #9ca3af;
-  background: #9ca3af;
-  color: #ffffff;
-}
-
-:root[data-ui-theme="company"] .oven-card.status-offline .oven-card-footer .button {
-  border-color: #6b7280;
-  background: #6b7280;
-  color: #ffffff;
-}
-
-:root[data-ui-theme="company"] .oven-card.status-disabled .oven-card-footer .button {
-  border-color: var(--status-disabled-main);
-  background: var(--status-disabled-main);
-  color: #ffffff;
-}
-
-/* ---------- Charts / Tables In Company Theme ---------- */
-
-:root[data-ui-theme="company"] .time-series-chart,
-:root[data-ui-theme="company"] .table-wrap {
-  background: #ffffff;
-  border-color: var(--line);
-}
-
-:root[data-ui-theme="company"] th {
-  background: var(--surface-strong);
-  color: var(--muted);
-}
-
-:root[data-ui-theme="company"] td {
-  color: var(--ink);
-}
-
-:root[data-ui-theme="company"] tbody tr:hover {
-  background: var(--surface-soft);
-}
-/* =========================================================
-   Status Simplify + Login Theme Patch
-   มีสถานะเตาแค่ เปิด / ปิด / ขาดการเชื่อมต่อ
-   ========================================================= */
-
-:root[data-ui-theme="company"][data-company="gr"] {
-  --status-open-main: #ecd92f;
-  --status-open-soft: #fff8b8;
-  --status-open-text: #2f332f;
-
-  --status-closed-main: #9ca3af;
-  --status-closed-soft: #e5e7eb;
-  --status-closed-text: #4b5563;
-
-  --status-offline-main: #6b7280;
-  --status-offline-soft: #d1d5db;
-  --status-offline-text: #374151;
-}
-
-:root[data-ui-theme="company"][data-company="ttn"] {
-  --status-open-main: #a784f6;
-  --status-open-soft: #efe7ff;
-  --status-open-text: #3f3561;
-
-  --status-closed-main: #b9bbc3;
-  --status-closed-soft: #eeeeF2;
-  --status-closed-text: #5b606b;
-
-  --status-offline-main: #7b8190;
-  --status-offline-soft: #e2e4ea;
-  --status-offline-text: #4b5563;
-}
-
-/* summary */
-:root[data-ui-theme="company"] .tone-open .summary-icon,
-:root[data-ui-theme="company"] .tone-open strong {
-  color: var(--status-open-main);
-}
-
-:root[data-ui-theme="company"] .tone-closed .summary-icon,
-:root[data-ui-theme="company"] .tone-closed strong {
-  color: var(--status-closed-main);
-}
-
-:root[data-ui-theme="company"] .tone-offline .summary-icon,
-:root[data-ui-theme="company"] .tone-offline strong {
-  color: var(--status-offline-main);
-}
-
-/* oven card: เปิด = สีธีม */
-:root[data-ui-theme="company"] .oven-card.status-open .oven-card-header,
-:root[data-ui-theme="company"] .oven-card-header.status-open {
-  background: var(--status-open-soft);
-  border-bottom-color: var(--status-open-main);
-}
-
-:root[data-ui-theme="company"] .oven-card.status-open .cycle-box strong,
-:root[data-ui-theme="company"] .oven-card.status-open .reading-inline.tone-normal {
-  color: var(--status-open-main);
-}
-
-/* oven card: ปิด = เทา */
-:root[data-ui-theme="company"] .oven-card.status-closed .oven-card-header,
-:root[data-ui-theme="company"] .oven-card-header.status-closed {
-  background: var(--status-closed-soft);
-  border-bottom-color: var(--status-closed-main);
-}
-
-:root[data-ui-theme="company"] .oven-card.status-closed .cycle-box strong {
-  color: var(--status-closed-main);
-}
-
-/* oven card: offline = เทาเข้ม */
-:root[data-ui-theme="company"] .oven-card.status-offline .oven-card-header,
-:root[data-ui-theme="company"] .oven-card-header.status-offline {
-  background: var(--status-offline-soft);
-  border-bottom-color: var(--status-offline-main);
-}
-
-:root[data-ui-theme="company"] .oven-card.status-offline .cycle-box strong {
-  color: var(--status-offline-main);
-}
-
-/* badge */
-:root[data-ui-theme="company"] .status-open,
-:root[data-ui-theme="company"] .status-normal {
-  background: var(--status-open-soft);
-  color: var(--status-open-text);
-}
-
-:root[data-ui-theme="company"] .status-closed,
-:root[data-ui-theme="company"] .status-acknowledged {
-  background: var(--status-closed-soft);
-  color: var(--status-closed-text);
-}
-
-:root[data-ui-theme="company"] .status-offline {
-  background: var(--status-offline-soft);
-  color: var(--status-offline-text);
-}
-
-/* ปุ่มรายละเอียดเตา */
-:root[data-ui-theme="company"] .oven-card.status-open .oven-card-footer .button {
-  border-color: var(--company-button);
-  background: var(--company-button);
-  color: var(--company-button-text);
-}
-
-:root[data-ui-theme="company"] .oven-card.status-closed .oven-card-footer .button,
-:root[data-ui-theme="company"] .oven-card.status-offline .oven-card-footer .button {
-  border-color: #9ca3af;
-  background: #9ca3af;
-  color: #ffffff;
-}
-
-/* login theme */
-:root[data-ui-theme="company"] .login-screen {
-  background:
-    radial-gradient(circle at 28% 12%, var(--company-primary-soft), transparent 30%),
-    var(--bg);
-}
-
-:root[data-ui-theme="company"] .login-panel {
-  border-color: var(--line);
-  background: #ffffff;
-  color: var(--ink);
-  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.14);
-}
-
-:root[data-ui-theme="company"] .login-panel h1 {
-  color: var(--ink-strong);
-}
-
-:root[data-ui-theme="company"] .login-brand {
-  color: var(--company-primary);
-}
-
-:root[data-ui-theme="company"] .login-brand-ttn {
-  color: #a784f6;
-}
-
-:root[data-ui-theme="company"] .login-theme-switch {
-  width: 100%;
-  margin: 4px 0 10px;
-}
-
-:root[data-ui-theme="dark"] .login-theme-switch {
-  width: 100%;
-  margin: 4px 0 10px;
 }

@@ -1,5 +1,4 @@
 import type { LimitMap, Oven, OvenStatus, SensorKey, SensorSnapshot } from "../types";
-import { isStale } from "../utils/limits";
 import { allSensorKeys, sensorByKey } from "../utils/sensors";
 
 type OvenSeed = {
@@ -56,15 +55,15 @@ const seeds: OvenSeed[] = [
   },
   {
     number: 15,
-    status: "closed",
+    status: "open",
     cycleCount: 71,
     updatedMinutesAgo: 17,
-    stoppedHoursAgo: 6,
+    startedHoursAgo: 38,
     readings: { chamberTemp: 62.5, humidity: 52, furnaceTemp: 208, blowerTemp: 44 },
   },
   {
     number: 16,
-    status: "closed",
+    status: "offline",
     cycleCount: 83,
     updatedMinutesAgo: 14520,
     stoppedHoursAgo: 304,
@@ -115,7 +114,7 @@ const seeds: OvenSeed[] = [
     status: "offline",
     cycleCount: 66,
     updatedMinutesAgo: 78,
-    startedHoursAgo: 12,
+    stoppedHoursAgo: 12,
     readings: { chamberTemp: 41.1, humidity: 53.2, furnaceTemp: 180, blowerTemp: 60 },
   },
   {
@@ -204,7 +203,7 @@ export function createMockOvens(now = new Date()): Oven[] {
 }
 
 export function deriveOvenStatus(oven: Oven): OvenStatus {
-  if (isStale(oven.lastUpdatedAt)) return "offline";
+  if (oven.status === "offline") return "offline";
   return oven.startedAt && !oven.stoppedAt ? "open" : "closed";
 }
 
