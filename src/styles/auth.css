@@ -310,3 +310,52 @@
     #ffffff 52%
   ) !important;
 }
+/* =========================
+   Company Theme Color Adjustments
+   ปรับสีธีมสว่างตามที่กำหนด
+   ========================= */
+
+/* GR: แทน #ecd92f และ #fff9bf ด้วย #eed236 */
+:root[data-ui-theme="company"][data-company="gr"] {
+  --company-primary: #eed236;
+  --company-primary-soft: #eed236;
+}
+
+/* หัวการ์ดสถานะปิด / ขาดการเชื่อมต่อ จาก #dfdfd9 เป็น #b1b1b5 */
+:root[data-ui-theme="company"] .oven-card.status-closed .oven-card-header,
+:root[data-ui-theme="company"] .oven-card-header.status-closed,
+:root[data-ui-theme="company"] .oven-card.status-offline .oven-card-header,
+:root[data-ui-theme="company"] .oven-card-header.status-offline {
+  background: #b1b1b5 !important;
+}
+
+/* หัวการ์ดสถานะเปิด ใช้สีหลักใหม่ */
+:root[data-ui-theme="company"] .oven-card.status-open .oven-card-header,
+:root[data-ui-theme="company"] .oven-card-header.status-open {
+  background: #eed236 !important;
+  border-bottom-color: #eed236 !important;
+}
+
+/* ป้าย เปิด / ปิด / ขาดการเชื่อมต่อ ในหัวการ์ด ไม่ต้องมีเส้นขอบ */
+:root[data-ui-theme="company"] .oven-card-header .status-badge {
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* เปิด = เขียว */
+:root[data-ui-theme="company"] .oven-card-header .status-badge.status-open {
+  background: rgba(34, 197, 94, 0.14) !important;
+  color: #15803d !important;
+}
+
+/* ปิด = แดง */
+:root[data-ui-theme="company"] .oven-card-header .status-badge.status-closed {
+  background: rgba(239, 68, 68, 0.14) !important;
+  color: #dc2626 !important;
+}
+
+/* ขาดการเชื่อมต่อ = เทา */
+:root[data-ui-theme="company"] .oven-card-header .status-badge.status-offline {
+  background: rgba(107, 114, 128, 0.16) !important;
+  color: #4b5563 !important;
+}
