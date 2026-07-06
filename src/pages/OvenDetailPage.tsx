@@ -1,6 +1,16 @@
-import { CalendarClock, Download, FileDown, History, Pause, Play, RefreshCw, Thermometer } from "lucide-react";
+import {
+  CalendarClock,
+  Download,
+  FileDown,
+  History,
+  Pause,
+  Play,
+  RefreshCw,
+  Thermometer,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+
 import { useAppData } from "../app/providers";
 import { ThresholdLegend } from "../components/charts/ThresholdLegend";
 import { TimeSeriesChart } from "../components/charts/TimeSeriesChart";
@@ -14,7 +24,7 @@ import { downloadCsv } from "../services/reportExport";
 import type { LimitMap, Oven, OvenStatus, SensorKey, TimeSeriesPoint } from "../types";
 import { formatDateTime } from "../utils/format";
 import { getReadingState } from "../utils/limits";
-import { clampCycleStart, REPORT_CYCLE_DAYS, REPORT_CYCLE_MS } from "../utils/reportCycle";
+import { clampCycleStart, REPORT_CYCLE_MS } from "../utils/reportCycle";
 import { allSensorKeys } from "../utils/sensors";
 
 type ChartMode = "realtime" | "historical";
@@ -25,7 +35,9 @@ const heatSensors: SensorKey[] = ["furnaceTemp", "blowerTemp"];
 export function OvenDetailPage() {
   const { ovenId = "" } = useParams();
   const { ovens, alarms, loading, refresh } = useAppData();
+
   const oven = ovens.find((item) => item.id === ovenId);
+
   const [mode, setMode] = useState<ChartMode>("realtime");
   const [selectedCycle, setSelectedCycle] = useState<number | null>(null);
   const [points, setPoints] = useState<TimeSeriesPoint[]>([]);
@@ -34,28 +46,38 @@ export function OvenDetailPage() {
 
   const cycleOptions = useMemo(() => {
     if (!oven) return [];
+
     const latest = Math.max(oven.cycleCount, 1);
     const count = Math.min(latest, 12);
+
     return Array.from({ length: count }, (_, index) => latest - index);
   }, [oven]);
 
   useEffect(() => {
     if (!oven) return;
+
     setMode(canUseRealtime(oven.status) ? "realtime" : "historical");
     setSelectedCycle(getDefaultHistoricalCycle(oven));
   }, [oven?.id, oven?.cycleCount, oven?.status]);
 
   useEffect(() => {
     if (!oven) return;
+
     if (!realtimeAvailable && mode === "realtime") {
       setMode("historical");
     }
   }, [mode, oven, realtimeAvailable]);
 
   const effectiveMode = realtimeAvailable ? mode : "historical";
+
   const cycleRange = useMemo(() => {
     if (!oven) return null;
-    return getDetailCycleRange(oven, effectiveMode, selectedCycle ?? getDefaultHistoricalCycle(oven));
+
+    return getDetailCycleRange(
+      oven,
+      effectiveMode,
+      selectedCycle ?? getDefaultHistoricalCycle(oven),
+    );
   }, [effectiveMode, oven, selectedCycle]);
 
   useEffect(() => {
@@ -68,27 +90,43 @@ export function OvenDetailPage() {
         sensors: allSensorKeys,
         startAt: cycleRange.start.toISOString(),
         endAt: cycleRange.end.toISOString(),
-        cycleNumber: effectiveMode === "historical" ? selectedCycle ?? undefined : oven.cycleCount,
+        cycleNumber:
+          effectiveMode === "historical"
+            ? selectedCycle ?? undefined
+            : oven.cycleCount,
       })
       .then(setPoints);
   }, [cycleRange, effectiveMode, oven, selectedCycle]);
 
-  const ovenAlarms = useMemo(() => alarms.filter((alarm) => alarm.ovenId === ovenId), [alarms, ovenId]);
+  const ovenAlarms = useMemo(
+    () => alarms.filter((alarm) => alarm.ovenId === ovenId),
+    [alarms, ovenId],
+  );
 
-  if (loading) return <LoadingState />;
+  if (loading) {
+    return <LoadingState />;
+  }
 
   if (!oven) {
-    return <EmptyState title="ไม่พบข้อมูลเตา" description="กลับไปเลือกเตาจาก Dashboard หรือเมนูด้านซ้าย" />;
+    return (
+      <EmptyState
+        title="ไม่พบข้อมูลเตา"
+        description="กลับไปเลือกเตาจาก Dashboard หรือเมนูด้านซ้าย"
+      />
+    );
   }
 
   return (
     <>
       <PageHeader
         title={`${oven.name} / Temperature control`}
-        description={`${oven.zone} · ${oven.line} · อัปเดตล่าสุด ${formatDateTime(oven.lastUpdatedAt)}`}
+        description={`${oven.zone} · ${oven.line} · อัปเดตล่าสุด ${formatDateTime(
+          oven.lastUpdatedAt,
+        )}`}
         actions={
           <>
             <StatusBadge kind={oven.status} />
+
             <button
               className="button"
               type="button"
@@ -111,10 +149,15 @@ export function OvenDetailPage() {
             type="button"
             disabled={!realtimeAvailable}
             onClick={() => setMode("realtime")}
-            title={realtimeAvailable ? "ดูกราฟรอบปัจจุบัน" : "เตานี้ไม่ได้เปิดอยู่ จึงไม่มีกราฟ Realtime"}
+            title={
+              realtimeAvailable
+                ? "ดูกราฟรอบปัจจุบัน"
+                : "เตานี้ไม่ได้เปิดอยู่ จึงไม่มีกราฟ Realtime"
+            }
           >
             Realtime
           </button>
+
           <button
             className={`tab ${effectiveMode === "historical" ? "is-active" : ""}`}
             type="button"
@@ -128,7 +171,11 @@ export function OvenDetailPage() {
           <div className="range-controls cycle-selector">
             <label className="field compact-field">
               <span>เลือกรอบอบย้อนหลัง</span>
-              <select value={selectedCycle ?? ""} onChange={(event) => setSelectedCycle(Number(event.target.value))}>
+
+              <select
+                value={selectedCycle ?? ""}
+                onChange={(event) => setSelectedCycle(Number(event.target.value))}
+              >
                 {cycleOptions.map((cycle) => (
                   <option key={cycle} value={cycle}>
                     รอบ {cycle}
@@ -173,6 +220,7 @@ export function OvenDetailPage() {
               <p>เวลาเปิดเตา เวลาเลิกใช้งาน และจำนวนรอบสะสม</p>
             </div>
           </div>
+
           <div className="operation-times">
             <div className="time-block">
               <h3>
@@ -181,6 +229,7 @@ export function OvenDetailPage() {
               </h3>
               <strong>{oven.startedAt ? formatDateTime(oven.startedAt) : "-"}</strong>
             </div>
+
             <div className="time-block">
               <h3>
                 <Pause size={18} />
@@ -189,17 +238,29 @@ export function OvenDetailPage() {
               <strong>{oven.stoppedAt ? formatDateTime(oven.stoppedAt) : "-"}</strong>
             </div>
           </div>
+
           <div className="download-row">
             <Link
               className="button button-primary"
-              to={`/reports?ovenId=${oven.id}&mode=${effectiveMode === "realtime" ? "current" : "history"}&cycle=${
-                effectiveMode === "realtime" ? oven.cycleCount : selectedCycle ?? getDefaultHistoricalCycle(oven)
+              to={`/reports?ovenId=${oven.id}&mode=${
+                effectiveMode === "realtime" ? "current" : "history"
+              }&cycle=${
+                effectiveMode === "realtime"
+                  ? oven.cycleCount
+                  : selectedCycle ?? getDefaultHistoricalCycle(oven)
               }&auto=pdf`}
             >
               <FileDown size={17} />
-              {effectiveMode === "realtime" ? "รายงานรอบปัจจุบัน" : "รายงานย้อนหลัง"}
+              {effectiveMode === "realtime"
+                ? "รายงานรอบปัจจุบัน"
+                : "รายงานย้อนหลัง"}
             </Link>
-            <button className="button" type="button" onClick={() => downloadCsv(`${oven.name}-cycle.csv`, points, allSensorKeys)}>
+
+            <button
+              className="button"
+              type="button"
+              onClick={() => downloadCsv(`${oven.name}-cycle.csv`, points, allSensorKeys)}
+            >
               <Download size={17} />
               ส่งออก CSV
             </button>
@@ -212,7 +273,10 @@ export function OvenDetailPage() {
             <strong>{statusText(oven.status)}</strong>
             <span>{oven.cycleCount} รอบทั้งหมด</span>
           </div>
-          {effectiveMode === "realtime" && realtimeAvailable ? <TemperatureRangeCard oven={oven} /> : null}
+
+          {effectiveMode === "realtime" && realtimeAvailable ? (
+            <TemperatureRangeCard oven={oven} />
+          ) : null}
         </div>
       </section>
 
@@ -229,6 +293,7 @@ export function OvenDetailPage() {
           rightAxisName="ความชื้น %"
           limitSensors={["chamberTemp"]}
         />
+
         <ChartPanel
           title="อุณหภูมิเตาเผาและ Blower"
           description="เตาเผาและ Blower ใช้ Upper/Lower ชุดเดียวกัน"
@@ -250,11 +315,13 @@ export function OvenDetailPage() {
             <h2>Alarm ที่เกี่ยวข้อง</h2>
             <p>เหตุการณ์ผิดปกติปัจจุบันและย้อนหลังของเตานี้</p>
           </div>
+
           <Link className="button" to="/alarms">
             <History size={17} />
             ดูทั้งหมด
           </Link>
         </div>
+
         {ovenAlarms.length ? (
           <div className="alarm-list">
             {ovenAlarms.slice(0, 5).map((alarm) => (
@@ -263,6 +330,7 @@ export function OvenDetailPage() {
                   {alarm.title}
                   <StatusBadge kind={alarm.severity} />
                 </h3>
+
                 <p>
                   {formatDateTime(alarm.createdAt)} · {alarm.detail}
                 </p>
@@ -309,9 +377,16 @@ function ChartPanel({
           <h2>{title}</h2>
           <p>{description}</p>
         </div>
+
         <span className="panel-mode-chip">{mode === "realtime" ? "Live" : "Historical"}</span>
       </div>
-      <ThresholdLegend sensors={limitSensors} limits={limits} labelOverrides={limitLabel ? { [limitSensors[0]]: limitLabel } : undefined} />
+
+      <ThresholdLegend
+        sensors={limitSensors}
+        limits={limits}
+        labelOverrides={limitLabel ? { [limitSensors[0]]: limitLabel } : undefined}
+      />
+
       <TimeSeriesChart
         points={points}
         sensors={sensors}
@@ -328,12 +403,18 @@ function ChartPanel({
 }
 
 function getGaugeLimit(oven: Oven, sensor: SensorKey) {
-  if (sensor === "furnaceTemp" || sensor === "blowerTemp") return oven.limits.furnaceTemp;
+  if (sensor === "furnaceTemp" || sensor === "blowerTemp") {
+    return oven.limits.furnaceTemp;
+  }
+
   return oven.limits[sensor];
 }
 
 function getDefaultHistoricalCycle(oven: Oven): number {
-  if (oven.status === "open") return Math.max(1, oven.cycleCount - 1);
+  if (oven.status === "open") {
+    return Math.max(1, oven.cycleCount - 1);
+  }
+
   return Math.max(1, oven.cycleCount);
 }
 
@@ -341,6 +422,7 @@ function TemperatureRangeCard({ oven }: { oven: Oven }) {
   const reading = oven.readings.chamberTemp;
   const limit = oven.limits.chamberTemp;
   const state = getReadingState(reading.value, "chamberTemp", oven.limits);
+
   const labels = {
     normal: "อยู่ในช่วง",
     warning: reading.value > limit.upper ? "สูงกว่า Upper" : "ต่ำกว่า Lower",
@@ -353,7 +435,9 @@ function TemperatureRangeCard({ oven }: { oven: Oven }) {
         <Thermometer size={16} />
         ช่วงอุณหภูมิ
       </p>
+
       <strong>{labels[state]}</strong>
+
       <span>
         Lower {limit.lower}°C · Upper {limit.upper}°C · ตอนนี้ {reading.value.toFixed(1)}°C
       </span>
@@ -361,11 +445,20 @@ function TemperatureRangeCard({ oven }: { oven: Oven }) {
   );
 }
 
-function getDetailCycleRange(oven: Oven, mode: ChartMode, cycleNumber: number): { start: Date; end: Date } {
+function getDetailCycleRange(
+  oven: Oven,
+  mode: ChartMode,
+  cycleNumber: number,
+): { start: Date; end: Date } {
   const now = new Date();
+
   if (mode === "realtime" && oven.startedAt) {
     const end = now;
-    return { start: clampCycleStart(new Date(oven.startedAt), end), end };
+
+    return {
+      start: clampCycleStart(new Date(oven.startedAt), end),
+      end,
+    };
   }
 
   const latestCycle = Math.max(oven.cycleCount, 1);
@@ -373,6 +466,7 @@ function getDetailCycleRange(oven: Oven, mode: ChartMode, cycleNumber: number): 
   const baseEnd = new Date(oven.stoppedAt ?? oven.lastUpdatedAt ?? now);
   const end = new Date(baseEnd.getTime() - cycleOffset * (REPORT_CYCLE_MS + 12 * 60 * 60 * 1000));
   const start = new Date(end.getTime() - REPORT_CYCLE_MS);
+
   return { start, end };
 }
 
@@ -384,10 +478,8 @@ function statusText(status: OvenStatus): string {
   const labels: Record<OvenStatus, string> = {
     open: "เปิด",
     closed: "ปิด",
-    warning: "เตือน",
-    danger: "อันตราย",
     offline: "ขาดการเชื่อมต่อ",
-    disabled: "ปิดใช้งาน",
   };
+
   return labels[status];
 }
