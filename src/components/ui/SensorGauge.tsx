@@ -8,10 +8,15 @@ const SVG_WIDTH = 220;
 const SVG_HEIGHT = 118;
 
 const CENTER_X = 110;
+
+/*
+  ยก CENTER_Y ขึ้น เพื่อให้โค้งไม่ทับตัวเลข
+  แล้วเพิ่ม radius เพื่อให้เกจดูใหญ่ขึ้น
+*/
 const CENTER_Y = 104;
 
-const OUTER_RADIUS = 74;
-const INNER_RADIUS = 61;
+const OUTER_RADIUS = 84;
+const INNER_RADIUS = 69;
 
 const OUTER_STROKE_WIDTH = 6;
 const INNER_STROKE_WIDTH = 18;
@@ -113,7 +118,7 @@ export function SensorGauge({
                 stroke={segment.color}
                 strokeWidth={OUTER_STROKE_WIDTH}
                 strokeLinecap="round"
-                opacity={0.95}
+                opacity={0.96}
               />
             );
           })}
