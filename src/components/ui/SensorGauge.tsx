@@ -5,13 +5,13 @@ import { sensorByKey } from "../../utils/sensors";
 type GaugeTone = "normal" | "warning" | "danger";
 
 const SVG_WIDTH = 220;
-const SVG_HEIGHT = 128;
+const SVG_HEIGHT = 118;
 
 const CENTER_X = 110;
 const CENTER_Y = 104;
 
-const OUTER_RADIUS = 84;
-const INNER_RADIUS = 70;
+const OUTER_RADIUS = 78;
+const INNER_RADIUS = 66;
 
 export function SensorGauge({
   sensor,
@@ -65,33 +65,18 @@ export function SensorGauge({
     <article className={`gauge-card tone-${tone} ${hasLimit ? "" : "no-limit"}`}>
       <div className="gauge-card-head">
         <span>{definition.label}</span>
+
         <strong style={{ color: hasLimit ? getToneColor(tone) : definition.color }}>
           {hasLimit ? getToneLabel(tone) : "ปกติ"}
         </strong>
       </div>
 
-      <div
-        className="gauge-visual"
-        style={{
-          minHeight: 124,
-          height: 124,
-          marginTop: 2,
-          overflow: "hidden",
-        }}
-      >
+      <div className="gauge-visual">
         <svg
           className="gauge-svg"
           viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
-          width="220"
-          height="128"
           role="img"
           aria-label={`${definition.label} ${formattedValue}${unit}`}
-          style={{
-            width: "220px",
-            maxWidth: "100%",
-            height: "128px",
-            display: "block",
-          }}
         >
           {outerSegments.map((segment, index) => {
             const fromRatio = clamp(
@@ -127,7 +112,6 @@ export function SensorGauge({
             stroke="var(--surface-strong)"
             strokeWidth={18}
             strokeLinecap="round"
-            opacity={1}
           />
 
           <path
@@ -136,65 +120,25 @@ export function SensorGauge({
             stroke={progressColor}
             strokeWidth={18}
             strokeLinecap="round"
-            opacity={1}
           />
-
-          <text
-            x={CENTER_X}
-            y={70}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            style={{
-              fill: "var(--ink-strong)",
-              fontSize: 24,
-              fontWeight: 850,
-            }}
-          >
-            {formattedValue}
-            <tspan
-              dx="4"
-              style={{
-                fill: "var(--muted)",
-                fontSize: 12,
-                fontWeight: 800,
-              }}
-            >
-              {unit}
-            </tspan>
-          </text>
-
-          <text
-            x={CENTER_X}
-            y={92}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            style={{
-              fill: "var(--muted)",
-              fontSize: 15,
-              fontWeight: 800,
-            }}
-          >
-            {definition.shortLabel}
-          </text>
-
-          <text
-            x={CENTER_X}
-            y={116}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            style={{
-              fill: "var(--muted-soft)",
-              fontSize: 11,
-              fontWeight: 700,
-            }}
-          >
-            {hasLimit
-              ? `Lower ${formatCompact(limit.lower)}${unit} · Upper ${formatCompact(
-                  limit.upper,
-                )}${unit}`
-              : "ไม่มี Upper/Lower สำหรับค่านี้"}
-          </text>
         </svg>
+
+        <strong>
+          {formattedValue}
+          <span>{unit}</span>
+        </strong>
+
+        <em>{definition.shortLabel}</em>
+      </div>
+
+      <div className="gauge-meta">
+        <span>
+          {hasLimit
+            ? `Lower ${formatCompact(limit.lower)}${unit} · Upper ${formatCompact(
+                limit.upper,
+              )}${unit}`
+            : "ไม่มี Upper/Lower สำหรับค่านี้"}
+        </span>
       </div>
     </article>
   );
@@ -202,11 +146,11 @@ export function SensorGauge({
 
 function getLimitScale(limit: LimitRule): { min: number; max: number } {
   const range = Math.max(limit.upper - limit.lower, 1);
-  const extra = Math.max(range * 0.25, 10);
+  const padding = range * 0.5;
 
   return {
-    min: 0,
-    max: limit.upper + extra,
+    min: Math.max(0, limit.lower - padding),
+    max: limit.upper + padding,
   };
 }
 
@@ -227,12 +171,21 @@ function getDefaultScale(sensor: SensorKey, value: number): { min: number; max: 
 function getGaugeTone(value: number, lower: number, upper: number): GaugeTone {
   if (value > upper) return "danger";
   if (value < lower) return "warning";
+
+  const range = Math.max(upper - lower, 1);
+  const warningHigh = upper - range * 0.08;
+  const warningLow = lower + range * 0.08;
+
+  if (value >= warningHigh || value <= warningLow) {
+    return "warning";
+  }
+
   return "normal";
 }
 
 function getToneLabel(tone: GaugeTone): string {
   if (tone === "danger") return "เกิน limit";
-  if (tone === "warning") return "ต่ำกว่า limit";
+  if (tone === "warning") return "ใกล้ limit";
   return "ปกติ";
 }
 
