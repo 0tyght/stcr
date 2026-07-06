@@ -3,7 +3,6 @@ import {
   DataZoomComponent,
   GridComponent,
   LegendComponent,
-  TitleComponent,
   TooltipComponent,
 } from "echarts/components";
 import { init, use, type ECharts, type EChartsCoreOption } from "echarts/core";
@@ -14,7 +13,6 @@ import { sensorByKey } from "../../utils/sensors";
 
 use([
   LineChart,
-  TitleComponent,
   TooltipComponent,
   GridComponent,
   LegendComponent,
@@ -96,8 +94,8 @@ export function TimeSeriesChart({
 
   const resolvedTheme: ChartTheme = theme === "print" ? "print" : theme ?? pageTheme;
   const effectiveShowDataZoom = showDataZoom ?? resolvedTheme !== "print";
-
   const palette = useMemo(() => getChartPalette(resolvedTheme), [resolvedTheme]);
+  const axisDescription = useMemo(() => getAxisDescription(sensors), [sensors]);
 
   const option = useMemo<EChartsCoreOption>(() => {
     const leftSensors = sensors.filter((sensor) => !rightAxisSensors.includes(sensor));
@@ -142,17 +140,6 @@ export function TimeSeriesChart({
       backgroundColor: palette.background,
       color: sensors.map((sensor) => sensorByKey[sensor].color),
 
-      title: {
-        text: title,
-        left: 8,
-        top: 0,
-        textStyle: {
-          fontSize: 15,
-          fontWeight: 700,
-          color: palette.text,
-        },
-      },
-
       tooltip: {
         trigger: "axis",
         triggerOn: "mousemove|click",
@@ -187,7 +174,7 @@ export function TimeSeriesChart({
       },
 
       legend: {
-        top: 28,
+        top: 8,
         type: "scroll",
         selectedMode: false,
         textStyle: {
@@ -196,9 +183,9 @@ export function TimeSeriesChart({
       },
 
       grid: {
-        left: 54,
+        left: 78,
         right: rightSensors.length ? 64 : 54,
-        top: 74,
+        top: 54,
         bottom: realtime || !effectiveShowDataZoom ? 38 : 72,
         containLabel: false,
       },
@@ -234,11 +221,16 @@ export function TimeSeriesChart({
       yAxis: [
         {
           type: "value",
-          name: leftAxisName,
+          name: axisDescription,
+          nameLocation: "middle",
+          nameGap: 54,
+          nameRotate: 90,
           min: leftBounds.min,
           max: leftBounds.max,
           nameTextStyle: {
-            color: palette.muted,
+            color: palette.text,
+            fontSize: 12,
+            fontWeight: 700,
           },
           axisLabel: {
             color: palette.muted,
@@ -265,7 +257,7 @@ export function TimeSeriesChart({
         },
         {
           type: "value",
-          name: rightAxisName,
+          name: "",
           min: rightBounds.min,
           max: rightBounds.max,
           show: rightSensors.length > 0,
@@ -333,6 +325,7 @@ export function TimeSeriesChart({
       series,
     };
   }, [
+    axisDescription,
     effectiveShowDataZoom,
     leftAxisName,
     limitSensors,
@@ -343,7 +336,6 @@ export function TimeSeriesChart({
     rightAxisName,
     rightAxisSensors,
     sensors,
-    title,
   ]);
 
   const updateOverlayLines = useCallback(() => {
@@ -364,7 +356,7 @@ export function TimeSeriesChart({
 
     const rightSensors = sensors.filter((sensor) => rightAxisSensors.includes(sensor));
     const shownLimitSensors = limitSensors ?? sensors;
-    const x1 = 54;
+    const x1 = 78;
     const x2 = rect.width - (rightSensors.length ? 64 : 54);
 
     if (x2 <= x1) {
@@ -525,7 +517,7 @@ function createOverlayLine(
   x2: number,
   color: string,
 ): OverlayLine {
-  const safeY = Math.max(20, y);
+  const safeY = Math.max(18, y);
   const labelX = Math.max(x1 + 8, x2 - 48);
   const labelY = Math.max(18, safeY - 8);
 
@@ -551,6 +543,39 @@ function getCurrentPageTheme(): "dark" | "company" {
   const savedTheme = localStorage.getItem("stcr-theme-mode");
 
   return savedTheme === "company" ? "company" : "dark";
+}
+
+function getAxisDescription(sensors: SensorKey[]): string {
+  const hasChamber = sensors.includes("chamberTemp");
+  const hasHumidity = sensors.includes("humidity");
+  const hasFurnace = sensors.includes("furnaceTemp");
+  const hasBlower = sensors.includes("blowerTemp");
+
+  if (hasChamber && hasHumidity) {
+    return "อุณหภูมิ (°C) และ ความชื้น (%)";
+  }
+
+  if (hasFurnace && hasBlower) {
+    return "อุณหภูมิเตาเผา (°C) และ อุณหภูมิ Blower (°C)";
+  }
+
+  if (hasChamber) {
+    return "อุณหภูมิห้องอบ (°C)";
+  }
+
+  if (hasHumidity) {
+    return "ความชื้น (%)";
+  }
+
+  if (hasFurnace) {
+    return "อุณหภูมิเตาเผา (°C)";
+  }
+
+  if (hasBlower) {
+    return "อุณหภูมิ Blower (°C)";
+  }
+
+  return "ค่าเซ็นเซอร์";
 }
 
 function getChartPalette(theme: ChartTheme) {
