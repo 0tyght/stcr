@@ -1,0 +1,512 @@
+/* =========================================================
+   Login UX/UI + Brand Visibility Polish
+   import หลัง globals.css และ theme.css
+   ========================================================= */
+
+/* =========================
+   Sidebar Brand Fix
+   ========================= */
+
+.brand-mark {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 120, 10, 0.14);
+  color: var(--orange);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+:root[data-ui-theme="company"][data-company="gr"] .brand-mark {
+  border-color: rgba(236, 217, 47, 0.85);
+  background: var(--company-primary);
+  color: #343a40;
+}
+
+:root[data-ui-theme="company"][data-company="ttn"] .brand-mark {
+  border-color: rgba(255, 255, 255, 0.9);
+  background: #ffffff;
+  color: #8e67eb;
+}
+
+:root[data-ui-theme="company"] .brand-mark {
+  font-size: 16px;
+  letter-spacing: -0.03em;
+}
+
+:root[data-ui-theme="company"] .brand-row {
+  gap: 11px;
+}
+
+:root[data-ui-theme="company"] .brand-text strong,
+:root[data-ui-theme="company"] .brand-text span {
+  color: #ffffff;
+  text-shadow: none;
+}
+
+/* =========================
+   Login Layout
+   ========================= */
+
+.login-screen.login-v2 {
+  position: relative;
+  min-height: 100vh;
+  padding: 32px;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 120, 10, 0.18), transparent 28%),
+    radial-gradient(circle at 82% 12%, rgba(87, 148, 242, 0.15), transparent 30%),
+    linear-gradient(135deg, #0b0f14 0%, #101722 52%, #0b0f14 100%);
+}
+
+:root[data-ui-theme="company"] .login-screen.login-v2 {
+  background:
+    radial-gradient(circle at 18% 16%, color-mix(in srgb, var(--company-primary) 34%, transparent), transparent 30%),
+    radial-gradient(circle at 86% 12%, color-mix(in srgb, var(--company-primary) 18%, transparent), transparent 34%),
+    linear-gradient(135deg, var(--bg) 0%, #ffffff 52%, var(--bg) 100%);
+}
+
+.login-floating-theme {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 20;
+  min-height: 36px;
+  border-radius: 999px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-ui-theme="company"] .login-floating-theme {
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+}
+
+.login-shell {
+  display: grid;
+  width: min(980px, calc(100vw - 64px));
+  min-height: 590px;
+  grid-template-columns: minmax(0, 1.08fr) 430px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(21, 26, 33, 0.92);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
+}
+
+:root[data-ui-theme="company"] .login-shell {
+  border-color: var(--line);
+  background: #ffffff;
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.14);
+}
+
+/* =========================
+   Login Hero
+   ========================= */
+
+.login-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 26px;
+  overflow: hidden;
+  padding: 36px;
+  background:
+    linear-gradient(135deg, rgba(255, 120, 10, 0.16), transparent 42%),
+    linear-gradient(180deg, #151a21 0%, #101722 100%);
+}
+
+.login-hero::before {
+  content: "";
+  position: absolute;
+  right: -110px;
+  top: -110px;
+  width: 260px;
+  height: 260px;
+  border-radius: 999px;
+  background: rgba(255, 120, 10, 0.16);
+}
+
+.login-hero::after {
+  content: "";
+  position: absolute;
+  left: -90px;
+  bottom: -90px;
+  width: 230px;
+  height: 230px;
+  border-radius: 999px;
+  background: rgba(87, 148, 242, 0.12);
+}
+
+:root[data-ui-theme="company"] .login-hero {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--company-primary) 32%, white) 0%, white 58%),
+    #ffffff;
+}
+
+:root[data-ui-theme="company"] .login-hero::before {
+  background: color-mix(in srgb, var(--company-primary) 26%, transparent);
+}
+
+:root[data-ui-theme="company"] .login-hero::after {
+  background: color-mix(in srgb, var(--company-primary) 16%, transparent);
+}
+
+.login-logo-badge {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 72px;
+  height: 72px;
+  place-items: center;
+  border: 1px solid rgba(255, 120, 10, 0.55);
+  border-radius: 22px;
+  background: rgba(255, 120, 10, 0.14);
+  color: var(--orange);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 26px;
+  font-weight: 950;
+  letter-spacing: -0.06em;
+}
+
+.login-logo-ttn {
+  font-family: Inter, "Segoe UI", Tahoma, Arial, sans-serif;
+  font-size: 22px;
+  letter-spacing: -0.08em;
+}
+
+:root[data-ui-theme="company"][data-company="gr"] .login-logo-badge {
+  border-color: #d9c81f;
+  background: var(--company-primary);
+  color: #343a40;
+}
+
+:root[data-ui-theme="company"][data-company="ttn"] .login-logo-badge {
+  border-color: #8e67eb;
+  background: #ffffff;
+  color: #8e67eb;
+}
+
+.login-hero-content,
+.login-feature-grid,
+.login-hero-footer {
+  position: relative;
+  z-index: 1;
+}
+
+.login-kicker {
+  margin: 0 0 10px;
+  color: var(--orange);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+:root[data-ui-theme="company"] .login-kicker {
+  color: var(--company-primary-strong);
+}
+
+.login-hero h1 {
+  max-width: 420px;
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: 34px;
+  line-height: 1.12;
+  letter-spacing: -0.04em;
+}
+
+.login-hero-text {
+  max-width: 440px;
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.login-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.login-feature-card {
+  display: grid;
+  gap: 8px;
+  min-height: 126px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(17, 24, 32, 0.72);
+  padding: 14px;
+}
+
+:root[data-ui-theme="company"] .login-feature-card {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.login-feature-card svg {
+  color: var(--orange);
+}
+
+:root[data-ui-theme="company"] .login-feature-card svg {
+  color: var(--company-primary-strong);
+}
+
+.login-feature-card strong {
+  color: var(--ink-strong);
+  font-size: 14px;
+}
+
+.login-feature-card span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.login-hero-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+
+.login-hero-footer span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.login-hero-footer strong {
+  color: var(--ink-strong);
+  font-size: 13px;
+}
+
+/* =========================
+   Login Form
+   ========================= */
+
+.login-panel.login-form-panel {
+  width: auto;
+  border: 0;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+  background: rgba(17, 22, 29, 0.92);
+  box-shadow: none;
+  padding: 34px;
+}
+
+:root[data-ui-theme="company"] .login-panel.login-form-panel {
+  border-left-color: var(--line);
+  background: #ffffff;
+  color: var(--ink);
+}
+
+.login-form-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.login-mini-mark {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  place-items: center;
+  border: 1px solid rgba(255, 120, 10, 0.55);
+  border-radius: 14px;
+  background: rgba(255, 120, 10, 0.14);
+  color: var(--orange);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 18px;
+  font-weight: 950;
+  letter-spacing: -0.05em;
+}
+
+.login-mini-ttn {
+  font-family: Inter, "Segoe UI", Tahoma, Arial, sans-serif;
+  font-size: 15px;
+  letter-spacing: -0.06em;
+}
+
+:root[data-ui-theme="company"][data-company="gr"] .login-mini-mark {
+  border-color: #d9c81f;
+  background: var(--company-primary);
+  color: #343a40;
+}
+
+:root[data-ui-theme="company"][data-company="ttn"] .login-mini-mark {
+  border-color: #8e67eb;
+  background: #ffffff;
+  color: #8e67eb;
+}
+
+.login-form-head h2 {
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: 24px;
+  letter-spacing: -0.03em;
+}
+
+.login-account-grid {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.login-account-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 12px;
+  min-height: 86px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #111820;
+  color: var(--ink);
+  padding: 12px;
+  text-align: left;
+}
+
+.login-account-card:hover,
+.login-account-card:focus-visible {
+  border-color: var(--orange);
+  background: #151d27;
+  outline: none;
+}
+
+.login-account-card.is-active {
+  border-color: var(--orange);
+  background: rgba(255, 120, 10, 0.1);
+}
+
+:root[data-ui-theme="company"] .login-account-card {
+  border-color: var(--line);
+  background: #ffffff;
+  color: var(--ink);
+}
+
+:root[data-ui-theme="company"] .login-account-card:hover,
+:root[data-ui-theme="company"] .login-account-card:focus-visible,
+:root[data-ui-theme="company"] .login-account-card.is-active {
+  border-color: var(--company-primary);
+  background: var(--company-primary-soft);
+}
+
+.login-account-mark {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(255, 120, 10, 0.14);
+  color: var(--orange);
+  font-weight: 950;
+}
+
+.login-account-ttn {
+  background: rgba(167, 132, 246, 0.16);
+  color: #a784f6;
+}
+
+:root[data-ui-theme="company"][data-company="gr"] .login-account-card.is-active .login-account-mark {
+  background: var(--company-primary);
+  color: #343a40;
+}
+
+:root[data-ui-theme="company"][data-company="ttn"] .login-account-card.is-active .login-account-mark {
+  background: #ffffff;
+  color: #8e67eb;
+}
+
+.login-account-content {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.login-account-content strong {
+  color: var(--ink-strong);
+  font-size: 14px;
+}
+
+.login-account-content small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.login-account-content em {
+  color: var(--muted-soft);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.login-account-check {
+  color: var(--orange);
+}
+
+:root[data-ui-theme="company"] .login-account-check {
+  color: var(--company-primary-strong);
+}
+
+.login-field {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 14px;
+}
+
+.login-field span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.login-field input {
+  min-height: 42px;
+  border-radius: 12px;
+}
+
+.login-submit {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 12px;
+  margin-top: 4px;
+}
+
+.login-note {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+  text-align: center;
+}
+
+/* =========================
+   Responsive Login
+   ========================= */
+
+@media (max-width: 980px) {
+  .login-screen.login-v2 {
+    padding: 76px 18px 24px;
+  }
+
+  .login-shell {
+    width: min(520px, calc(100vw - 36px));
+    grid-template-columns: 1fr;
+  }
+
+  .login-hero {
+    padding: 28px;
+  }
+
+  .login-feature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .login-panel.login-form-panel {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding: 28px;
+  }
+}

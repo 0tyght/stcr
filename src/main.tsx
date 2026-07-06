@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./app/App";
 import "./styles/globals.css";
 import "./styles/theme.css";
+import "./styles/auth.css";
 
 function getInitialThemeMode(): "dark" | "company" {
   const savedTheme = localStorage.getItem("stcr-theme-mode");

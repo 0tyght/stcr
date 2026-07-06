@@ -3,14 +3,25 @@ import { NavLink } from "react-router-dom";
 import { appRoutes } from "../../app/routes";
 import { useAppData } from "../../app/providers";
 
+function getSidebarBrand() {
+  const account = localStorage.getItem("stcr-account") || "gr_dev_admin";
+  const isTtn = account.toLowerCase().includes("ttn");
+
+  return {
+    mark: isTtn ? "TTN" : "GR",
+    company: isTtn ? "TTN" : "GR",
+  };
+}
+
 export function Sidebar() {
   const { ovens } = useAppData();
+  const brand = getSidebarBrand();
 
   return (
     <aside className="sidebar">
       <div className="brand-row">
         <NavLink to="/" className="brand-mark" aria-label="กลับ Dashboard">
-          GR
+          {brand.mark}
         </NavLink>
 
         <div className="brand-text">
@@ -53,8 +64,8 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
-        <strong>Smoking</strong>
-        <span>Temperature Control</span>
+        <strong>{brand.company}</strong>
+        <span>Smoking Temperature Control</span>
       </div>
     </aside>
   );
