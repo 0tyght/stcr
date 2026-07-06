@@ -176,7 +176,7 @@ export function TimeSeriesChart({
       legend: {
         top: 8,
         type: "scroll",
-        selectedMode: false,
+        selectedMode: true,
         textStyle: {
           color: palette.muted,
         },
@@ -261,9 +261,6 @@ export function TimeSeriesChart({
           min: rightBounds.min,
           max: rightBounds.max,
           show: rightSensors.length > 0,
-          nameTextStyle: {
-            color: palette.muted,
-          },
           axisLabel: {
             color: palette.muted,
           },
@@ -327,13 +324,11 @@ export function TimeSeriesChart({
   }, [
     axisDescription,
     effectiveShowDataZoom,
-    leftAxisName,
     limitSensors,
     limits,
     palette,
     points,
     realtime,
-    rightAxisName,
     rightAxisSensors,
     sensors,
   ]);
@@ -356,6 +351,8 @@ export function TimeSeriesChart({
 
     const rightSensors = sensors.filter((sensor) => rightAxisSensors.includes(sensor));
     const shownLimitSensors = limitSensors ?? sensors;
+    const legendSelected = getLegendSelectedMap(chart);
+
     const x1 = 78;
     const x2 = rect.width - (rightSensors.length ? 64 : 54);
 
@@ -367,6 +364,8 @@ export function TimeSeriesChart({
     const lines: OverlayLine[] = [];
 
     shownLimitSensors.forEach((sensor) => {
+      if (!isSensorVisible(sensor, legendSelected)) return;
+
       const limit = limits[sensor];
       const definition = sensorByKey[sensor];
       const yAxisIndex = rightAxisSensors.includes(sensor) ? 1 : 0;
@@ -401,18 +400,30 @@ export function TimeSeriesChart({
     instanceRef.current?.dispose();
     instanceRef.current = init(chartRef.current);
 
-    const resizeObserver = new ResizeObserver(() => {
-      instanceRef.current?.resize();
-
+    const handleChartStateChange = () => {
       window.requestAnimationFrame(() => {
         updateOverlayRef.current();
       });
+    };
+
+    instanceRef.current.on("legendselectchanged", handleChartStateChange);
+    instanceRef.current.on("datazoom", handleChartStateChange);
+    instanceRef.current.on("finished", handleChartStateChange);
+
+    const resizeObserver = new ResizeObserver(() => {
+      instanceRef.current?.resize();
+      handleChartStateChange();
     });
 
     resizeObserver.observe(chartRef.current);
 
     return () => {
       resizeObserver.disconnect();
+
+      instanceRef.current?.off("legendselectchanged", handleChartStateChange);
+      instanceRef.current?.off("datazoom", handleChartStateChange);
+      instanceRef.current?.off("finished", handleChartStateChange);
+
       instanceRef.current?.dispose();
       instanceRef.current = null;
     };
@@ -531,6 +542,21 @@ function createOverlayLine(
     labelX,
     labelY,
   };
+}
+
+function getLegendSelectedMap(chart: ECharts): Record<string, boolean> {
+  const option = chart.getOption() as {
+    legend?: Array<{
+      selected?: Record<string, boolean>;
+    }>;
+  };
+
+  return option.legend?.[0]?.selected ?? {};
+}
+
+function isSensorVisible(sensor: SensorKey, selected: Record<string, boolean>): boolean {
+  const legendName = sensorByKey[sensor].shortLabel;
+  return selected[legendName] !== false;
 }
 
 function getCurrentPageTheme(): "dark" | "company" {
