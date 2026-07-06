@@ -359,3 +359,76 @@
   background: rgba(107, 114, 128, 0.16) !important;
   color: #4b5563 !important;
 }
+
+/* =========================
+   Fix TTN Theme Colors
+   TTN ต้องใช้ม่วง ไม่ใช้เหลือง/ส้มของ GR
+   ========================= */
+
+/* ให้ TTN ใช้ม่วงเป็นสีหลักของปุ่มและปุ่มรายละเอียดเตา */
+:root[data-ui-theme="company"][data-company="ttn"] {
+  --company-accent: var(--company-primary);
+  --company-accent-hover: var(--company-primary-strong);
+  --company-on-accent: #ffffff;
+}
+
+/* หัวการ์ดเตาที่เปิด:
+   GR = เหลือง
+   TTN = ม่วง
+*/
+:root[data-ui-theme="company"][data-company="gr"] .oven-card.status-open .oven-card-header,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card-header.status-open {
+  background: #eed236 !important;
+  border-bottom-color: #eed236 !important;
+}
+
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card.status-open .oven-card-header,
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card-header.status-open {
+  background: var(--company-primary) !important;
+  border-bottom-color: var(--company-primary) !important;
+}
+
+/* ตัวหนังสือบนหัวการ์ด TTN ให้ยังอ่านง่าย */
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card.status-open .oven-card-header h2,
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card.status-open .oven-card-header .status-badge {
+  color: #ffffff !important;
+}
+
+/* ปุ่มรายละเอียดเตา / ปุ่มหลัก ของ TTN ให้เป็นม่วง */
+:root[data-ui-theme="company"][data-company="ttn"] .button-primary,
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card-footer .button {
+  border-color: var(--company-primary) !important;
+  background: var(--company-primary) !important;
+  color: #ffffff !important;
+}
+
+:root[data-ui-theme="company"][data-company="ttn"] .button-primary:hover,
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card-footer .button:hover {
+  border-color: var(--company-primary-strong) !important;
+  background: var(--company-primary-strong) !important;
+  color: #ffffff !important;
+}
+
+/* ป้ายสถานะในหัวการ์ด: ไม่มีเส้นขอบ แต่สียังอยู่ */
+:root[data-ui-theme="company"] .oven-card-header .status-badge {
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* เปิด = เขียว */
+:root[data-ui-theme="company"] .oven-card-header .status-badge.status-open {
+  background: rgba(34, 197, 94, 0.16) !important;
+  color: #15803d !important;
+}
+
+/* ปิด = แดง */
+:root[data-ui-theme="company"] .oven-card-header .status-badge.status-closed {
+  background: rgba(239, 68, 68, 0.16) !important;
+  color: #dc2626 !important;
+}
+
+/* ขาดการเชื่อมต่อ = เทา */
+:root[data-ui-theme="company"] .oven-card-header .status-badge.status-offline {
+  background: rgba(107, 114, 128, 0.18) !important;
+  color: #4b5563 !important;
+}
