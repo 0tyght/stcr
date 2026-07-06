@@ -9,7 +9,7 @@ import {
 } from "echarts/components";
 import { init, use, type ECharts, type EChartsCoreOption } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { LimitMap, SensorKey, TimeSeriesPoint } from "../../types";
 import { sensorByKey } from "../../utils/sensors";
 
@@ -36,8 +36,8 @@ export function TimeSeriesChart({
   leftAxisName = "°C",
   rightAxisName = "%",
   limitSensors,
-  theme = "dark",
-  showDataZoom = theme !== "print",
+  theme,
+  showDataZoom,
 }: {
   points: TimeSeriesPoint[];
   sensors: SensorKey[];
@@ -53,37 +53,83 @@ export function TimeSeriesChart({
 }) {
   const chartRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<ECharts | null>(null);
-  const [pageTheme, setPageTheme] = useState<"dark" | "company">(() => getCurrentPageTheme());
 
-  useEffect(() => {
-    if (theme === "print") return;
+  const resolvedTheme = useMemo<ChartTheme>(() => {
+    if (theme) return theme;
 
-    const root = document.documentElement;
+    const rootTheme = document.documentElement.dataset.uiTheme;
+    if (rootTheme === "company") return "company";
 
-    const observer = new MutationObserver(() => {
-      setPageTheme(getCurrentPageTheme());
-    });
-
-    observer.observe(root, {
-      attributes: true,
-      attributeFilter: ["data-ui-theme", "data-company"],
-    });
-
-    return () => observer.disconnect();
+    const savedTheme = localStorage.getItem("stcr-theme-mode");
+    return savedTheme === "company" ? "company" : "dark";
   }, [theme]);
 
-  const resolvedTheme: ChartTheme = theme === "print" ? "print" : pageTheme;
+  const effectiveShowDataZoom = showDataZoom ?? resolvedTheme !== "print";
 
   const option = useMemo<EChartsCoreOption>(() => {
     const leftSensors = sensors.filter((sensor) => !rightAxisSensors.includes(sensor));
     const rightSensors = sensors.filter((sensor) => rightAxisSensors.includes(sensor));
     const shownLimitSensors = limitSensors ?? sensors;
+
     const leftBounds = getAxisBounds(points, leftSensors, limits, shownLimitSensors);
     const rightBounds = getAxisBounds(points, rightSensors, limits, []);
 
-    const palette = getChartPalette(resolvedTheme);
+    const isPrint = resolvedTheme === "print";
+    const isCompany = resolvedTheme === "company";
 
-    const series = sensors.map((sensor) => {
+    const textColor = isPrint
+      ? "#111827"
+      : isCompany
+        ? "#334155"
+        : "#d8dce3";
+
+    const mutedColor = isPrint
+      ? "#4b5563"
+      : isCompany
+        ? "#64748b"
+        : "#9aa3b2";
+
+    const gridColor = isPrint
+      ? "#d1d5db"
+      : isCompany
+        ? "#e2e8f0"
+        : "#2a3038";
+
+    const axisColor = isPrint
+      ? "#6b7280"
+      : isCompany
+        ? "#cbd5e1"
+        : "#3a424f";
+
+    const chartBackground = isPrint
+      ? "#ffffff"
+      : isCompany
+        ? "#ffffff"
+        : "transparent";
+
+    const tooltipBackground = isPrint
+      ? "#ffffff"
+      : isCompany
+        ? "#ffffff"
+        : "#111820";
+
+    const tooltipBorder = isPrint
+      ? "#d1d5db"
+      : isCompany
+        ? "#d8dde5"
+        : axisColor;
+
+    const sliderFill = isCompany
+      ? "rgba(148, 163, 184, 0.18)"
+      : "rgba(87, 148, 242, 0.18)";
+
+    const sliderBackground = isPrint
+      ? "#f9fafb"
+      : isCompany
+        ? "#f8fafc"
+        : "#111820";
+
+    const lineSeries = sensors.map((sensor) => {
       const definition = sensorByKey[sensor];
       const useRightAxis = rightAxisSensors.includes(sensor);
       const showLimit = shownLimitSensors.includes(sensor);
@@ -97,15 +143,19 @@ export function TimeSeriesChart({
         yAxisIndex: useRightAxis ? 1 : 0,
         data: points.map((point) => [point.timestamp, point[sensor]]),
         lineStyle: {
-          width: 2,
+          width: 2.2,
           color: definition.color,
+          opacity: 1,
         },
         areaStyle: {
-          color: withAlpha(definition.color, resolvedTheme === "dark" ? 0.06 : 0.1),
+          color: withAlpha(definition.color, isCompany ? 0.08 : 0.06),
           opacity: 1,
         },
         itemStyle: {
           color: definition.color,
+        },
+        emphasis: {
+          focus: "series" as const,
         },
         markLine: showLimit
           ? {
@@ -115,7 +165,7 @@ export function TimeSeriesChart({
                 type: "dashed" as const,
                 width: 1,
                 color: definition.color,
-                opacity: resolvedTheme === "dark" ? 0.62 : 0.78,
+                opacity: isCompany ? 0.85 : 0.62,
               },
               label: {
                 show: true,
@@ -124,9 +174,9 @@ export function TimeSeriesChart({
                 color: definition.color,
                 fontSize: 11,
                 fontWeight: 700,
-                backgroundColor: palette.markLabelBackground,
-                borderColor: palette.border,
-                borderWidth: resolvedTheme === "dark" ? 0 : 1,
+                backgroundColor: isPrint || isCompany
+                  ? "rgba(255,255,255,0.88)"
+                  : "rgba(17,24,39,0.76)",
                 padding: [2, 4],
               },
               data: [
@@ -139,6 +189,10 @@ export function TimeSeriesChart({
     });
 
     return {
+      animation: false,
+      backgroundColor: chartBackground,
+      color: sensors.map((sensor) => sensorByKey[sensor].color),
+
       title: {
         text: title,
         left: 8,
@@ -146,62 +200,86 @@ export function TimeSeriesChart({
         textStyle: {
           fontSize: 15,
           fontWeight: 700,
-          color: palette.text,
+          color: textColor,
         },
       },
-      backgroundColor: palette.background,
-      color: sensors.map((sensor) => sensorByKey[sensor].color),
+
       tooltip: {
         trigger: "axis",
         axisPointer: {
           type: "cross",
-          lineStyle: { color: palette.axis },
-          crossStyle: { color: palette.axis },
+          lineStyle: {
+            color: axisColor,
+            width: 1,
+            opacity: isCompany ? 0.7 : 0.5,
+          },
+          crossStyle: {
+            color: axisColor,
+          },
           label: {
-            backgroundColor: palette.tooltipBackground,
-            color: palette.text,
+            backgroundColor: tooltipBackground,
+            color: textColor,
+            borderColor: tooltipBorder,
+            borderWidth: 1,
           },
         },
-        backgroundColor: palette.tooltipBackground,
-        borderColor: palette.border,
-        textStyle: { color: palette.text },
-        valueFormatter: (value: unknown) => (typeof value === "number" ? value.toFixed(1) : String(value)),
+        backgroundColor: tooltipBackground,
+        borderColor: tooltipBorder,
+        borderWidth: 1,
+        textStyle: { color: textColor },
+        valueFormatter: (value: unknown) =>
+          typeof value === "number" ? value.toFixed(1) : String(value),
       },
+
       legend: {
         top: 28,
         type: "scroll",
-        textStyle: { color: palette.muted },
+        textStyle: { color: mutedColor },
       },
+
       grid: {
         left: 54,
         right: rightSensors.length ? 64 : 54,
         top: 74,
-        bottom: realtime || !showDataZoom ? 38 : 72,
+        bottom: realtime || !effectiveShowDataZoom ? 38 : 72,
+        containLabel: false,
       },
+
       xAxis: {
         type: "time",
         axisLabel: {
-          color: palette.muted,
+          color: mutedColor,
           formatter: (value: number) => formatShortDateTime(new Date(value)),
         },
-        axisLine: { lineStyle: { color: palette.axis } },
-        axisTick: { lineStyle: { color: palette.axis } },
+        axisLine: { lineStyle: { color: axisColor, width: 1 } },
+        axisTick: { lineStyle: { color: axisColor, width: 1 } },
         splitLine: {
           show: true,
-          lineStyle: { color: palette.grid },
+          lineStyle: {
+            color: gridColor,
+            width: 1,
+            opacity: isCompany ? 0.85 : 1,
+          },
         },
       },
+
       yAxis: [
         {
           type: "value",
           name: leftAxisName,
           min: leftBounds.min,
           max: leftBounds.max,
-          nameTextStyle: { color: palette.muted },
-          axisLabel: { color: palette.muted },
-          axisLine: { lineStyle: { color: palette.axis } },
-          axisTick: { lineStyle: { color: palette.axis } },
-          splitLine: { lineStyle: { color: palette.grid } },
+          nameTextStyle: { color: mutedColor },
+          axisLabel: { color: mutedColor },
+          axisLine: { lineStyle: { color: axisColor, width: 1 } },
+          axisTick: { lineStyle: { color: axisColor, width: 1 } },
+          splitLine: {
+            lineStyle: {
+              color: gridColor,
+              width: 1,
+              opacity: isCompany ? 0.85 : 1,
+            },
+          },
         },
         {
           type: "value",
@@ -209,15 +287,16 @@ export function TimeSeriesChart({
           min: rightBounds.min,
           max: rightBounds.max,
           show: rightSensors.length > 0,
-          nameTextStyle: { color: palette.muted },
-          axisLabel: { color: palette.muted },
-          axisLine: { lineStyle: { color: palette.axis } },
-          axisTick: { lineStyle: { color: palette.axis } },
+          nameTextStyle: { color: mutedColor },
+          axisLabel: { color: mutedColor },
+          axisLine: { lineStyle: { color: axisColor, width: 1 } },
+          axisTick: { lineStyle: { color: axisColor, width: 1 } },
           splitLine: { show: false },
         },
       ],
+
       dataZoom:
-        realtime || !showDataZoom
+        realtime || !effectiveShowDataZoom
           ? []
           : [
               { type: "inside", throttle: 80 },
@@ -225,23 +304,17 @@ export function TimeSeriesChart({
                 type: "slider",
                 height: 24,
                 bottom: 22,
-                borderColor: palette.grid,
-                fillerColor: palette.zoomFiller,
-                backgroundColor: palette.zoomBackground,
-                dataBackground: {
-                  lineStyle: { color: palette.axis },
-                  areaStyle: { color: palette.zoomArea },
-                },
-                selectedDataBackground: {
-                  lineStyle: { color: palette.axis },
-                  areaStyle: { color: palette.zoomFiller },
-                },
-                textStyle: { color: palette.muted },
+                borderColor: gridColor,
+                fillerColor: sliderFill,
+                backgroundColor: sliderBackground,
+                textStyle: { color: mutedColor },
               },
             ],
-      series,
+
+      series: lineSeries,
     };
   }, [
+    effectiveShowDataZoom,
     leftAxisName,
     limitSensors,
     limits,
@@ -251,13 +324,13 @@ export function TimeSeriesChart({
     rightAxisName,
     rightAxisSensors,
     sensors,
-    showDataZoom,
     title,
   ]);
 
   useEffect(() => {
     if (!chartRef.current) return;
 
+    instanceRef.current?.dispose();
     instanceRef.current = init(chartRef.current);
 
     const resizeObserver = new ResizeObserver(() => {
@@ -271,49 +344,16 @@ export function TimeSeriesChart({
       instanceRef.current?.dispose();
       instanceRef.current = null;
     };
-  }, []);
+  }, [resolvedTheme]);
 
   useEffect(() => {
-    instanceRef.current?.setOption(option, true);
+    if (!instanceRef.current) return;
+    instanceRef.current.clear();
+    instanceRef.current.setOption(option, true);
+    instanceRef.current.resize();
   }, [option]);
 
   return <div className="time-series-chart" ref={chartRef} role="img" aria-label={title} />;
-}
-
-function getCurrentPageTheme(): "dark" | "company" {
-  return document.documentElement.dataset.uiTheme === "company" ? "company" : "dark";
-}
-
-function getChartPalette(theme: ChartTheme) {
-  if (theme === "dark") {
-    return {
-      background: "transparent",
-      text: "#d8dce3",
-      muted: "#9aa3b2",
-      grid: "#2a3038",
-      axis: "#3a424f",
-      border: "#3a424f",
-      tooltipBackground: "#111820",
-      markLabelBackground: "rgba(17, 24, 39, 0.76)",
-      zoomBackground: "#111820",
-      zoomFiller: "rgba(87, 148, 242, 0.18)",
-      zoomArea: "rgba(154, 163, 178, 0.12)",
-    };
-  }
-
-  return {
-    background: "#ffffff",
-    text: "#1f2937",
-    muted: "#6b7280",
-    grid: "#e5e7eb",
-    axis: "#cbd5e1",
-    border: "#d1d5db",
-    tooltipBackground: "#ffffff",
-    markLabelBackground: "rgba(255, 255, 255, 0.92)",
-    zoomBackground: "#f8fafc",
-    zoomFiller: "rgba(167, 132, 246, 0.2)",
-    zoomArea: "rgba(148, 163, 184, 0.16)",
-  };
 }
 
 function formatShortDateTime(value: Date): string {
@@ -328,7 +368,6 @@ function formatShortDateTime(value: Date): string {
 
 function withAlpha(hex: string, alpha: number): string {
   const normalized = hex.replace("#", "");
-
   if (normalized.length !== 6) return hex;
 
   const r = parseInt(normalized.slice(0, 2), 16);

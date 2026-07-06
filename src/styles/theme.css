@@ -1,6 +1,5 @@
 /* =========================================================
    STCR Theme System
-   Company Theme / GR / TTN / Status / Login / Chart Surface
    ========================================================= */
 
 /* =========================
@@ -150,7 +149,8 @@
 :root[data-ui-theme="company"] .eyebrow,
 :root[data-ui-theme="company"] .report-cycle-toolbar span,
 :root[data-ui-theme="company"] .field span,
-:root[data-ui-theme="company"] .search-field span {
+:root[data-ui-theme="company"] .search-field span,
+:root[data-ui-theme="company"] .mode-note {
   color: var(--muted);
 }
 
@@ -313,29 +313,31 @@
 :root[data-ui-theme="company"] .status-banner,
 :root[data-ui-theme="company"] .status-range-card,
 :root[data-ui-theme="company"] .alarm-item,
-:root[data-ui-theme="company"] .table-wrap {
+:root[data-ui-theme="company"] .table-wrap,
+:root[data-ui-theme="company"] .chart-panel,
+:root[data-ui-theme="company"] .grafana-chart-panel {
   border-color: var(--line);
   background: #ffffff;
   color: var(--ink);
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
-:root[data-ui-theme="company"] .summary-card {
-  background: #ffffff;
-}
-
 :root[data-ui-theme="company"] .summary-card span,
 :root[data-ui-theme="company"] .mini-card span,
 :root[data-ui-theme="company"] .metric-card h3,
 :root[data-ui-theme="company"] .history-stat-card span,
-:root[data-ui-theme="company"] .gauge-card-head span {
+:root[data-ui-theme="company"] .gauge-card-head span,
+:root[data-ui-theme="company"] .alarm-item p,
+:root[data-ui-theme="company"] .table-note {
   color: var(--muted);
 }
 
 :root[data-ui-theme="company"] .summary-card strong,
 :root[data-ui-theme="company"] .metric-value strong,
 :root[data-ui-theme="company"] .mini-card strong,
-:root[data-ui-theme="company"] .history-stat-card strong {
+:root[data-ui-theme="company"] .history-stat-card strong,
+:root[data-ui-theme="company"] .panel-heading h2,
+:root[data-ui-theme="company"] .alarm-item h3 {
   color: var(--ink-strong);
 }
 
@@ -383,29 +385,37 @@
   color: var(--ink-strong);
 }
 
+/* แท็บ Realtime / Historical ให้เป็น segmented แบบธีมมืด */
 :root[data-ui-theme="company"] .tabs {
-  border: 0;
-  background: transparent;
-  padding: 0;
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fafc;
 }
 
 :root[data-ui-theme="company"] .tab {
-  border: 1px solid var(--line-strong);
-  background: #ffffff;
-  color: var(--ink);
+  min-width: 92px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
 }
 
 :root[data-ui-theme="company"] .tab:hover,
 :root[data-ui-theme="company"] .tab:focus-visible {
-  border-color: var(--company-primary);
-  background: var(--company-primary-soft);
+  border-color: var(--line-strong);
+  background: #ffffff;
   color: var(--ink-strong);
 }
 
 :root[data-ui-theme="company"] .tab.is-active {
   border-color: var(--company-primary);
-  background: var(--company-primary-soft);
+  background: #ffffff;
   color: var(--ink-strong);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 
 :root[data-ui-theme="company"] .button-dark {
@@ -430,7 +440,6 @@
 
 /* =========================
    Status Badge
-   ต้องใช้สีสถานะเหมือนธีมมืด
    ========================= */
 
 :root[data-ui-theme="company"] .status-badge {
@@ -485,7 +494,6 @@
 :root[data-ui-theme="company"] .oven-card {
   border-color: var(--line);
   background: #ffffff;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
 :root[data-ui-theme="company"] .oven-card-header {
@@ -498,12 +506,13 @@
   color: var(--ink-strong);
 }
 
-:root[data-ui-theme="company"] .oven-meta span {
+:root[data-ui-theme="company"] .oven-meta span,
+:root[data-ui-theme="company"] .cycle-box span,
+:root[data-ui-theme="company"] .oven-state-note {
   color: var(--muted);
 }
 
-:root[data-ui-theme="company"] .oven-meta strong,
-:root[data-ui-theme="company"] .cycle-box span {
+:root[data-ui-theme="company"] .oven-meta strong {
   color: var(--ink);
 }
 
@@ -518,7 +527,6 @@
 :root[data-ui-theme="company"] .oven-state-note {
   border-color: var(--line);
   background: var(--surface-soft);
-  color: var(--muted);
 }
 
 :root[data-ui-theme="company"] .oven-mini-strip {
@@ -581,7 +589,7 @@
 }
 
 /* =========================
-   Sensor Readings
+   Reading Tone
    ========================= */
 
 :root[data-ui-theme="company"] .reading-inline.tone-normal {
@@ -617,17 +625,11 @@
 }
 
 /* =========================
-   Chart / Table
+   Chart / Table / Report
    ========================= */
 
 :root[data-ui-theme="company"] .time-series-chart,
 :root[data-ui-theme="company"] .report-page-shell {
-  border-color: var(--line);
-  background: #ffffff;
-}
-
-:root[data-ui-theme="company"] .chart-panel,
-:root[data-ui-theme="company"] .grafana-chart-panel {
   border-color: var(--line);
   background: #ffffff;
 }
