@@ -20,7 +20,7 @@ export function SensorGauge({
   const formattedValue = formatNumber(value, sensor === "furnaceTemp" ? 0 : 1);
 
   return (
-    <article className={`gauge-card tone-${tone}`}>
+    <article className={`gauge-card tone-${tone} ${showLimit ? "" : "no-limit"}`}>
       <div className="gauge-card-head">
         <span>{definition.label}</span>
         <strong>{getToneLabel(tone)}</strong>
@@ -42,9 +42,9 @@ export function SensorGauge({
           {formattedValue}
           <span>{unit}</span>
         </strong>
+        <em>{definition.shortLabel}</em>
       </div>
       <div className="gauge-meta">
-        <span>{showLimit ? `${Math.round(ratio)}% ของช่วง limit` : "ค่าปัจจุบัน"}</span>
         {showLimit && limit ? (
           <small>
             Lower {limit.lower}

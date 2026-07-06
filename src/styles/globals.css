@@ -39,7 +39,7 @@ html {
 }
 
 body {
-  min-width: 320px;
+  min-width: 1280px;
   min-height: 100vh;
   margin: 0;
   background: var(--bg);
@@ -91,6 +91,8 @@ a {
   transition: width 0.16s ease;
 }
 
+.sidebar:hover,
+.sidebar:focus-within,
 .sidebar.is-expanded {
   width: var(--sidebar-expanded);
   box-shadow: var(--shadow);
@@ -204,7 +206,11 @@ a {
   transition: opacity 0.12s ease;
 }
 
+.sidebar:hover .nav-item span,
+.sidebar:focus-within .nav-item span,
 .sidebar.is-expanded .nav-item span,
+.sidebar:hover .sidebar-footer,
+.sidebar:focus-within .sidebar-footer,
 .sidebar.is-expanded .sidebar-footer {
   opacity: 1;
 }
@@ -219,6 +225,8 @@ a {
   display: none;
 }
 
+.sidebar:hover .oven-word,
+.sidebar:focus-within .oven-word,
 .sidebar.is-expanded .oven-word {
   display: inline;
 }
@@ -1049,7 +1057,7 @@ select:focus {
 .history-stat-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(160px, 1fr));
-  gap: 8px;
+  gap: 10px;
   margin-bottom: 8px;
 }
 
@@ -1061,8 +1069,8 @@ select:focus {
 }
 
 .gauge-card {
-  min-height: 152px;
-  padding: 10px;
+  min-height: 188px;
+  padding: 12px 12px 10px;
 }
 
 .gauge-card-head {
@@ -1086,6 +1094,10 @@ select:focus {
   white-space: nowrap;
 }
 
+.gauge-card.no-limit .gauge-card-head strong {
+  color: var(--blue);
+}
+
 .gauge-card.tone-warning .gauge-card-head strong {
   color: var(--yellow);
 }
@@ -1097,14 +1109,14 @@ select:focus {
 .gauge-visual {
   position: relative;
   display: grid;
-  min-height: 78px;
+  min-height: 118px;
   place-items: center;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .gauge-svg {
-  width: min(150px, 100%);
-  height: 78px;
+  width: min(218px, 100%);
+  height: 118px;
   overflow: visible;
 }
 
@@ -1122,7 +1134,7 @@ select:focus {
 }
 
 .gauge-threshold {
-  stroke-width: 4;
+  stroke-width: 4.5;
 }
 
 .gauge-threshold-low {
@@ -1143,13 +1155,23 @@ select:focus {
 }
 
 .gauge-bg {
-  stroke: #202733;
-  stroke-width: 12;
+  stroke: #2a2f38;
+  stroke-width: 18;
 }
 
 .gauge-fill {
   stroke: var(--green);
-  stroke-width: 12;
+  stroke-width: 18;
+}
+
+.gauge-card.no-limit .gauge-threshold {
+  stroke: #303741;
+  stroke-dasharray: 100 0;
+  stroke-dashoffset: 0;
+}
+
+.gauge-card.no-limit .gauge-fill {
+  stroke: var(--blue);
 }
 
 .gauge-card.tone-warning .gauge-zone {
@@ -1170,25 +1192,35 @@ select:focus {
 
 .gauge-visual > strong {
   position: absolute;
-  top: 38px;
+  top: 54px;
   display: inline-flex;
   align-items: baseline;
   gap: 3px;
   color: var(--ink-strong);
-  font-size: 22px;
+  font-size: 32px;
   line-height: 1;
 }
 
 .gauge-visual > strong span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
+}
+
+.gauge-visual > em {
+  position: absolute;
+  top: 86px;
+  color: var(--muted);
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 750;
 }
 
 .gauge-meta {
   display: grid;
   gap: 2px;
-  margin-top: 2px;
+  min-height: 18px;
+  margin-top: -2px;
   text-align: center;
 }
 
@@ -1610,7 +1642,7 @@ tbody tr:hover {
   border: 1px solid #c7ccd5;
   background: #ffffff;
   color: #111827;
-  padding: 18px 22px 20px;
+  padding: 14px 20px 16px;
   font-family: "Segoe UI", Tahoma, Arial, sans-serif;
 }
 
@@ -1633,7 +1665,7 @@ tbody tr:hover {
   grid-template-columns: 1.15fr 1fr 0.85fr;
   gap: 14px;
   border-bottom: 1px solid #d1d5db;
-  padding: 10px 0 8px;
+  padding: 8px 0 6px;
 }
 
 .report-meta-grid p {
@@ -1644,7 +1676,7 @@ tbody tr:hover {
 }
 
 .report-chart-title {
-  margin: 12px 0 5px;
+  margin: 8px 0 4px;
   color: #111827;
   font-size: 13px;
   font-weight: 800;
@@ -1652,10 +1684,14 @@ tbody tr:hover {
 }
 
 .report-chart-frame {
-  height: 455px;
+  height: 242px;
   border: 1px solid #d1d5db;
   background: #ffffff;
   padding: 4px;
+}
+
+.compact-report-chart {
+  height: 242px;
 }
 
 .report-chart-frame .time-series-chart {
@@ -1666,9 +1702,9 @@ tbody tr:hover {
 
 .report-summary-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .report-summary-row div {
@@ -1696,7 +1732,7 @@ tbody tr:hover {
   grid-template-columns: repeat(2, 220px);
   justify-content: end;
   gap: 24px;
-  margin-top: 26px;
+  margin-top: 16px;
 }
 
 .report-signatures p {

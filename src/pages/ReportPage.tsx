@@ -11,11 +11,13 @@ import { downloadCsv } from "../services/reportExport";
 import type { Oven, SensorKey, TimeSeriesPoint } from "../types";
 import { formatNumber } from "../utils/format";
 import { clampCycleStart, REPORT_CYCLE_DAYS, REPORT_CYCLE_MS } from "../utils/reportCycle";
-import { sensorByKey } from "../utils/sensors";
+import { allSensorKeys, sensorByKey } from "../utils/sensors";
 
 type ReportMode = "current" | "history";
 
-const reportSensors: SensorKey[] = ["chamberTemp", "humidity"];
+const environmentReportSensors: SensorKey[] = ["chamberTemp", "humidity"];
+const heatReportSensors: SensorKey[] = ["furnaceTemp", "blowerTemp"];
+const reportSensors: SensorKey[] = [...environmentReportSensors, ...heatReportSensors];
 
 export function ReportPage() {
   const { ovens } = useAppData();
@@ -24,7 +26,7 @@ export function ReportPage() {
   const mode: ReportMode = searchParams.get("mode") === "history" ? "history" : "current";
   const autoPdf = searchParams.get("auto") === "pdf";
   const requestedCycle = Number(searchParams.get("cycle"));
-  const oven = ovens.find((item) => item.id === ovenId);
+  const oven = ovens.find((item) => item.id === ovenId) ?? ovens.find((item) => item.number === 18) ?? ovens[0];
   const [selectedCycle, setSelectedCycle] = useState<number | null>(null);
   const [points, setPoints] = useState<TimeSeriesPoint[]>([]);
   const [loadingReport, setLoadingReport] = useState(false);
@@ -59,7 +61,7 @@ export function ReportPage() {
       startAt: cycleRange.start.toISOString(),
       endAt: cycleRange.end.toISOString(),
       cycleNumber: selectedCycle ?? undefined,
-      sensors: reportSensors,
+      sensors: allSensorKeys,
     });
     setPoints(nextPoints);
     setLoadingReport(false);
@@ -90,12 +92,7 @@ export function ReportPage() {
   }, [autoDownloaded, autoPdf, downloadPdf, loadingReport, points.length]);
 
   if (!oven) {
-    return (
-      <EmptyState
-        title="ไม่พบเตาสำหรับรายงาน"
-        description="เปิดรายงานจากหน้ารายละเอียดเตา เพื่อให้ระบบล็อกเตาและรอบอบถูกต้อง"
-      />
-    );
+    return <EmptyState title="ยังไม่มีข้อมูลเตา" description="ยังไม่มีข้อมูลเตาสำหรับสร้างรายงาน" />;
   }
 
   if (!cycleRange) {
@@ -176,18 +173,36 @@ export function ReportPage() {
           </section>
 
           <div className="report-chart-title">Temperature and Humidity Variation 1</div>
-          <div className="report-chart-frame">
+          <div className="report-chart-frame compact-report-chart">
             <TimeSeriesChart
               points={points}
-              sensors={reportSensors}
+              sensors={environmentReportSensors}
+              limits={oven.limits}
+              title=""
+              realtime={mode === "current"}
+              rightAxisSensors={["humidity"]}
+              leftAxisName="Temperature Oven"
+              rightAxisName="Humidity Oven"
+              limitSensors={["chamberTemp"]}
+              theme="print"
+              showDataZoom={false}
+            />
+          </div>
+
+          <div className="report-chart-title">Furnace and Blower Temperature Variation 2</div>
+          <div className="report-chart-frame compact-report-chart">
+            <TimeSeriesChart
+              points={points}
+              sensors={heatReportSensors}
               limits={oven.limits}
               title=""
               realtime={mode === "current"}
               rightAxisSensors={[]}
-              leftAxisName="Temperature Oven / Humidity Oven"
+              leftAxisName="Furnace / Blower Temperature"
               rightAxisName=""
-              limitSensors={["chamberTemp"]}
+              limitSensors={["furnaceTemp"]}
               theme="print"
+              showDataZoom={false}
             />
           </div>
 

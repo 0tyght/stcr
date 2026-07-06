@@ -35,6 +35,7 @@ export function TimeSeriesChart({
   rightAxisName = "%",
   limitSensors,
   theme = "dark",
+  showDataZoom = theme !== "print",
 }: {
   points: TimeSeriesPoint[];
   sensors: SensorKey[];
@@ -46,6 +47,7 @@ export function TimeSeriesChart({
   rightAxisName?: string;
   limitSensors?: SensorKey[];
   theme?: "dark" | "print";
+  showDataZoom?: boolean;
 }) {
   const chartRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<ECharts | null>(null);
@@ -98,6 +100,7 @@ export function TimeSeriesChart({
               },
               label: {
                 show: true,
+                position: "insideEndTop",
                 formatter: "{b}",
                 color: definition.color,
                 fontSize: 11,
@@ -142,9 +145,9 @@ export function TimeSeriesChart({
       },
       grid: {
         left: 54,
-        right: rightSensors.length ? 64 : 28,
+        right: rightSensors.length ? 64 : 54,
         top: 74,
-        bottom: realtime ? 38 : 72,
+        bottom: realtime || !showDataZoom ? 38 : 72,
       },
       xAxis: {
         type: "time",
@@ -184,7 +187,7 @@ export function TimeSeriesChart({
           splitLine: { show: false },
         },
       ],
-      dataZoom: realtime
+      dataZoom: realtime || !showDataZoom
         ? []
         : [
             { type: "inside", throttle: 80 },
@@ -200,7 +203,7 @@ export function TimeSeriesChart({
           ],
       series,
     };
-  }, [leftAxisName, limitSensors, limits, points, realtime, rightAxisName, rightAxisSensors, sensors, theme, title]);
+  }, [leftAxisName, limitSensors, limits, points, realtime, rightAxisName, rightAxisSensors, sensors, showDataZoom, theme, title]);
 
   useEffect(() => {
     if (!chartRef.current) return;
