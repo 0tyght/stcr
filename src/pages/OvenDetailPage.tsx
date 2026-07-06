@@ -108,27 +108,37 @@ export function OvenDetailPage() {
 
   const calendarCells = useMemo(() => getCalendarCells(calendarCursor), [calendarCursor]);
 
+  /*
+    แก้บัคสำคัญ:
+    - effect นี้ทำงานเฉพาะตอนเปลี่ยนเตาเท่านั้น
+    - ห้ามใส่ oven.cycleCount หรือ oven.status เป็น dependency
+    - ไม่งั้นตอน refresh / ข้อมูลเปลี่ยน จะเด้งจาก "ย้อนหลัง" กลับ "ปัจจุบัน"
+  */
   useEffect(() => {
     if (!oven) return;
 
-    const nextMode = canUseRealtime(oven.status) ? "realtime" : "historical";
     const defaultCycle = getDefaultHistoricalCycle(oven);
     const defaultRange = getDetailCycleRange(oven, "historical", defaultCycle);
 
-    setMode(nextMode);
+    setMode(canUseRealtime(oven.status) ? "realtime" : "historical");
     setHistoryPickMode("cycle");
     setSelectedCycle(defaultCycle);
     setSelectedDateKey(toThaiDateKey(defaultRange.end));
     setCalendarCursor(defaultRange.end);
-  }, [oven?.id, oven?.cycleCount, oven?.status]);
+  }, [oven?.id]);
 
+  /*
+    effect นี้ทำหน้าที่เดียว:
+    ถ้าเตาไม่ได้เปิดอยู่ แต่ผู้ใช้อยู่โหมดปัจจุบัน ให้บังคับไปย้อนหลัง
+    แต่ถ้าผู้ใช้อยู่ย้อนหลังอยู่แล้ว ห้ามดึงกลับไปปัจจุบัน
+  */
   useEffect(() => {
     if (!oven) return;
 
     if (!realtimeAvailable && mode === "realtime") {
       setMode("historical");
     }
-  }, [mode, oven, realtimeAvailable]);
+  }, [oven?.id, realtimeAvailable, mode]);
 
   useEffect(() => {
     if (!selectedRecord || historyPickMode !== "cycle") return;
@@ -225,6 +235,7 @@ export function OvenDetailPage() {
       setCalendarCursor(record.end);
     }
   }
+
   const currentCycleLabel =
     effectiveMode === "realtime"
       ? `รอบปัจจุบัน ${oven.cycleCount}`
@@ -380,8 +391,8 @@ export function OvenDetailPage() {
                     ? selectedRecord.rangeLabel
                     : cycleRange
                       ? `${formatShortThaiDateTime(cycleRange.start)} - ${formatShortThaiDateTime(
-                        cycleRange.end,
-                      )}`
+                          cycleRange.end,
+                        )}`
                       : "-"}
                 </span>
               </div>
@@ -490,10 +501,10 @@ export function OvenDetailPage() {
                       const isSelectedDate = selectedDateKey === dateKey;
                       const isSelectedCycleDate = selectedRecord
                         ? isDateKeyInRange(
-                          dateKey,
-                          selectedRecord.startDateKey,
-                          selectedRecord.endDateKey,
-                        )
+                            dateKey,
+                            selectedRecord.startDateKey,
+                            selectedRecord.endDateKey,
+                          )
                         : false;
 
                       return (
@@ -704,11 +715,13 @@ export function OvenDetailPage() {
           <div className="download-row">
             <Link
               className="button button-primary"
-              to={`/reports?ovenId=${oven.id}&mode=${effectiveMode === "realtime" ? "current" : "history"
-                }&cycle=${effectiveMode === "realtime"
+              to={`/reports?ovenId=${oven.id}&mode=${
+                effectiveMode === "realtime" ? "current" : "history"
+              }&cycle=${
+                effectiveMode === "realtime"
                   ? oven.cycleCount
                   : selectedCycle ?? getDefaultHistoricalCycle(oven)
-                }&auto=pdf`}
+              }&auto=pdf`}
             >
               <FileDown size={17} />
               {effectiveMode === "realtime" ? "รายงานรอบปัจจุบัน" : "รายงานย้อนหลัง"}
@@ -785,7 +798,7 @@ export function OvenDetailPage() {
       ) : (
         <section className="chart-grid-two">
           <ChartPanel
-            title="อุณหภูิและความชื้นในห้องอบ"
+            title="อุณหภูมิและความชื้นในห้องอบ"
             description="1 กราฟต่อ 1 รอบอบ แสดงเส้น Upper/Lower เฉพาะอุณหภูมิห้องอบ"
             points={points}
             sensors={environmentSensors}
@@ -927,7 +940,7 @@ function TemperatureRangeCard({ oven }: { oven: Oven }) {
   const limit = oven.limits.chamberTemp;
   const state = getReadingState(reading.value, "chamberTemp", oven.limits);
 
-  const labels = {
+  const labels: Record<ReturnType<typeof getReadingState>, string> = {
     normal: "อยู่ในช่วง",
     warning: reading.value > limit.upper ? "สูงกว่า Upper" : "ต่ำกว่า Lower",
     danger: reading.value > limit.upper ? "สูงกว่า Upper มาก" : "ต่ำกว่า Lower มาก",
