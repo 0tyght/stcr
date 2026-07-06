@@ -25,8 +25,7 @@
   --offline: #8b95a5;
   --radius: 3px;
   --shadow: 0 8px 26px rgba(0, 0, 0, 0.35);
-  --sidebar-width: 54px;
-  --sidebar-expanded: 232px;
+  --sidebar-width: 232px;
   font-family: Inter, "Segoe UI", Tahoma, Arial, sans-serif;
 }
 
@@ -82,29 +81,21 @@ a {
   display: flex;
   width: var(--sidebar-width);
   height: 100vh;
-  min-width: 0;
+  min-width: var(--sidebar-width);
   flex-direction: column;
   overflow: hidden;
   border-right: 1px solid var(--line);
   background: #11161d;
   color: var(--ink);
-  transition: width 0.16s ease;
-}
-
-.sidebar:hover,
-.sidebar:focus-within,
-.sidebar.is-expanded {
-  width: var(--sidebar-expanded);
-  box-shadow: var(--shadow);
 }
 
 .brand-row {
   display: flex;
   min-height: 48px;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 10px;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--line);
   background: #10151b;
 }
@@ -113,6 +104,7 @@ a {
   display: grid;
   width: 34px;
   height: 34px;
+  flex: 0 0 34px;
   place-items: center;
   border-radius: 999px;
   color: var(--orange);
@@ -123,8 +115,30 @@ a {
   text-decoration: none;
 }
 
-.brand-row .icon-button {
-  display: inline-flex;
+.brand-text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.brand-text strong {
+  overflow: hidden;
+  color: var(--ink-strong);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-text span {
+  overflow: hidden;
+  color: var(--muted-soft);
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .icon-button,
@@ -201,18 +215,8 @@ a {
 
 .nav-item span,
 .sidebar-footer {
-  opacity: 0;
-  white-space: nowrap;
-  transition: opacity 0.12s ease;
-}
-
-.sidebar:hover .nav-item span,
-.sidebar:focus-within .nav-item span,
-.sidebar.is-expanded .nav-item span,
-.sidebar:hover .sidebar-footer,
-.sidebar:focus-within .sidebar-footer,
-.sidebar.is-expanded .sidebar-footer {
   opacity: 1;
+  white-space: nowrap;
 }
 
 .oven-label {
@@ -222,12 +226,6 @@ a {
 }
 
 .oven-word {
-  display: none;
-}
-
-.sidebar:hover .oven-word,
-.sidebar:focus-within .oven-word,
-.sidebar.is-expanded .oven-word {
   display: inline;
 }
 
@@ -1934,10 +1932,6 @@ tbody tr:hover {
     height: auto;
   }
 
-  .sidebar.is-expanded {
-    width: 100%;
-    box-shadow: none;
-  }
 
   .brand-row {
     min-height: 48px;
@@ -1946,18 +1940,14 @@ tbody tr:hover {
   }
 
   .primary-nav {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     padding: 0;
   }
 
   .nav-item {
-    justify-content: center;
+    justify-content: flex-start;
     min-height: 42px;
-    padding: 0 8px;
-  }
-
-  .nav-item span {
-    display: none;
+    padding: 0 12px;
   }
 
   .oven-nav {
@@ -1979,10 +1969,6 @@ tbody tr:hover {
     opacity: 1;
   }
 
-  .oven-link .mini-status,
-  .sidebar-footer {
-    display: none;
-  }
 
   .topbar {
     position: relative;
