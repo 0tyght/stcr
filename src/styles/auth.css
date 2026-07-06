@@ -365,24 +365,27 @@
 
 /* =========================================================
    8) Oven Detail Buttons
+   ปุ่มรายละเอียดเตาแยกตามธีมบริษัท
    ========================================================= */
 
+/* GR: ใช้สีเดียวกับเมนูด้านข้าง */
 :root[data-ui-theme="company"][data-company="gr"] .oven-card-footer .button,
 :root[data-ui-theme="company"][data-company="gr"] .oven-card .button,
 :root[data-ui-theme="company"][data-company="gr"] a.button[href*="/ovens/"] {
-  border-color: #eed236 !important;
-  background: #eed236 !important;
-  color: #30343b !important;
+  border-color: #363b40 !important;
+  background: #363b40 !important;
+  color: #ffffff !important;
 }
 
 :root[data-ui-theme="company"][data-company="gr"] .oven-card-footer .button:hover,
 :root[data-ui-theme="company"][data-company="gr"] .oven-card .button:hover,
 :root[data-ui-theme="company"][data-company="gr"] a.button[href*="/ovens/"]:hover {
-  border-color: #d9c81f !important;
-  background: #d9c81f !important;
-  color: #30343b !important;
+  border-color: #2f3439 !important;
+  background: #2f3439 !important;
+  color: #ffffff !important;
 }
 
+/* TTN: คงสีเดิมตามปุ่มเช็คอุณหภูมิ */
 :root[data-ui-theme="company"][data-company="ttn"] .oven-card-footer .button,
 :root[data-ui-theme="company"][data-company="ttn"] .oven-card .button,
 :root[data-ui-theme="company"][data-company="ttn"] a.button[href*="/ovens/"] {
@@ -466,4 +469,33 @@
 :root[data-ui-theme="company"][data-company="ttn"] .oven-card .updated-at svg {
   color: #ab84fe !important;
   stroke: currentColor;
+}
+/* ---------- เลขรอบใช้สีตามธีมบริษัท ---------- */
+
+:root[data-ui-theme="company"][data-company="gr"] .oven-card .cycle-box strong {
+  color: #eed236 !important;
+}
+
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card .cycle-box strong {
+  color: #ab84fe !important;
+}
+
+/* ---------- ไอคอนเหนือเลขรอบ + คำว่า "รอบ" ใช้สีเดิม ---------- */
+
+:root[data-ui-theme="company"] .oven-card .cycle-box svg,
+:root[data-ui-theme="company"] .oven-card .cycle-box span {
+  color: var(--muted) !important;
+  stroke: currentColor !important;
+}
+
+/* ---------- ไอคอนวันที่/เวลา ใช้สีตามธีมบริษัท ---------- */
+
+:root[data-ui-theme="company"][data-company="gr"] .oven-card .oven-meta strong svg {
+  color: #eed236 !important;
+  stroke: currentColor !important;
+}
+
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card .oven-meta strong svg {
+  color: #ab84fe !important;
+  stroke: currentColor !important;
 }
