@@ -1,5 +1,6 @@
 import { LogIn, Moon, Palette } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import ttnLogo from "../assets/ttn-logo.png";
 
 type ThemeMode = "company" | "dark";
 type LoginAccount = "gr_dev_admin" | "ttn_dev_admin";
@@ -37,7 +38,6 @@ export function LoginPage({
 
   const company = useMemo(() => getCompanyFromUsername(username), [username]);
   const companyLabel = company === "ttn" ? "TTN Rubber" : "Grand Rubber";
-  const companyMark = company === "ttn" ? "TTN" : "GR";
 
   useEffect(() => {
     document.documentElement.dataset.company = company;
@@ -79,8 +79,12 @@ export function LoginPage({
 
       <form className="login-panel login-simple-panel" onSubmit={handleSubmit}>
         <div className="login-simple-brand">
-          <div className={`login-simple-mark login-simple-mark-${company}`}>
-            {companyMark}
+          <div className="login-simple-mark-wrap">
+            {company === "ttn" ? (
+              <img src={ttnLogo} alt="TTN Logo" className="login-simple-mark-image" />
+            ) : (
+              <div className="login-simple-mark login-simple-mark-gr">GR</div>
+            )}
           </div>
 
           <div>

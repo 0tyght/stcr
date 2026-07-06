@@ -8,10 +8,32 @@
    ========================= */
 
 .brand-mark {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
   border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 14px;
   background: rgba(255, 120, 10, 0.14);
   color: var(--orange);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+
+.brand-mark-text {
+  color: inherit;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.06em;
+}
+
+.brand-mark-image {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  display: block;
 }
 
 :root[data-ui-theme="company"][data-company="gr"] .brand-mark {
@@ -24,11 +46,6 @@
   border-color: rgba(255, 255, 255, 0.9);
   background: #ffffff;
   color: #8e67eb;
-}
-
-:root[data-ui-theme="company"] .brand-mark {
-  font-size: 16px;
-  letter-spacing: -0.03em;
 }
 
 :root[data-ui-theme="company"] .brand-text strong,
@@ -92,11 +109,19 @@
   margin-bottom: 22px;
 }
 
+.login-simple-mark-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
+}
+
 .login-simple-mark {
   display: grid;
   width: 54px;
   height: 54px;
-  flex: 0 0 54px;
   place-items: center;
   border: 1px solid rgba(255, 120, 10, 0.55);
   border-radius: 16px;
@@ -108,22 +133,17 @@
   letter-spacing: -0.06em;
 }
 
-.login-simple-mark-ttn {
-  font-family: Inter, "Segoe UI", Tahoma, Arial, sans-serif;
-  font-size: 17px;
-  letter-spacing: -0.06em;
+.login-simple-mark-image {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  display: block;
 }
 
 :root[data-ui-theme="company"][data-company="gr"] .login-simple-mark {
   border-color: #d9c81f;
   background: var(--company-primary);
   color: #343a40;
-}
-
-:root[data-ui-theme="company"][data-company="ttn"] .login-simple-mark {
-  border-color: #8e67eb;
-  background: #ffffff;
-  color: #8e67eb;
 }
 
 .login-simple-brand .eyebrow {

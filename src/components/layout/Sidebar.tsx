@@ -2,12 +2,14 @@ import { PackageOpen } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { appRoutes } from "../../app/routes";
 import { useAppData } from "../../app/providers";
+import ttnLogo from "../../assets/ttn-logo.png";
 
 function getSidebarBrand() {
   const account = localStorage.getItem("stcr-account") || "gr_dev_admin";
   const isTtn = account.toLowerCase().includes("ttn");
 
   return {
+    isTtn,
     mark: isTtn ? "TTN" : "GR",
     company: isTtn ? "TTN" : "GR",
   };
@@ -21,7 +23,11 @@ export function Sidebar() {
     <aside className="sidebar">
       <div className="brand-row">
         <NavLink to="/" className="brand-mark" aria-label="กลับ Dashboard">
-          {brand.mark}
+          {brand.isTtn ? (
+            <img src={ttnLogo} alt="TTN Logo" className="brand-mark-image" />
+          ) : (
+            <span className="brand-mark-text">GR</span>
+          )}
         </NavLink>
 
         <div className="brand-text">
