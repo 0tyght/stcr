@@ -2227,3 +2227,452 @@ tbody tr:hover {
     height: 290px;
   }
 }
+/* =========================================================
+   Company Theme Switch: GR / TTN / Dark
+   วางท้ายสุดของ globals.css
+   ========================================================= */
+
+/* ---------- Theme Switch Button ---------- */
+
+.theme-switch {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #111820;
+  color: var(--muted);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.theme-switch:hover,
+.theme-switch:focus-visible {
+  border-color: var(--line-strong);
+  background: #1d2530;
+  color: var(--ink-strong);
+  outline: none;
+}
+
+.theme-switch-track {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.25);
+}
+
+.theme-switch-dot {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #ffffff;
+  transition: transform 0.18s ease;
+}
+
+.theme-switch.is-dark .theme-switch-dot {
+  transform: translateX(16px);
+}
+
+.theme-switch.is-company {
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.theme-switch.is-dark {
+  background: #111820;
+  color: #d8dce3;
+}
+
+/* ---------- Company Variables ---------- */
+
+:root[data-ui-theme="company"][data-company="gr"] {
+  color-scheme: light;
+
+  --company-primary: #ecd92f;
+  --company-primary-soft: #fff5a6;
+  --company-accent: #53575d;
+  --company-sidebar: #363b40;
+  --company-sidebar-head: #363b40;
+  --company-sidebar-text: #f3f4f6;
+  --company-sidebar-muted: #d1d5db;
+  --company-active-bg: #ecd92f;
+  --company-active-text: #22252a;
+
+  --bg: #eef1f3;
+  --surface: #ffffff;
+  --surface-soft: #f6f7f9;
+  --surface-strong: #e5e7eb;
+  --ink: #374151;
+  --ink-strong: #24292f;
+  --muted: #6b7280;
+  --muted-soft: #9ca3af;
+  --line: #d9dde3;
+  --line-strong: #c4c9d1;
+}
+
+:root[data-ui-theme="company"][data-company="ttn"] {
+  color-scheme: light;
+
+  --company-primary: #a784f6;
+  --company-primary-soft: #efe7ff;
+  --company-accent: #f2c45f;
+  --company-sidebar: #a784f6;
+  --company-sidebar-head: #a784f6;
+  --company-sidebar-text: #ffffff;
+  --company-sidebar-muted: #f2eaff;
+  --company-active-bg: #efe7ff;
+  --company-active-text: #3f3561;
+
+  --bg: #f3f6f8;
+  --surface: #ffffff;
+  --surface-soft: #fbf9ff;
+  --surface-strong: #efe7ff;
+  --ink: #3f4550;
+  --ink-strong: #30343b;
+  --muted: #7b8190;
+  --muted-soft: #a5a8b2;
+  --line: #e1d8fa;
+  --line-strong: #c9b8f4;
+}
+
+/* ---------- Company Mode Base ---------- */
+
+:root[data-ui-theme="company"] body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+:root[data-ui-theme="company"] .app-shell,
+:root[data-ui-theme="company"] .workspace {
+  background: var(--bg);
+}
+
+/* ---------- Topbar Company Theme ---------- */
+
+:root[data-ui-theme="company"] .topbar {
+  border-bottom: 1px solid rgba(17, 24, 39, 0.14);
+  background: #ffffff;
+  color: var(--ink);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+  backdrop-filter: none;
+}
+
+:root[data-ui-theme="company"] .breadcrumbs {
+  color: var(--muted);
+}
+
+:root[data-ui-theme="company"] .breadcrumbs strong {
+  color: var(--ink-strong);
+}
+
+:root[data-ui-theme="company"] .global-search {
+  border-color: #d9dde3;
+  background: #f8fafc;
+  color: var(--muted);
+}
+
+:root[data-ui-theme="company"] .global-search input {
+  color: var(--ink);
+}
+
+:root[data-ui-theme="company"] kbd {
+  border-color: #d1d5db;
+  color: var(--muted);
+  background: #ffffff;
+}
+
+:root[data-ui-theme="company"] .toolbar-button,
+:root[data-ui-theme="company"] .icon-button,
+:root[data-ui-theme="company"] .user-chip {
+  border-color: #d9dde3;
+  background: #ffffff;
+  color: var(--muted);
+}
+
+:root[data-ui-theme="company"] .toolbar-button:hover,
+:root[data-ui-theme="company"] .icon-button:hover,
+:root[data-ui-theme="company"] .user-chip:hover {
+  border-color: var(--company-primary);
+  background: var(--company-primary-soft);
+  color: var(--ink-strong);
+}
+
+:root[data-ui-theme="company"] .live-clock {
+  color: var(--muted);
+}
+
+:root[data-ui-theme="company"] .theme-switch {
+  border-color: var(--company-primary);
+  background: var(--company-primary);
+  color: var(--company-active-text);
+}
+
+:root[data-ui-theme="company"] .theme-switch-track {
+  background: rgba(255, 255, 255, 0.45);
+}
+
+/* ---------- Sidebar Company Theme ---------- */
+
+:root[data-ui-theme="company"] .sidebar {
+  background: var(--company-sidebar);
+  border-right-color: rgba(0, 0, 0, 0.12);
+  color: var(--company-sidebar-text);
+}
+
+:root[data-ui-theme="company"] .brand-row {
+  background: var(--company-sidebar-head);
+  border-bottom-color: rgba(255, 255, 255, 0.22);
+}
+
+:root[data-ui-theme="company"] .brand-mark {
+  color: var(--company-primary);
+}
+
+:root[data-ui-theme="company"][data-company="ttn"] .brand-mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffdb4d;
+}
+
+:root[data-ui-theme="company"] .brand-text strong {
+  color: var(--company-sidebar-text);
+}
+
+:root[data-ui-theme="company"] .brand-text span {
+  color: var(--company-sidebar-muted);
+}
+
+:root[data-ui-theme="company"] .primary-nav {
+  border-bottom-color: rgba(255, 255, 255, 0.18);
+}
+
+:root[data-ui-theme="company"] .nav-item,
+:root[data-ui-theme="company"] .oven-link {
+  color: var(--company-sidebar-muted);
+}
+
+:root[data-ui-theme="company"] .nav-item:hover,
+:root[data-ui-theme="company"] .nav-item:focus-visible,
+:root[data-ui-theme="company"] .oven-link:hover,
+:root[data-ui-theme="company"] .oven-link:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--company-sidebar-text);
+}
+
+:root[data-ui-theme="company"] .nav-item.active,
+:root[data-ui-theme="company"] .oven-link.active {
+  border-left-color: var(--company-primary);
+  background: var(--company-active-bg);
+  color: var(--company-active-text);
+}
+
+:root[data-ui-theme="company"] .oven-label {
+  color: inherit;
+}
+
+:root[data-ui-theme="company"] .sidebar-footer {
+  border-top-color: rgba(255, 255, 255, 0.18);
+  color: var(--company-sidebar-muted);
+}
+
+/* ---------- Company Cards / Panels ---------- */
+
+:root[data-ui-theme="company"] .panel,
+:root[data-ui-theme="company"] .metric-card,
+:root[data-ui-theme="company"] .summary-card,
+:root[data-ui-theme="company"] .oven-card,
+:root[data-ui-theme="company"] .time-block,
+:root[data-ui-theme="company"] .mini-card,
+:root[data-ui-theme="company"] .gauge-card,
+:root[data-ui-theme="company"] .history-stat-card,
+:root[data-ui-theme="company"] .status-banner,
+:root[data-ui-theme="company"] .status-range-card,
+:root[data-ui-theme="company"] .alarm-item {
+  border-color: var(--line);
+  background: #ffffff;
+  color: var(--ink);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+:root[data-ui-theme="company"] .panel-heading h2,
+:root[data-ui-theme="company"] .page-title h1,
+:root[data-ui-theme="company"] .topbar h1 {
+  color: var(--ink-strong);
+}
+
+:root[data-ui-theme="company"] .panel-heading p,
+:root[data-ui-theme="company"] .page-title p,
+:root[data-ui-theme="company"] .eyebrow {
+  color: var(--muted);
+}
+
+:root[data-ui-theme="company"] .title-rule {
+  background: var(--company-primary);
+}
+
+/* ---------- Oven Card Company ---------- */
+
+:root[data-ui-theme="company"] .oven-card {
+  overflow: hidden;
+  background: #ffffff;
+}
+
+:root[data-ui-theme="company"] .oven-card-header {
+  border-bottom: 3px solid var(--company-primary);
+  background: var(--surface-strong);
+}
+
+:root[data-ui-theme="company"] .oven-card-header h2 {
+  color: var(--ink-strong);
+}
+
+:root[data-ui-theme="company"] .oven-card.status-open,
+:root[data-ui-theme="company"] .oven-card.status-closed,
+:root[data-ui-theme="company"] .oven-card.status-warning,
+:root[data-ui-theme="company"] .oven-card.status-danger,
+:root[data-ui-theme="company"] .oven-card.status-offline,
+:root[data-ui-theme="company"] .oven-card.status-disabled {
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+:root[data-ui-theme="company"] .oven-meta span,
+:root[data-ui-theme="company"] .summary-card span,
+:root[data-ui-theme="company"] .mini-card span {
+  color: var(--muted);
+}
+
+:root[data-ui-theme="company"] .oven-meta strong,
+:root[data-ui-theme="company"] .metric-value strong {
+  color: var(--ink-strong);
+}
+
+:root[data-ui-theme="company"] .cycle-box {
+  border-left-color: var(--line);
+}
+
+:root[data-ui-theme="company"] .cycle-box strong,
+:root[data-ui-theme="company"] .mini-card strong,
+:root[data-ui-theme="company"] .history-stat-card strong {
+  color: var(--company-primary);
+}
+
+:root[data-ui-theme="company"] .button-primary,
+:root[data-ui-theme="company"] .oven-card-footer .button {
+  border-color: var(--company-primary);
+  background: var(--company-primary);
+  color: var(--company-active-text);
+}
+
+:root[data-ui-theme="company"] .button-primary:hover,
+:root[data-ui-theme="company"] .oven-card-footer .button:hover {
+  border-color: var(--company-primary);
+  background: var(--company-primary-soft);
+  color: var(--ink-strong);
+}
+
+/* ---------- Form / Table / Chart Company ---------- */
+
+:root[data-ui-theme="company"] input,
+:root[data-ui-theme="company"] select {
+  border-color: #d1d5db;
+  background: #ffffff;
+  color: var(--ink);
+}
+
+:root[data-ui-theme="company"] input:focus,
+:root[data-ui-theme="company"] select:focus {
+  border-color: var(--company-primary);
+  box-shadow: 0 0 0 1px var(--company-primary);
+}
+
+:root[data-ui-theme="company"] .dashboard-toolbar,
+:root[data-ui-theme="company"] .toolbar-grid,
+:root[data-ui-theme="company"] .detail-control-bar {
+  background: transparent;
+}
+
+:root[data-ui-theme="company"] .segment,
+:root[data-ui-theme="company"] .tab,
+:root[data-ui-theme="company"] .button,
+:root[data-ui-theme="company"] .check-pill,
+:root[data-ui-theme="company"] .panel-mode-chip,
+:root[data-ui-theme="company"] .threshold-item {
+  border-color: #d9dde3;
+  background: #ffffff;
+  color: var(--ink);
+}
+
+:root[data-ui-theme="company"] .segment:hover,
+:root[data-ui-theme="company"] .segment:focus-visible,
+:root[data-ui-theme="company"] .segment.is-active,
+:root[data-ui-theme="company"] .tab.is-active,
+:root[data-ui-theme="company"] .button:hover,
+:root[data-ui-theme="company"] .button:focus-visible {
+  border-color: var(--company-primary);
+  background: var(--company-primary-soft);
+  color: var(--ink-strong);
+}
+
+:root[data-ui-theme="company"] .time-series-chart {
+  border-color: var(--line);
+  background: #ffffff;
+}
+
+:root[data-ui-theme="company"] .table-wrap {
+  border-color: var(--line);
+  background: #ffffff;
+}
+
+:root[data-ui-theme="company"] th {
+  background: var(--surface-strong);
+  color: var(--muted);
+}
+
+:root[data-ui-theme="company"] td {
+  color: var(--ink);
+}
+
+:root[data-ui-theme="company"] tbody tr:hover {
+  background: var(--surface-soft);
+}
+
+/* ---------- TTN Specific ---------- */
+
+:root[data-ui-theme="company"][data-company="ttn"] .button-primary,
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card-footer .button {
+  background: var(--company-accent);
+  border-color: var(--company-accent);
+  color: #ffffff;
+}
+
+:root[data-ui-theme="company"][data-company="ttn"] .cycle-box strong,
+:root[data-ui-theme="company"][data-company="ttn"] .mini-card strong,
+:root[data-ui-theme="company"][data-company="ttn"] .history-stat-card strong {
+  color: var(--company-primary);
+}
+
+/* ---------- GR Specific ---------- */
+
+:root[data-ui-theme="company"][data-company="gr"] .button-primary,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card-footer .button {
+  background: #50545a;
+  border-color: #50545a;
+  color: #ffffff;
+}
+
+:root[data-ui-theme="company"][data-company="gr"] .button-primary:hover,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card-footer .button:hover {
+  background: #3f444a;
+  border-color: #3f444a;
+  color: #ffffff;
+}
