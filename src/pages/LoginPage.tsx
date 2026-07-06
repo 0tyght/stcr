@@ -15,7 +15,7 @@ export function LoginPage({
     const cleanUsername = username.trim();
 
     if (!cleanUsername) {
-      alert("กรุณากรอกชื่อผู้ใช้");
+      alert("กรุณาเลือกผู้ใช้");
       return;
     }
 
@@ -25,7 +25,9 @@ export function LoginPage({
   return (
     <main className="login-screen">
       <form className="login-panel" onSubmit={handleSubmit}>
-        <div className="login-brand">GR</div>
+        <div className="login-brand">
+          {username.includes("ttn") ? "TTN" : "GR"}
+        </div>
 
         <p className="eyebrow">Smoking Temperature Control Report</p>
 
