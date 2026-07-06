@@ -1,0 +1,1 @@
+import{j as a}from"./index-DA_8V3Xq.js";const t={open:"เปิด",closed:"ปิด",warning:"เตือน",danger:"อันตราย",offline:"ขาดการเชื่อมต่อ",disabled:"ปิดใช้งาน",normal:"ปกติ",active:"กำลังเกิดเหตุ",acknowledged:"รับทราบแล้ว",resolved:"แก้ไขแล้ว"};function o({kind:e,label:s}){return a.jsx("span",{className:`status-badge status-${e}`,children:s??t[e]})}export{o as S};
