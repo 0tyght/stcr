@@ -294,41 +294,49 @@
 /* =========================================================
    5) Oven Card Header
    หัวการ์ดใช้สีตามธีมแบบจาง ๆ
+   ปิด / ขาดการเชื่อมต่อ ใช้ #b1b1b5
+   เส้นกั้นใต้หัวการ์ดใช้สีธีมของแต่ละบริษัท
    ========================================================= */
 
+/* GR: หัวการ์ดปกติ / เปิด = เหลืองจาง */
 :root[data-ui-theme="company"][data-company="gr"] .oven-card .oven-card-header,
 :root[data-ui-theme="company"][data-company="gr"] .oven-card-header {
   background: #fff6bf !important;
   border-bottom-color: #eed236 !important;
 }
 
+/* TTN: หัวการ์ดปกติ / เปิด = ม่วงจาง */
 :root[data-ui-theme="company"][data-company="ttn"] .oven-card .oven-card-header,
 :root[data-ui-theme="company"][data-company="ttn"] .oven-card-header {
   background: #efe7ff !important;
-  border-bottom-color: #cdb7ff !important;
+  border-bottom-color: #ab84fe !important;
 }
 
+/* GR: ปิด / ขาดการเชื่อมต่อ = เทา แต่เส้นใต้หัวการ์ดเป็นสีธีม GR */
+:root[data-ui-theme="company"][data-company="gr"] .oven-card.status-closed .oven-card-header,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card-header.status-closed,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card.status-offline .oven-card-header,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card-header.status-offline {
+  background: #b1b1b5 !important;
+  border-bottom-color: #eed236 !important;
+}
+
+/* TTN: ปิด / ขาดการเชื่อมต่อ = เทา แต่เส้นใต้หัวการ์ดเป็นสีธีม TTN */
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card.status-closed .oven-card-header,
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card-header.status-closed,
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card.status-offline .oven-card-header,
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card-header.status-offline {
+  background: #b1b1b5 !important;
+  border-bottom-color: #ab84fe !important;
+}
+
+/* ขอบการ์ดตามธีมบริษัท */
 :root[data-ui-theme="company"][data-company="gr"] .oven-card {
   border-color: #efe3a2 !important;
 }
 
 :root[data-ui-theme="company"][data-company="ttn"] .oven-card {
   border-color: #dccdff !important;
-}
-
-/* =========================================================
-   6) Oven Card Open Background
-   เฉพาะตัวการ์ดเปิด: ไล่สีเขียวจางด้านบนแล้วเฟดลง
-   ไม่แก้หัวการ์ด
-   ========================================================= */
-
-:root[data-ui-theme="company"] .oven-card.status-open {
-  background: linear-gradient(
-    180deg,
-    rgba(115, 191, 105, 0.1) 0%,
-    rgba(115, 191, 105, 0.055) 24%,
-    #ffffff 52%
-  ) !important;
 }
 
 /* =========================================================
