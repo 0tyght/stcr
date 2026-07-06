@@ -251,3 +251,47 @@
     padding: 22px;
   }
 }
+/* =========================
+   Detail Control Bar Fix
+   ทำให้กล่อง Realtime / Historical มีพื้นเหมือน panel อื่น
+   ========================= */
+
+.detail-control-bar {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  padding: 14px 16px;
+}
+
+:root[data-ui-theme="company"] .detail-control-bar {
+  border-color: var(--line);
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+:root[data-ui-theme="dark"] .detail-control-bar,
+:root:not([data-ui-theme="company"]) .detail-control-bar {
+  border-color: var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.detail-control-bar .tabs {
+  background: var(--surface-soft);
+}
+
+:root[data-ui-theme="company"] .detail-control-bar .tabs {
+  border-color: var(--line);
+  background: #f8fafc;
+}
+
+:root[data-ui-theme="company"] .detail-control-bar .tab {
+  color: var(--muted);
+}
+
+:root[data-ui-theme="company"] .detail-control-bar .tab.is-active {
+  border-color: var(--company-primary);
+  background: #ffffff;
+  color: var(--ink-strong);
+}
