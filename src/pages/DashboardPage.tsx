@@ -56,10 +56,32 @@ export function DashboardPage() {
       />
 
       <section className="summary-grid">
-        <SummaryCard label="เตาทั้งหมด" value={summary.total} icon={<Gauge size={22} />} />
-        <SummaryCard label="กำลังอบ" value={summary.open} icon={<Power size={22} />} tone="open" />
-        <SummaryCard label="ปิด" value={summary.closed} icon={<PauseCircle size={22} />} tone="closed" />
-        <SummaryCard label="ขาดการเชื่อมต่อ" value={summary.offline} icon={<WifiOff size={22} />} tone="offline" />
+        <SummaryCard
+          label="เตาทั้งหมด"
+          value={summary.total}
+          icon={<Gauge size={22} />}
+        />
+
+        <SummaryCard
+          label="กำลังอบ"
+          value={summary.open}
+          icon={<Power size={22} />}
+          tone="open"
+        />
+
+        <SummaryCard
+          label="ปิด"
+          value={summary.closed}
+          icon={<PauseCircle size={22} />}
+          tone="closed"
+        />
+
+        <SummaryCard
+          label="ขาดการเชื่อมต่อ"
+          value={summary.offline}
+          icon={<WifiOff size={22} />}
+          tone="offline"
+        />
       </section>
 
       <section className="panel dashboard-toolbar">
@@ -93,7 +115,10 @@ export function DashboardPage() {
           ))}
         </section>
       ) : (
-        <EmptyState title="ไม่พบเตา" description="ลองเปลี่ยนคำค้นหาหรือตัวกรองสถานะ" />
+        <EmptyState
+          title="ไม่พบเตา"
+          description="ลองเปลี่ยนคำค้นหาหรือตัวกรองสถานะ"
+        />
       )}
     </>
   );
@@ -116,6 +141,7 @@ function SummaryCard({
         <span>{label}</span>
         <strong>{value}</strong>
       </div>
+
       <div className="summary-icon">{icon}</div>
     </article>
   );

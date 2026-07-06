@@ -5,10 +5,18 @@ type ThemeMode = "company" | "dark";
 type LoginAccount = "gr_dev_admin" | "ttn_dev_admin";
 
 const THEME_STORAGE_KEY = "stcr-theme-mode";
+const ACCOUNT_STORAGE_KEY = "stcr-account";
 
 function getInitialThemeMode(): ThemeMode {
   const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
   return savedTheme === "dark" ? "dark" : "company";
+}
+
+function getInitialAccount(): LoginAccount {
+  const savedAccount = localStorage.getItem(ACCOUNT_STORAGE_KEY);
+
+  if (savedAccount === "ttn_dev_admin") return "ttn_dev_admin";
+  return "gr_dev_admin";
 }
 
 function getCompanyFromUsername(username: string): "gr" | "ttn" {
@@ -20,7 +28,7 @@ export function LoginPage({
 }: {
   onLogin: (username: string) => void;
 }) {
-  const [username, setUsername] = useState<LoginAccount>("gr_dev_admin");
+  const [username, setUsername] = useState<LoginAccount>(() => getInitialAccount());
   const [password, setPassword] = useState("");
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => getInitialThemeMode());
 
@@ -30,13 +38,15 @@ export function LoginPage({
   useEffect(() => {
     document.documentElement.dataset.company = company;
     document.documentElement.dataset.uiTheme = themeMode;
+
     localStorage.setItem(THEME_STORAGE_KEY, themeMode);
-  }, [company, themeMode]);
+    localStorage.setItem(ACCOUNT_STORAGE_KEY, username);
+  }, [company, themeMode, username]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    localStorage.setItem("stcr-account", username);
+    localStorage.setItem(ACCOUNT_STORAGE_KEY, username);
     onLogin(username);
   }
 
@@ -77,7 +87,11 @@ export function LoginPage({
           />
         </label>
 
-        <button className="theme-switch login-theme-switch" type="button" onClick={toggleTheme}>
+        <button
+          className={`theme-switch login-theme-switch is-${themeMode}`}
+          type="button"
+          onClick={toggleTheme}
+        >
           {themeMode === "company" ? <Palette size={15} /> : <Moon size={15} />}
           <span className="theme-switch-track">
             <span className="theme-switch-dot" />

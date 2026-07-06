@@ -1,5 +1,10 @@
 import { createHistory } from "../data/mockHistory";
-import { advanceOvenReadings, createMockOvens, createNewOven, deriveOvenStatus } from "../data/mockOvens";
+import {
+  advanceOvenReadings,
+  createMockOvens,
+  createNewOven,
+  deriveOvenStatus,
+} from "../data/mockOvens";
 import type {
   Alarm,
   AlarmFilter,
@@ -15,6 +20,7 @@ import { buildLimitAlarms, isStale } from "../utils/limits";
 import { sensorByKey } from "../utils/sensors";
 
 let ovens: Oven[] = createMockOvens();
+
 let auditEvents: AuditEvent[] = [
   {
     id: "audit-1",
@@ -75,10 +81,12 @@ function wait<T>(value: T, ms = 120): Promise<T> {
 }
 
 function pushAudit(action: string, target: string, detail: string): void {
+  const account = localStorage.getItem("stcr-account") || "gr_dev_admin";
+
   auditEvents = [
     {
       id: `audit-${Date.now()}`,
-      actor: "gr_dev_admin",
+      actor: account,
       action,
       target,
       detail,
@@ -90,15 +98,16 @@ function pushAudit(action: string, target: string, detail: string): void {
 
 function getOvenOrThrow(ovenId: string): Oven {
   const oven = ovens.find((item) => item.id === ovenId);
+
   if (!oven) {
     throw new Error(`Oven not found: ${ovenId}`);
   }
+
   return oven;
 }
 
 function getActiveAlarms(): Alarm[] {
   return ovens.flatMap((oven) => {
-    if (!oven.enabled) return [];
     if (isStale(oven.lastUpdatedAt)) {
       return [
         {
@@ -113,12 +122,14 @@ function getActiveAlarms(): Alarm[] {
         },
       ];
     }
+
     return buildLimitAlarms(oven.id, oven.name, oven.readings, oven.limits);
   });
 }
 
 function applyAlarmFilter(alarms: Alarm[], filter?: AlarmFilter): Alarm[] {
   if (!filter) return alarms;
+
   const search = filter.search.trim().toLowerCase();
 
   return alarms.filter((alarm) => {
@@ -127,13 +138,26 @@ function applyAlarmFilter(alarms: Alarm[], filter?: AlarmFilter): Alarm[] {
     const matchesOven = filter.ovenId === "all" || alarm.ovenId === filter.ovenId;
     const matchesSearch =
       !search ||
-      [alarm.ovenName, alarm.title, alarm.detail, alarm.sensor ? sensorByKey[alarm.sensor].label : ""]
+      [
+        alarm.ovenName,
+        alarm.title,
+        alarm.detail,
+        alarm.sensor ? sensorByKey[alarm.sensor].label : "",
+      ]
         .join(" ")
         .toLowerCase()
         .includes(search);
 
     return matchesSeverity && matchesStatus && matchesOven && matchesSearch;
   });
+}
+
+function getAllAlarms(filter?: AlarmFilter): Alarm[] {
+  const alarms = [...getActiveAlarms(), ...historicalAlarms].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+
+  return applyAlarmFilter(alarms, filter);
 }
 
 export const mockApi = {
@@ -151,10 +175,7 @@ export const mockApi = {
   },
 
   async getAlarms(filter?: AlarmFilter): Promise<Alarm[]> {
-    const alarms = [...getActiveAlarms(), ...historicalAlarms].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
-    return wait(applyAlarmFilter(alarms, filter));
+    return wait(getAllAlarms(filter));
   },
 
   async getAuditEvents(): Promise<AuditEvent[]> {
@@ -163,61 +184,84 @@ export const mockApi = {
 
   async saveLimits(ovenId: string, limits: LimitMap): Promise<Oven> {
     const oven = getOvenOrThrow(ovenId);
-    const updated = {
+
+    const updated: Oven = {
       ...oven,
       limits,
     };
-    const withStatus = {
+
+    const withStatus: Oven = {
       ...updated,
       status: deriveOvenStatus(updated),
     };
+
     ovens = ovens.map((item) => (item.id === ovenId ? withStatus : item));
+
     pushAudit("เปลี่ยนค่า Limit", oven.name, "บันทึกค่า Upper/Lower Limit ใหม่");
+
     return wait(withStatus);
   },
 
   async updateOven(ovenId: string, input: OvenUpdateInput): Promise<Oven> {
     const oven = getOvenOrThrow(ovenId);
 
-    const updated = {
+    const updated: Oven = {
       ...oven,
       ...input,
     };
 
-    const withStatus = {
+    const withStatus: Oven = {
       ...updated,
       status: deriveOvenStatus(updated),
-    } satisfies Oven;
+    };
 
     ovens = ovens.map((item) => (item.id === ovenId ? withStatus : item));
 
     pushAudit("แก้ไขข้อมูลเตา", withStatus.name, "ปรับข้อมูลชื่อเตา โซน หรือไลน์");
+
     return wait(withStatus);
   },
 
   async addOven(): Promise<Oven> {
     const nextNumber = Math.max(...ovens.map((oven) => oven.number)) + 1;
     const oven = createNewOven(nextNumber);
+
     ovens = [...ovens, oven];
+
     pushAudit("เพิ่มเตาใหม่", oven.name, "เพิ่มเตาใหม่สำหรับรองรับการขยายระบบ");
+
     return wait(oven);
   },
 
   async advanceRealtime(): Promise<Oven[]> {
     const now = new Date();
+
     ovens = ovens.map((oven) => advanceOvenReadings(oven, now));
+
     return wait(ovens, 60);
   },
 
   async acknowledgeAlarm(alarmId: string): Promise<Alarm[]> {
     pushAudit("รับทราบ Alarm", alarmId, "ผู้ใช้รับทราบรายการแจ้งเตือน");
-    return this.getAlarms();
+    return wait(getAllAlarms());
   },
 
   async exportRawCsv(ovenId: string, sensors: SensorKey[]): Promise<string> {
-    const points = createHistory({ ovenId, preset: "cycle", sensors }, getOvenOrThrow(ovenId));
+    const points = createHistory(
+      {
+        ovenId,
+        preset: "cycle",
+        sensors,
+      },
+      getOvenOrThrow(ovenId),
+    );
+
     const header = ["timestamp", ...sensors];
-    const rows = points.map((point) => [point.timestamp, ...sensors.map((sensor) => point[sensor])]);
+    const rows = points.map((point) => [
+      point.timestamp,
+      ...sensors.map((sensor) => point[sensor]),
+    ]);
+
     return wait([header, ...rows].map((row) => row.join(",")).join("\n"), 100);
   },
 };
