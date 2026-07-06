@@ -149,8 +149,8 @@ export function TimeSeriesChart({
                 shadowBlur: palette.markLabelShadowBlur,
               },
               data: [
-                { name: `${definition.shortLabel} Upper`, yAxis: limit.upper },
-                { name: `${definition.shortLabel} Lower`, yAxis: limit.lower },
+                { name: "Upper", yAxis: limit.upper },
+                { name: "Lower", yAxis: limit.lower },
               ],
             }
           : undefined,
