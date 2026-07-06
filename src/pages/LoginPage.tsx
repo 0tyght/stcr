@@ -1,35 +1,57 @@
-import { LogIn } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { LogIn, Moon, Palette } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+
+type ThemeMode = "company" | "dark";
+type LoginAccount = "gr_dev_admin" | "ttn_dev_admin";
+
+const THEME_STORAGE_KEY = "stcr-theme-mode";
+
+function getInitialThemeMode(): ThemeMode {
+  const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+  return savedTheme === "dark" ? "dark" : "company";
+}
+
+function getCompanyFromUsername(username: string): "gr" | "ttn" {
+  return username.toLowerCase().includes("ttn") ? "ttn" : "gr";
+}
 
 export function LoginPage({
   onLogin,
 }: {
   onLogin: (username: string) => void;
 }) {
-  const [username, setUsername] = useState("gr_dev_admin");
+  const [username, setUsername] = useState<LoginAccount>("gr_dev_admin");
   const [password, setPassword] = useState("");
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => getInitialThemeMode());
+
+  const company = useMemo(() => getCompanyFromUsername(username), [username]);
+  const companyLabel = company === "ttn" ? "TTN Rubber" : "Grand Rubber";
+
+  useEffect(() => {
+    document.documentElement.dataset.company = company;
+    document.documentElement.dataset.uiTheme = themeMode;
+    localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+  }, [company, themeMode]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const cleanUsername = username.trim();
+    localStorage.setItem("stcr-account", username);
+    onLogin(username);
+  }
 
-    if (!cleanUsername) {
-      alert("กรุณาเลือกผู้ใช้");
-      return;
-    }
-
-    onLogin(cleanUsername);
+  function toggleTheme() {
+    setThemeMode((current) => (current === "company" ? "dark" : "company"));
   }
 
   return (
     <main className="login-screen">
       <form className="login-panel" onSubmit={handleSubmit}>
-        <div className="login-brand">
-          {username.includes("ttn") ? "TTN" : "GR"}
+        <div className={`login-brand login-brand-${company}`}>
+          {company === "ttn" ? "TTN" : "GR"}
         </div>
 
-        <p className="eyebrow">Smoking Temperature Control Report</p>
+        <p className="eyebrow">{companyLabel}</p>
 
         <h1>เข้าสู่ระบบ</h1>
 
@@ -37,7 +59,7 @@ export function LoginPage({
           <span>ผู้ใช้</span>
           <select
             value={username}
-            onChange={(event) => setUsername(event.target.value)}
+            onChange={(event) => setUsername(event.target.value as LoginAccount)}
           >
             <option value="gr_dev_admin">gr_dev_admin</option>
             <option value="ttn_dev_admin">ttn_dev_admin</option>
@@ -54,6 +76,14 @@ export function LoginPage({
             autoComplete="current-password"
           />
         </label>
+
+        <button className="theme-switch login-theme-switch" type="button" onClick={toggleTheme}>
+          {themeMode === "company" ? <Palette size={15} /> : <Moon size={15} />}
+          <span className="theme-switch-track">
+            <span className="theme-switch-dot" />
+          </span>
+          <span>{themeMode === "company" ? "ธีมบริษัท" : "ธีมมืด"}</span>
+        </button>
 
         <button className="button button-primary" type="submit">
           <LogIn size={18} />

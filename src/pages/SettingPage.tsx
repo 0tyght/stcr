@@ -20,7 +20,6 @@ export function SettingPage() {
     name: "",
     zone: "",
     line: "",
-    enabled: true,
   });
   const [limits, setLimits] = useState<LimitMap | null>(null);
   const [saving, setSaving] = useState(false);
@@ -37,7 +36,6 @@ export function SettingPage() {
       name: oven.name,
       zone: oven.zone,
       line: oven.line,
-      enabled: oven.enabled,
     });
     setLimits(structuredClone(oven.limits));
   }, [oven]);
@@ -145,7 +143,7 @@ export function SettingPage() {
             <div className="panel-heading">
               <div>
                 <h2>ข้อมูลเตา</h2>
-                <p>ชื่อเตา หมายเลขใช้อ้างอิงจากระบบ และสถานะเปิดใช้งาน</p>
+                <p>ชื่อเตา หมายเลขใช้อ้างอิงจากระบบ โซน และไลน์ผลิต</p>
               </div>
             </div>
             <label className="field">
@@ -168,14 +166,6 @@ export function SettingPage() {
                 value={ovenForm.line}
                 onChange={(event) => setOvenForm((current) => ({ ...current, line: event.target.value }))}
               />
-            </label>
-            <label className="switch-row">
-              <input
-                type="checkbox"
-                checked={ovenForm.enabled}
-                onChange={(event) => setOvenForm((current) => ({ ...current, enabled: event.target.checked }))}
-              />
-              <span>เปิดใช้งานเตานี้</span>
             </label>
             <button className="button button-dark" type="submit" disabled={saving}>
               <Save size={17} />

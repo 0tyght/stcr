@@ -3144,3 +3144,153 @@ tbody tr:hover {
 :root[data-ui-theme="company"] tbody tr:hover {
   background: var(--surface-soft);
 }
+/* =========================================================
+   Status Simplify + Login Theme Patch
+   มีสถานะเตาแค่ เปิด / ปิด / ขาดการเชื่อมต่อ
+   ========================================================= */
+
+:root[data-ui-theme="company"][data-company="gr"] {
+  --status-open-main: #ecd92f;
+  --status-open-soft: #fff8b8;
+  --status-open-text: #2f332f;
+
+  --status-closed-main: #9ca3af;
+  --status-closed-soft: #e5e7eb;
+  --status-closed-text: #4b5563;
+
+  --status-offline-main: #6b7280;
+  --status-offline-soft: #d1d5db;
+  --status-offline-text: #374151;
+}
+
+:root[data-ui-theme="company"][data-company="ttn"] {
+  --status-open-main: #a784f6;
+  --status-open-soft: #efe7ff;
+  --status-open-text: #3f3561;
+
+  --status-closed-main: #b9bbc3;
+  --status-closed-soft: #eeeeF2;
+  --status-closed-text: #5b606b;
+
+  --status-offline-main: #7b8190;
+  --status-offline-soft: #e2e4ea;
+  --status-offline-text: #4b5563;
+}
+
+/* summary */
+:root[data-ui-theme="company"] .tone-open .summary-icon,
+:root[data-ui-theme="company"] .tone-open strong {
+  color: var(--status-open-main);
+}
+
+:root[data-ui-theme="company"] .tone-closed .summary-icon,
+:root[data-ui-theme="company"] .tone-closed strong {
+  color: var(--status-closed-main);
+}
+
+:root[data-ui-theme="company"] .tone-offline .summary-icon,
+:root[data-ui-theme="company"] .tone-offline strong {
+  color: var(--status-offline-main);
+}
+
+/* oven card: เปิด = สีธีม */
+:root[data-ui-theme="company"] .oven-card.status-open .oven-card-header,
+:root[data-ui-theme="company"] .oven-card-header.status-open {
+  background: var(--status-open-soft);
+  border-bottom-color: var(--status-open-main);
+}
+
+:root[data-ui-theme="company"] .oven-card.status-open .cycle-box strong,
+:root[data-ui-theme="company"] .oven-card.status-open .reading-inline.tone-normal {
+  color: var(--status-open-main);
+}
+
+/* oven card: ปิด = เทา */
+:root[data-ui-theme="company"] .oven-card.status-closed .oven-card-header,
+:root[data-ui-theme="company"] .oven-card-header.status-closed {
+  background: var(--status-closed-soft);
+  border-bottom-color: var(--status-closed-main);
+}
+
+:root[data-ui-theme="company"] .oven-card.status-closed .cycle-box strong {
+  color: var(--status-closed-main);
+}
+
+/* oven card: offline = เทาเข้ม */
+:root[data-ui-theme="company"] .oven-card.status-offline .oven-card-header,
+:root[data-ui-theme="company"] .oven-card-header.status-offline {
+  background: var(--status-offline-soft);
+  border-bottom-color: var(--status-offline-main);
+}
+
+:root[data-ui-theme="company"] .oven-card.status-offline .cycle-box strong {
+  color: var(--status-offline-main);
+}
+
+/* badge */
+:root[data-ui-theme="company"] .status-open,
+:root[data-ui-theme="company"] .status-normal {
+  background: var(--status-open-soft);
+  color: var(--status-open-text);
+}
+
+:root[data-ui-theme="company"] .status-closed,
+:root[data-ui-theme="company"] .status-acknowledged {
+  background: var(--status-closed-soft);
+  color: var(--status-closed-text);
+}
+
+:root[data-ui-theme="company"] .status-offline {
+  background: var(--status-offline-soft);
+  color: var(--status-offline-text);
+}
+
+/* ปุ่มรายละเอียดเตา */
+:root[data-ui-theme="company"] .oven-card.status-open .oven-card-footer .button {
+  border-color: var(--company-button);
+  background: var(--company-button);
+  color: var(--company-button-text);
+}
+
+:root[data-ui-theme="company"] .oven-card.status-closed .oven-card-footer .button,
+:root[data-ui-theme="company"] .oven-card.status-offline .oven-card-footer .button {
+  border-color: #9ca3af;
+  background: #9ca3af;
+  color: #ffffff;
+}
+
+/* login theme */
+:root[data-ui-theme="company"] .login-screen {
+  background:
+    radial-gradient(circle at 28% 12%, var(--company-primary-soft), transparent 30%),
+    var(--bg);
+}
+
+:root[data-ui-theme="company"] .login-panel {
+  border-color: var(--line);
+  background: #ffffff;
+  color: var(--ink);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.14);
+}
+
+:root[data-ui-theme="company"] .login-panel h1 {
+  color: var(--ink-strong);
+}
+
+:root[data-ui-theme="company"] .login-brand {
+  color: var(--company-primary);
+}
+
+:root[data-ui-theme="company"] .login-brand-ttn {
+  color: #a784f6;
+}
+
+:root[data-ui-theme="company"] .login-theme-switch {
+  width: 100%;
+  margin: 4px 0 10px;
+}
+
+:root[data-ui-theme="dark"] .login-theme-switch {
+  width: 100%;
+  margin: 4px 0 10px;
+}

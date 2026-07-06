@@ -1,18 +1,17 @@
-import { Gauge, PauseCircle, Power, Search, WifiOff, Wrench } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Gauge, PauseCircle, Power, Search, WifiOff } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useAppData } from "../app/providers";
-import { OvenCard } from "../features/ovens/OvenCard";
-import type { OvenStatusFilter } from "../types";
 import { EmptyState } from "../components/ui/EmptyState";
 import { LoadingState } from "../components/ui/LoadingState";
 import { PageHeader } from "../components/ui/PageHeader";
+import { OvenCard } from "../features/ovens/OvenCard";
+import type { OvenStatusFilter } from "../types";
 
 const filters: { label: string; value: OvenStatusFilter }[] = [
   { label: "ทั้งหมด", value: "all" },
   { label: "เปิด", value: "open" },
   { label: "ปิด", value: "closed" },
   { label: "ขาดการเชื่อมต่อ", value: "offline" },
-  { label: "ปิดใช้งาน", value: "disabled" },
 ];
 
 export function DashboardPage() {
@@ -26,17 +25,21 @@ export function DashboardPage() {
       open: ovens.filter((oven) => oven.status === "open").length,
       closed: ovens.filter((oven) => oven.status === "closed").length,
       offline: ovens.filter((oven) => oven.status === "offline").length,
-      disabled: ovens.filter((oven) => oven.status === "disabled").length,
     };
   }, [ovens]);
 
   const filteredOvens = useMemo(() => {
     const keyword = search.trim().toLowerCase();
+
     return ovens.filter((oven) => {
       const matchesStatus = status === "all" || oven.status === status;
       const matchesSearch =
         !keyword ||
-        [oven.name, oven.number, oven.zone, oven.line].join(" ").toLowerCase().includes(keyword);
+        [oven.name, oven.number, oven.zone, oven.line]
+          .join(" ")
+          .toLowerCase()
+          .includes(keyword);
+
       return matchesStatus && matchesSearch;
     });
   }, [ovens, search, status]);
@@ -49,27 +52,27 @@ export function DashboardPage() {
     <>
       <PageHeader
         title="Dashboard"
-        description="ภาพรวมสถานะจริงของเตา พร้อมค่าล่าสุดแบบย่อเฉพาะเตาที่กำลังเปิด"
+        description="ภาพรวมสถานะจริงของเตา พร้อมค่าสำคัญแบบเรียลไทม์"
       />
 
-      <section className="summary-grid" aria-label="สรุปสถานะเตา">
-        <SummaryCard label="เตาทั้งหมด" value={summary.total} icon={<Gauge size={24} />} />
-        <SummaryCard label="กำลังอบ" value={summary.open} tone="open" icon={<Power size={24} />} />
-        <SummaryCard label="ปิดเตา" value={summary.closed} icon={<PauseCircle size={24} />} />
-        <SummaryCard label="ขาดการเชื่อมต่อ" value={summary.offline} tone="offline" icon={<WifiOff size={24} />} />
-        <SummaryCard label="ปิดใช้งาน" value={summary.disabled} tone="disabled" icon={<Wrench size={24} />} />
+      <section className="summary-grid">
+        <SummaryCard label="เตาทั้งหมด" value={summary.total} icon={<Gauge size={22} />} />
+        <SummaryCard label="กำลังอบ" value={summary.open} icon={<Power size={22} />} tone="open" />
+        <SummaryCard label="ปิด" value={summary.closed} icon={<PauseCircle size={22} />} tone="closed" />
+        <SummaryCard label="ขาดการเชื่อมต่อ" value={summary.offline} icon={<WifiOff size={22} />} tone="offline" />
       </section>
 
       <section className="panel dashboard-toolbar">
         <label className="search-field">
-          <Search size={18} />
+          <Search size={17} />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="ค้นหาเตา หมายเลข โซน หรือไลน์"
           />
         </label>
-        <div className="segmented" role="group" aria-label="กรองสถานะเตา">
+
+        <div className="segmented">
           {filters.map((filter) => (
             <button
               key={filter.value}
@@ -90,7 +93,7 @@ export function DashboardPage() {
           ))}
         </section>
       ) : (
-        <EmptyState title="ไม่พบเตาตามเงื่อนไข" description="ลองล้างคำค้นหาหรือเปลี่ยนตัวกรองสถานะ" />
+        <EmptyState title="ไม่พบเตา" description="ลองเปลี่ยนคำค้นหาหรือตัวกรองสถานะ" />
       )}
     </>
   );
@@ -104,8 +107,8 @@ function SummaryCard({
 }: {
   label: string;
   value: number;
-  icon: React.ReactNode;
-  tone?: "default" | "open" | "warning" | "danger" | "offline" | "disabled";
+  icon: ReactNode;
+  tone?: "default" | "open" | "closed" | "offline";
 }) {
   return (
     <article className={`summary-card tone-${tone}`}>

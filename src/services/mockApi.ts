@@ -178,15 +178,21 @@ export const mockApi = {
 
   async updateOven(ovenId: string, input: OvenUpdateInput): Promise<Oven> {
     const oven = getOvenOrThrow(ovenId);
+
     const updated = {
       ...oven,
       ...input,
-      status: input.enabled ? deriveOvenStatus({ ...oven, ...input }) : "disabled",
+    };
+
+    const withStatus = {
+      ...updated,
+      status: deriveOvenStatus(updated),
     } satisfies Oven;
 
-    ovens = ovens.map((item) => (item.id === ovenId ? updated : item));
-    pushAudit("แก้ไขข้อมูลเตา", updated.name, "ปรับข้อมูลชื่อเตา โซน ไลน์ หรือสถานะใช้งาน");
-    return wait(updated);
+    ovens = ovens.map((item) => (item.id === ovenId ? withStatus : item));
+
+    pushAudit("แก้ไขข้อมูลเตา", withStatus.name, "ปรับข้อมูลชื่อเตา โซน หรือไลน์");
+    return wait(withStatus);
   },
 
   async addOven(): Promise<Oven> {

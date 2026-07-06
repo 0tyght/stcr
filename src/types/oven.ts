@@ -1,6 +1,6 @@
 import type { LimitMap, SensorSnapshot } from "./sensor";
 
-export type OvenStatus = "open" | "closed" | "warning" | "danger" | "offline" | "disabled";
+export type OvenStatus = "open" | "closed" | "offline";
 
 export type Oven = {
   id: string;
@@ -18,6 +18,6 @@ export type Oven = {
   limits: LimitMap;
 };
 
-export type OvenUpdateInput = Pick<Oven, "name" | "zone" | "line" | "enabled">;
+export type OvenUpdateInput = Pick<Oven, "name" | "zone" | "line">;
 
 export type OvenStatusFilter = OvenStatus | "all";
