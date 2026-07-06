@@ -401,8 +401,12 @@
 
 /* =========================================================
    9) Icons + Cycle Number
-   ไอคอนและเลขรอบใช้สีตามธีมบริษัท
+   - เลขรอบใช้สีตามธีมบริษัท
+   - ไอคอนเหนือเลขรอบใช้สีเดิมเหมือนคำว่า "รอบ"
+   - ไอคอนวันที่/เวลาใช้สีตามธีมบริษัท
    ========================================================= */
+
+/* ---------- เลขรอบใช้สีตามธีมบริษัท ---------- */
 
 /* GR */
 :root[data-ui-theme="company"][data-company="gr"] .oven-card .cycle-box strong,
@@ -410,18 +414,6 @@
 :root[data-ui-theme="company"][data-company="gr"] .oven-card .round-count,
 :root[data-ui-theme="company"][data-company="gr"] .oven-card .count-value {
   color: #eed236 !important;
-}
-
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .cycle-box svg,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .meta-item svg,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .update-item svg,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .info-item svg,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .card-meta svg,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .latest-update svg,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .oven-updated svg,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .oven-info svg {
-  color: #eed236 !important;
-  stroke: currentColor;
 }
 
 /* TTN */
@@ -432,14 +424,46 @@
   color: #ab84fe !important;
 }
 
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .cycle-box svg,
+/* ---------- ไอคอนเหนือเลขรอบ + คำว่า "รอบ" ใช้สีเดิม ---------- */
+
+:root[data-ui-theme="company"] .oven-card .cycle-box svg,
+:root[data-ui-theme="company"] .oven-card .cycle-box .label,
+:root[data-ui-theme="company"] .oven-card .cycle-box .unit,
+:root[data-ui-theme="company"] .oven-card .cycle-box small {
+  color: var(--muted) !important;
+  stroke: currentColor;
+}
+
+/* ---------- ไอคอนวันที่/เวลา ใช้สีตามธีมบริษัท ---------- */
+
+/* GR */
+:root[data-ui-theme="company"][data-company="gr"] .oven-card .meta-item svg,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card .update-item svg,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card .info-item svg,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card .card-meta svg,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card .latest-update svg,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card .oven-updated svg,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card .oven-info svg,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card .meta-row svg,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card .date-row svg,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card .time-row svg,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card .updated-at svg {
+  color: #eed236 !important;
+  stroke: currentColor;
+}
+
+/* TTN */
 :root[data-ui-theme="company"][data-company="ttn"] .oven-card .meta-item svg,
 :root[data-ui-theme="company"][data-company="ttn"] .oven-card .update-item svg,
 :root[data-ui-theme="company"][data-company="ttn"] .oven-card .info-item svg,
 :root[data-ui-theme="company"][data-company="ttn"] .oven-card .card-meta svg,
 :root[data-ui-theme="company"][data-company="ttn"] .oven-card .latest-update svg,
 :root[data-ui-theme="company"][data-company="ttn"] .oven-card .oven-updated svg,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .oven-info svg {
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card .oven-info svg,
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card .meta-row svg,
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card .date-row svg,
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card .time-row svg,
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card .updated-at svg {
   color: #ab84fe !important;
   stroke: currentColor;
 }
