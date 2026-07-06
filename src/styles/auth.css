@@ -1,12 +1,23 @@
 /* =========================================================
-   Login polish only
-   ปรับหน้า Login ให้สวยขึ้นแบบเรียบง่าย ไม่เพิ่มส่วนเกิน
+   STCR Auth + Company Theme Overrides
+   ไฟล์นี้เป็น override หลัง globals.css และ theme.css
+   จัดกลุ่มให้แก้ง่าย ไม่เพิ่มท้ายไฟล์ซ้ำซ้อน
    ========================================================= */
 
-/* =========================
-   Sidebar Brand Fix
+/* =========================================================
+   1) Company Color Corrections
+   ========================================================= */
+
+/* GR: แทน #ecd92f และ #fff9bf ด้วย #eed236 */
+:root[data-ui-theme="company"][data-company="gr"] {
+  --company-primary: #eed236;
+  --company-primary-soft: #eed236;
+}
+
+/* =========================================================
+   2) Sidebar Brand
    เอากรอบรอบโลโก้ออก
-   ========================= */
+   ========================================================= */
 
 .brand-mark {
   display: flex;
@@ -59,7 +70,7 @@
 }
 
 :root[data-ui-theme="company"][data-company="gr"] .brand-mark-text {
-  color: #f0d92c;
+  color: #eed236;
 }
 
 :root[data-ui-theme="company"][data-company="ttn"] .brand-mark {
@@ -78,9 +89,10 @@
   color: #ffffff;
 }
 
-/* =========================
-   Simple Login
-   ========================= */
+/* =========================================================
+   3) Simple Login
+   หน้า Login แบบเรียบง่าย
+   ========================================================= */
 
 .login-screen.login-simple {
   position: relative;
@@ -181,7 +193,7 @@
 :root[data-ui-theme="company"][data-company="gr"] .login-simple-mark {
   border: none;
   background: transparent;
-  color: #f0d92c;
+  color: #eed236;
 }
 
 :root[data-ui-theme="company"][data-company="ttn"] .login-simple-mark {
@@ -252,10 +264,10 @@
   }
 }
 
-/* =========================
-   Detail Control Bar Fix
-   ทำให้กล่อง Realtime / Historical มีพื้นเหมือน panel อื่น
-   ========================= */
+/* =========================================================
+   4) Detail Control Bar
+   กล่อง Realtime / Historical ให้มีพื้นเหมือน panel อื่น
+   ========================================================= */
 
 .detail-control-bar {
   border: 1px solid var(--line);
@@ -296,11 +308,45 @@
   background: #ffffff;
   color: var(--ink-strong);
 }
-/* =========================
-   Light Theme Open Oven Background
-   ใช้แค่พื้นหลังไล่สีเขียวจางด้านบนแล้วเฟดลงไป
+
+/* =========================================================
+   5) Oven Card Header Colors
+   จัดสีหัวการ์ดตามบริษัท ไม่ให้ GR ไปทับ TTN
+   ========================================================= */
+
+/* GR: เปิด = เหลืองใหม่ */
+:root[data-ui-theme="company"][data-company="gr"] .oven-card.status-open .oven-card-header,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card-header.status-open {
+  background: #eed236 !important;
+  border-bottom-color: #eed236 !important;
+}
+
+/* GR: ปิด / ขาดการเชื่อมต่อ = #b1b1b5 */
+:root[data-ui-theme="company"][data-company="gr"] .oven-card.status-closed .oven-card-header,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card-header.status-closed,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card.status-offline .oven-card-header,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card-header.status-offline {
+  background: #b1b1b5 !important;
+  border-bottom-color: #8f8f95 !important;
+}
+
+/* TTN: หัวการ์ดเป็นม่วงบาง ๆ ตามธีมตัวอย่าง */
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card .oven-card-header,
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card-header {
+  background: #efe7ff !important;
+  border-bottom-color: #cdb7ff !important;
+}
+
+/* TTN: ขอบการ์ดใช้ม่วงอ่อน */
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card {
+  border-color: #dccdff !important;
+}
+
+/* =========================================================
+   6) Oven Card Open Background
+   เฉพาะตัวการ์ดเปิด: ไล่สีเขียวจางด้านบนแล้วเฟดลง
    ไม่แก้หัวการ์ด
-   ========================= */
+   ========================================================= */
 
 :root[data-ui-theme="company"] .oven-card.status-open {
   background: linear-gradient(
@@ -310,125 +356,71 @@
     #ffffff 52%
   ) !important;
 }
-/* =========================
-   Company Theme Color Adjustments
-   ปรับสีธีมสว่างตามที่กำหนด
-   ========================= */
 
-/* GR: แทน #ecd92f และ #fff9bf ด้วย #eed236 */
-:root[data-ui-theme="company"][data-company="gr"] {
-  --company-primary: #eed236;
-  --company-primary-soft: #eed236;
+/* =========================================================
+   7) Header Status Badges
+   ป้าย เปิด / ปิด / ขาดการเชื่อมต่อ ในหัวการ์ด
+   ไม่มีเส้นขอบ แต่ยังมีสีสถานะ
+   ========================================================= */
+
+:root[data-ui-theme="company"] .oven-card-header .status-badge {
+  border: none !important;
+  box-shadow: none !important;
 }
 
-/* หัวการ์ดสถานะปิด / ขาดการเชื่อมต่อ จาก #dfdfd9 เป็น #b1b1b5 */
-:root[data-ui-theme="company"] .oven-card.status-closed .oven-card-header,
-:root[data-ui-theme="company"] .oven-card-header.status-closed,
-:root[data-ui-theme="company"] .oven-card.status-offline .oven-card-header,
-:root[data-ui-theme="company"] .oven-card-header.status-offline {
+/* เปิด = เขียว */
+:root[data-ui-theme="company"] .oven-card-header .status-badge.status-open {
+  background: #9dca66 !important;
+  color: #ffffff !important;
+}
+
+/* ปิด = แดง */
+:root[data-ui-theme="company"] .oven-card-header .status-badge.status-closed {
+  background: #e11912 !important;
+  color: #ffffff !important;
+}
+
+/* ขาดการเชื่อมต่อ = เทา */
+:root[data-ui-theme="company"] .oven-card-header .status-badge.status-offline {
   background: #b1b1b5 !important;
+  color: #3f454d !important;
 }
 
-/* หัวการ์ดสถานะเปิด ใช้สีหลักใหม่ */
-:root[data-ui-theme="company"] .oven-card.status-open .oven-card-header,
-:root[data-ui-theme="company"] .oven-card-header.status-open {
+/* =========================================================
+   8) Oven Detail Buttons
+   ปุ่มรายละเอียดเตาแยกตามธีมบริษัท
+   ========================================================= */
+
+/* GR: ใช้เหลืองใหม่ */
+:root[data-ui-theme="company"][data-company="gr"] .oven-card-footer .button,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card .button,
+:root[data-ui-theme="company"][data-company="gr"] a.button[href*="/ovens/"] {
+  border-color: #eed236 !important;
   background: #eed236 !important;
-  border-bottom-color: #eed236 !important;
+  color: #30343b !important;
 }
 
-/* ป้าย เปิด / ปิด / ขาดการเชื่อมต่อ ในหัวการ์ด ไม่ต้องมีเส้นขอบ */
-:root[data-ui-theme="company"] .oven-card-header .status-badge {
-  border: none !important;
-  box-shadow: none !important;
+:root[data-ui-theme="company"][data-company="gr"] .oven-card-footer .button:hover,
+:root[data-ui-theme="company"][data-company="gr"] .oven-card .button:hover,
+:root[data-ui-theme="company"][data-company="gr"] a.button[href*="/ovens/"]:hover {
+  border-color: #d9c81f !important;
+  background: #d9c81f !important;
+  color: #30343b !important;
 }
 
-/* เปิด = เขียว */
-:root[data-ui-theme="company"] .oven-card-header .status-badge.status-open {
-  background: rgba(34, 197, 94, 0.14) !important;
-  color: #15803d !important;
-}
-
-/* ปิด = แดง */
-:root[data-ui-theme="company"] .oven-card-header .status-badge.status-closed {
-  background: rgba(239, 68, 68, 0.14) !important;
-  color: #dc2626 !important;
-}
-
-/* ขาดการเชื่อมต่อ = เทา */
-:root[data-ui-theme="company"] .oven-card-header .status-badge.status-offline {
-  background: rgba(107, 114, 128, 0.16) !important;
-  color: #4b5563 !important;
-}
-
-/* =========================
-   Fix TTN Theme Colors
-   TTN ต้องใช้ม่วง ไม่ใช้เหลือง/ส้มของ GR
-   ========================= */
-
-/* ให้ TTN ใช้ม่วงเป็นสีหลักของปุ่มและปุ่มรายละเอียดเตา */
-:root[data-ui-theme="company"][data-company="ttn"] {
-  --company-accent: var(--company-primary);
-  --company-accent-hover: var(--company-primary-strong);
-  --company-on-accent: #ffffff;
-}
-
-/* หัวการ์ดเตาที่เปิด:
-   GR = เหลือง
-   TTN = ม่วง
-*/
-:root[data-ui-theme="company"][data-company="gr"] .oven-card.status-open .oven-card-header,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card-header.status-open {
-  background: #eed236 !important;
-  border-bottom-color: #eed236 !important;
-}
-
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card.status-open .oven-card-header,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card-header.status-open {
-  background: var(--company-primary) !important;
-  border-bottom-color: var(--company-primary) !important;
-}
-
-/* ตัวหนังสือบนหัวการ์ด TTN ให้ยังอ่านง่าย */
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card.status-open .oven-card-header h2,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card.status-open .oven-card-header .status-badge {
+/* TTN: ใช้สีเดียวกับปุ่มเช็คอุณหภูมิในตัวอย่าง */
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card-footer .button,
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card .button,
+:root[data-ui-theme="company"][data-company="ttn"] a.button[href*="/ovens/"] {
+  border-color: #f0c45f !important;
+  background: #f0c45f !important;
   color: #ffffff !important;
 }
 
-/* ปุ่มรายละเอียดเตา / ปุ่มหลัก ของ TTN ให้เป็นม่วง */
-:root[data-ui-theme="company"][data-company="ttn"] .button-primary,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card-footer .button {
-  border-color: var(--company-primary) !important;
-  background: var(--company-primary) !important;
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card-footer .button:hover,
+:root[data-ui-theme="company"][data-company="ttn"] .oven-card .button:hover,
+:root[data-ui-theme="company"][data-company="ttn"] a.button[href*="/ovens/"]:hover {
+  border-color: #e2b44f !important;
+  background: #e2b44f !important;
   color: #ffffff !important;
-}
-
-:root[data-ui-theme="company"][data-company="ttn"] .button-primary:hover,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card-footer .button:hover {
-  border-color: var(--company-primary-strong) !important;
-  background: var(--company-primary-strong) !important;
-  color: #ffffff !important;
-}
-
-/* ป้ายสถานะในหัวการ์ด: ไม่มีเส้นขอบ แต่สียังอยู่ */
-:root[data-ui-theme="company"] .oven-card-header .status-badge {
-  border: none !important;
-  box-shadow: none !important;
-}
-
-/* เปิด = เขียว */
-:root[data-ui-theme="company"] .oven-card-header .status-badge.status-open {
-  background: rgba(34, 197, 94, 0.16) !important;
-  color: #15803d !important;
-}
-
-/* ปิด = แดง */
-:root[data-ui-theme="company"] .oven-card-header .status-badge.status-closed {
-  background: rgba(239, 68, 68, 0.16) !important;
-  color: #dc2626 !important;
-}
-
-/* ขาดการเชื่อมต่อ = เทา */
-:root[data-ui-theme="company"] .oven-card-header .status-badge.status-offline {
-  background: rgba(107, 114, 128, 0.18) !important;
-  color: #4b5563 !important;
 }
