@@ -385,20 +385,20 @@
   color: #ffffff !important;
 }
 
-/* TTN: คงสีเดิมตามปุ่มเช็คอุณหภูมิ */
+/* TTN: ปุ่มรายละเอียดเตาใช้สี #eec16c */
 :root[data-ui-theme="company"][data-company="ttn"] .oven-card-footer .button,
 :root[data-ui-theme="company"][data-company="ttn"] .oven-card .button,
 :root[data-ui-theme="company"][data-company="ttn"] a.button[href*="/ovens/"] {
-  border-color: #f0c45f !important;
-  background: #f0c45f !important;
+  border-color: #eec16c !important;
+  background: #eec16c !important;
   color: #ffffff !important;
 }
 
 :root[data-ui-theme="company"][data-company="ttn"] .oven-card-footer .button:hover,
 :root[data-ui-theme="company"][data-company="ttn"] .oven-card .button:hover,
 :root[data-ui-theme="company"][data-company="ttn"] a.button[href*="/ovens/"]:hover {
-  border-color: #e2b44f !important;
-  background: #e2b44f !important;
+  border-color: #dfb25d !important;
+  background: #dfb25d !important;
   color: #ffffff !important;
 }
 
