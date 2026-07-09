@@ -56,7 +56,7 @@ const defaultReportForm: ReportFormState = {
   reporter: "",
   productionHead: "",
   targetTemperature: 45,
-  showTargetLine: true,
+  showTargetLine: false,
 };
 
 const rubberOptions: Array<{ value: Exclude<RubberType, "">; label: string }> = [
@@ -178,7 +178,7 @@ export function ReportPage() {
     setRangeFromCycle(safeCycle);
     setRangeToCycle(safeCycle);
     setHistoricalDownloadMode("single");
-  }, [mode, oven, requestedCycle]);
+  }, [mode, oven?.id, requestedCycle]);
 
   const cycleRange = useMemo(() => {
     if (!oven || selectedCycle == null) return null;
@@ -269,6 +269,8 @@ export function ReportPage() {
     try {
       const safeCycle = clampCycleNumber(selectedCycle, oven);
       const range = getCycleRange(oven, mode, safeCycle);
+
+      setSelectedCycle(safeCycle);
 
       const nextPoints = await apiClient.getHistory({
         ovenId: oven.id,
@@ -614,8 +616,22 @@ function ReportFormControls({
       <div className="report-form-controls__header">
         <div>
           <strong>ข้อมูลเพิ่มเติมสำหรับฟอร์ม F-WS-05</strong>
-          <span>เลือก/กรอกข้อมูลก่อนดาวน์โหลด PDF ระบบจะนำข้อมูลไปติ๊กและแสดงในแบบฟอร์ม</span>
+          <span>เลือก/กรอกข้อมูลก่อนดาวน์โหลด PDF ช่องเหล่านี้ไม่บังคับเลือก และกดตัวเดิมซ้ำเพื่อล้างค่าได้</span>
         </div>
+
+        <button
+          className="button"
+          type="button"
+          onClick={() =>
+            onChange({
+              ...defaultReportForm,
+              targetTemperature: form.targetTemperature,
+              showTargetLine: false,
+            })
+          }
+        >
+          ล้างข้อมูลที่เลือก
+        </button>
       </div>
 
       <div className="report-form-controls__grid">
@@ -625,10 +641,11 @@ function ReportFormControls({
             {rubberOptions.map((option) => (
               <label key={option.value} className="report-choice">
                 <input
-                  type="radio"
-                  name="rubberType"
+                  type="checkbox"
                   checked={form.rubberType === option.value}
-                  onChange={() => update("rubberType", option.value)}
+                  onChange={() =>
+                    update("rubberType", form.rubberType === option.value ? "" : option.value)
+                  }
                 />
                 <span>{option.label}</span>
               </label>
@@ -642,10 +659,14 @@ function ReportFormControls({
             {smokingPeriodOptions.map((option) => (
               <label key={option.value} className="report-choice">
                 <input
-                  type="radio"
-                  name="smokingPeriodStatus"
+                  type="checkbox"
                   checked={form.smokingPeriodStatus === option.value}
-                  onChange={() => update("smokingPeriodStatus", option.value)}
+                  onChange={() =>
+                    update(
+                      "smokingPeriodStatus",
+                      form.smokingPeriodStatus === option.value ? "" : option.value,
+                    )
+                  }
                 />
                 <span>
                   {option.label}
@@ -662,10 +683,14 @@ function ReportFormControls({
             {temperatureControlOptions.map((option) => (
               <label key={option.value} className="report-choice">
                 <input
-                  type="radio"
-                  name="temperatureControlStatus"
+                  type="checkbox"
                   checked={form.temperatureControlStatus === option.value}
-                  onChange={() => update("temperatureControlStatus", option.value)}
+                  onChange={() =>
+                    update(
+                      "temperatureControlStatus",
+                      form.temperatureControlStatus === option.value ? "" : option.value,
+                    )
+                  }
                 />
                 <span>
                   {option.label}
@@ -1148,26 +1173,9 @@ function FwsSvgTemperatureGrid({
       <line x1="0" y1={tempToY(60)} x2="28" y2={tempToY(60)} stroke="#000000" strokeWidth="1.2" />
       <line x1="0" y1={tempToY(40)} x2="28" y2={tempToY(40)} stroke="#000000" strokeWidth="1.2" />
 
-      <line
-        x1={left}
-        y1={tempToY(upper)}
-        x2={width}
-        y2={tempToY(upper)}
-        stroke="#0f4c81"
-        strokeWidth="1"
-        strokeDasharray="4 4"
-        opacity="0.75"
-      />
-
-      <line
-        x1={left}
-        y1={tempToY(lower)}
-        x2={width}
-        y2={tempToY(lower)}
-        stroke="#0f4c81"
-        strokeWidth="1"
-        strokeDasharray="4 4"
-        opacity="0.75"
+      <g
+        data-control-upper-y={tempToY(upper).toFixed(2)}
+        data-control-lower-y={tempToY(lower).toFixed(2)}
       />
 
       {targetPath ? (
@@ -1196,97 +1204,101 @@ function FwsSvgTemperatureGrid({
 function FwsSvgNotes({ y, form }: { y: number; form: ReportFormState }) {
   return (
     <g transform={`translate(0 ${y})`}>
-      <SvgText x={58} y={0} size={8.7} weight={700}>
+      <SvgText x={58} y={0} size={8.5} weight={700}>
         * ✕ ไม่สุก (ปากกาสีน้ำเงิน)  ✓ สุก (ปากกาสีแดง)  Ø ยางสุกแล้วยังไม่ออกเตา (อุ่นใช้ปากกาสีแดง)
       </SvgText>
 
-      <SvgText x={58} y={14} size={8.7} weight={700}>
+      <SvgText x={58} y={13} size={8.5} weight={700}>
+        ** ควบคุมอุณหภูมิ: [รมควัน] 40 - 60°C, [อุ่นยาง] 35-40°C
+      </SvgText>
+
+      <SvgText x={58} y={27} size={8.3} weight={700}>
         After the 3rd day of smoking, control the temperature between 40 - 55 °C.
       </SvgText>
 
-      <SvgText x={58} y={28} size={8.5} weight={700}>
+      <SvgText x={58} y={40} size={8.2} weight={700}>
         (ประเมินอุณหภูมิวันที่ 3 หลังปิดเตา 2 วัน / เกณฑ์การรมควัน = ความชื้นยาง บวกลบ 1 วัน)
       </SvgText>
 
-      <SvgText x={58} y={51} size={9.8} weight={700}>
+      <SvgText x={58} y={61} size={9.4} weight={700}>
         ประเมินวันรมควัน
       </SvgText>
-      <SvgText x={58} y={64} size={8.4}>
+      <SvgText x={58} y={73} size={8}>
         Smoking period
       </SvgText>
 
-      <FwsCheckbox x={178} y={42} size={10} checked={form.smokingPeriodStatus === "under"} />
-      <SvgText x={193} y={52} size={9.8} weight={700}>
+      <FwsCheckbox x={178} y={51} size={10} checked={form.smokingPeriodStatus === "under"} />
+      <SvgText x={193} y={61} size={9.4} weight={700}>
         อยู่ในเกณฑ์
       </SvgText>
-      <SvgText x={193} y={65} size={8.4}>
+      <SvgText x={193} y={73} size={8}>
         Under period
       </SvgText>
 
-      <FwsCheckbox x={316} y={42} size={10} checked={form.smokingPeriodStatus === "over"} />
-      <SvgText x={331} y={52} size={9.2} weight={700}>
+      <FwsCheckbox x={316} y={51} size={10} checked={form.smokingPeriodStatus === "over"} />
+      <SvgText x={331} y={61} size={8.8} weight={700}>
         เกินเกณฑ์ (เกณฑ์การรมควัน = ความชื้นยาง บวกลบ 1 วัน)
       </SvgText>
-      <SvgText x={331} y={65} size={8.4}>
+      <SvgText x={331} y={73} size={8}>
         Over period (+/- 1 day)
       </SvgText>
 
-      <SvgText x={58} y={86} size={9.8} weight={700}>
+      <SvgText x={58} y={93} size={9.4} weight={700}>
         อุณหภูมิ
       </SvgText>
-      <SvgText x={58} y={99} size={8.4}>
+      <SvgText x={58} y={105} size={8}>
         Temperature
       </SvgText>
 
-      <FwsCheckbox x={178} y={77} size={10} checked={form.temperatureControlStatus === "underControl"} />
-      <SvgText x={193} y={87} size={9.8} weight={700}>
+      <FwsCheckbox x={178} y={83} size={10} checked={form.temperatureControlStatus === "underControl"} />
+      <SvgText x={193} y={93} size={9.4} weight={700}>
         อยู่ในค่าควบคุม
       </SvgText>
-      <SvgText x={193} y={100} size={8.4}>
+      <SvgText x={193} y={105} size={8}>
         Under Control
       </SvgText>
 
-      <FwsCheckbox x={316} y={77} size={10} checked={form.temperatureControlStatus === "outOfControl"} />
-      <SvgText x={331} y={87} size={9.8} weight={700}>
+      <FwsCheckbox x={316} y={83} size={10} checked={form.temperatureControlStatus === "outOfControl"} />
+      <SvgText x={331} y={93} size={9.4} weight={700}>
         ไม่อยู่ในค่าควบคุม
       </SvgText>
-      <SvgText x={331} y={100} size={8.4}>
+      <SvgText x={331} y={105} size={8}>
         Out of Control
       </SvgText>
 
-      <SvgText x={760} y={52} size={9.6} weight={800}>
+      <SvgText x={760} y={61} size={9.4} weight={800}>
         สีน้ำเงิน = อุณหภูมิที่ต้องการ : หัวหน้างาน
       </SvgText>
-      <SvgText x={760} y={77} size={9.6} weight={800}>
+      <SvgText x={760} y={84} size={9.4} weight={800}>
         สีแดง = อุณหภูมิจริง : พนักงานคุมเตา
       </SvgText>
 
-      <SvgText x={350} y={114} size={10} weight={700}>
+      <SvgText x={350} y={118} size={9.8} weight={700}>
         สาเหตุ
       </SvgText>
-      <DottedLine x={390} y={114} width={430} />
+      <DottedLine x={390} y={118} width={430} />
       {form.reason ? (
-        <SvgText x={400} y={111} size={9.4}>
+        <SvgText x={400} y={115} size={9}>
           {form.reason}
         </SvgText>
       ) : null}
 
-      <SvgText x={290} y={132} size={10.5} weight={700}>
+      <SvgText x={290} y={133} size={10.2} weight={700}>
         ผู้รายงาน
       </SvgText>
-      <DottedLine x={345} y={132} width={210} />
+      <DottedLine x={345} y={133} width={210} />
       {form.reporter ? (
-        <SvgText x={355} y={129} size={9.4}>
+        <SvgText x={355} y={130} size={9}>
           {form.reporter}
         </SvgText>
       ) : null}
 
-      <SvgText x={650} y={132} size={10.5} weight={700}>
+      <SvgText x={650} y={133} size={10.2} weight={700}>
         หัวหน้าฝ่ายผลิต
       </SvgText>
-      <DottedLine x={740} y={132} width={245} />
+      <DottedLine x={740} y={133} width={245} />
       {form.productionHead ? (
-        <SvgText x={750} y={129} size={9.4}>
+        <SvgText x={750} y={130} size={9}>
           {form.productionHead}
         </SvgText>
       ) : null}
@@ -1524,6 +1536,7 @@ const fwsSvgStyles = `
   .report-form-controls__header {
     display: flex;
     justify-content: space-between;
+    align-items: flex-start;
     gap: 12px;
     margin-bottom: 14px;
   }
