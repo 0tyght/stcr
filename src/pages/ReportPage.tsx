@@ -869,10 +869,10 @@ function FwsSvgHeader({
 
       <image
         href={logoHref}
-        x={company === "ttn" ? 14 : 37}
-        y={company === "ttn" ? 5 : 7}
-        width={company === "ttn" ? 145 : 100}
-        height={company === "ttn" ? 65 : 60}
+        x={company === "ttn" ? 52 : 42}
+        y={company === "ttn" ? 7 : 6}
+        width={company === "ttn" ? 70 : 90}
+        height={company === "ttn" ? 62 : 62}
         preserveAspectRatio="xMidYMid meet"
       />
 
@@ -916,7 +916,7 @@ function FwsSvgMeta({
 }) {
   return (
     <g transform={`translate(0 ${y})`}>
-      <rect x="0" y="0" width={width} height={height} fill="#ffffff" stroke="#000000" />
+      <rect x="0" y="0" width={width} height={height} fill="#ffffff" stroke="#000000" strokeWidth="0.75" />
 
       <SvgText x={14} y={18} size={11} weight={700}>
         เตา No.
@@ -929,7 +929,7 @@ function FwsSvgMeta({
       <SvgText x={14} y={39} size={11} weight={700}>
         ชนิดยาง
       </SvgText>
-      <SvgText x={14} y={53} size={8.5}>
+      <SvgText x={14} y={54} size={8.6}>
         Type of rubber
       </SvgText>
 
@@ -938,16 +938,8 @@ function FwsSvgMeta({
 
         return (
           <g key={item.value}>
-            <FwsCheckbox x={x} y={23} checked={form.rubberType === item.value} />
-            <line
-              x1={x + 6.5}
-              y1={36}
-              x2={x + 1.5}
-              y2={44}
-              stroke="#000000"
-              strokeWidth="0.75"
-            />
-            <SvgText x={x + 6.5} y={55} size={8.6} anchor="middle">
+            <FwsCheckbox x={x} y={30} checked={form.rubberType === item.value} />
+            <SvgText x={x + 6.5} y={62} size={8.7} anchor="middle">
               {item.label}
             </SvgText>
           </g>
@@ -1062,13 +1054,13 @@ function FwsSvgTemperatureGrid({
 
   return (
     <g transform={`translate(0 ${y})`}>
-      <rect x="0" y="0" width={width} height={height} fill="#ffffff" stroke="#000000" />
+      <rect x="0" y="0" width={width} height={height} fill="#ffffff" stroke="#000000" strokeWidth="0.8" />
 
-      <line x1={left} y1="0" x2={left} y2={height} stroke="#000000" />
-      <line x1="0" y1={dayH} x2={width} y2={dayH} stroke="#000000" />
-      <line x1="0" y1={dayH + timeH} x2={width} y2={dayH + timeH} stroke="#000000" />
-      <line x1="0" y1={chartTop} x2={width} y2={chartTop} stroke="#000000" />
-      <line x1="0" y1={chartBottom} x2={width} y2={chartBottom} stroke="#000000" />
+      <line x1={left} y1="0" x2={left} y2={height} stroke="#000000" strokeWidth="0.9" />
+      <line x1="0" y1={dayH} x2={width} y2={dayH} stroke="#000000" strokeWidth="0.8" />
+      <line x1="0" y1={dayH + timeH} x2={width} y2={dayH + timeH} stroke="#000000" strokeWidth="0.8" />
+      <line x1="0" y1={chartTop} x2={width} y2={chartTop} stroke="#000000" strokeWidth="0.9" />
+      <line x1="0" y1={chartBottom} x2={width} y2={chartBottom} stroke="#000000" strokeWidth="0.8" />
 
       <SvgText x={22} y={19} size={11} weight={700} anchor="middle">
         วัน
@@ -1089,27 +1081,32 @@ function FwsSvgTemperatureGrid({
 
         return (
           <g key={`day-${dayIndex}`}>
-            <rect x={x} y="0" width={w} height={dayH} fill="#ffffff" stroke="#000000" />
+            <line x1={x} y1="0" x2={x} y2={height} stroke="#000000" strokeWidth="1.0" />
             <SvgText x={x + w / 2} y={19} size={10} weight={700} anchor="middle">
               ({dayIndex + 1})
             </SvgText>
           </g>
         );
       })}
+      <line x1={width - 0.5} y1="0" x2={width - 0.5} y2={height} stroke="#000000" strokeWidth="0.9" />
 
       {slots.map((slot) => {
         const x = left + slot.index * cellW;
         const isDayStart = slot.index % timeSlots.length === 0;
 
+        if (isDayStart) {
+          return null;
+        }
+
         return (
           <g key={`slot-${slot.index}`}>
             <line
               x1={x}
-              y1="0"
+              y1={dayH}
               x2={x}
               y2={height}
               stroke="#000000"
-              strokeWidth={isDayStart ? 1.5 : 0.55}
+              strokeWidth="0.38"
             />
 
             <text
@@ -1119,7 +1116,7 @@ function FwsSvgTemperatureGrid({
               textAnchor="start"
               fontFamily="Sarabun"
               fontSize="8"
-              fontWeight="bold"
+              fontWeight="normal"
               fill="#000000"
             >
               {slot.timeLabel}
@@ -1128,7 +1125,27 @@ function FwsSvgTemperatureGrid({
         );
       })}
 
-      <line x1={width - 0.5} y1="0" x2={width - 0.5} y2={height} stroke="#000000" />
+      {slots
+        .filter((slot) => slot.index % timeSlots.length === 0)
+        .map((slot) => {
+          const x = left + slot.index * cellW;
+
+          return (
+            <text
+              key={`time-start-${slot.index}`}
+              x={x + cellW / 2 + 2}
+              y={dayH + timeH - 5}
+              transform={`rotate(-90 ${x + cellW / 2 + 2} ${dayH + timeH - 5})`}
+              textAnchor="start"
+              fontFamily="Sarabun"
+              fontSize="8"
+              fontWeight="normal"
+              fill="#000000"
+            >
+              {slot.timeLabel}
+            </text>
+          );
+        })}
 
       {Array.from({ length: graphMaxTemp - graphMinTemp + 1 }).map((_, index) => {
         const temp = graphMaxTemp - index;
@@ -1144,7 +1161,7 @@ function FwsSvgTemperatureGrid({
               x2={width}
               y2={lineY}
               stroke="#000000"
-              strokeWidth={isMajor ? 1.45 : isFive ? 0.9 : 0.38}
+              strokeWidth={isMajor ? 0.9 : isFive ? 0.58 : 0.26}
             />
 
             {isFive ? (
@@ -1166,7 +1183,7 @@ function FwsSvgTemperatureGrid({
             x2={x}
             y2={chartBottom}
             stroke="#000000"
-            strokeWidth={index % timeSlots.length === 0 ? 1.1 : 0.35}
+            strokeWidth={index % timeSlots.length === 0 ? 0.85 : 0.26}
           />
         );
       })}
@@ -1178,8 +1195,8 @@ function FwsSvgTemperatureGrid({
         อุ่น
       </SvgText>
 
-      <line x1="0" y1={tempToY(60)} x2="28" y2={tempToY(60)} stroke="#000000" strokeWidth="1.2" />
-      <line x1="0" y1={tempToY(40)} x2="28" y2={tempToY(40)} stroke="#000000" strokeWidth="1.2" />
+      <line x1="0" y1={tempToY(60)} x2="28" y2={tempToY(60)} stroke="#000000" strokeWidth="0.8" />
+      <line x1="0" y1={tempToY(40)} x2="28" y2={tempToY(40)} stroke="#000000" strokeWidth="0.8" />
 
       <g
         data-control-upper-y={tempToY(upper).toFixed(2)}
@@ -1187,11 +1204,11 @@ function FwsSvgTemperatureGrid({
       />
 
       {targetPath ? (
-        <path d={targetPath} fill="none" stroke="#0f4c81" strokeWidth="1.75" opacity="0.9" />
+        <path d={targetPath} fill="none" stroke="#0f4c81" strokeWidth="1.35" opacity="0.9" />
       ) : null}
 
       {actualPath ? (
-        <path d={actualPath} fill="none" stroke="#d62027" strokeWidth="2.05" opacity="0.96" />
+        <path d={actualPath} fill="none" stroke="#d62027" strokeWidth="1.45" opacity="0.96" />
       ) : null}
 
       {slots
@@ -1201,7 +1218,7 @@ function FwsSvgTemperatureGrid({
             key={`actual-${slot.index}`}
             cx={slotToX(slot.index)}
             cy={tempToY(slot.actual ?? graphMinTemp)}
-            r="1.65"
+            r="1.25"
             fill="#d62027"
           />
         ))}
@@ -1212,147 +1229,104 @@ function FwsSvgTemperatureGrid({
 function FwsSvgNotes({ y, form }: { y: number; form: ReportFormState }) {
   return (
     <g transform={`translate(0 ${y})`}>
-      <SvgText x={58} y={0} size={8.4} weight={700}>
-        *
-      </SvgText>
-      <FwsCrossMark x={71} y={-8} size={9} />
-      <SvgText x={84} y={0} size={8.4} weight={700}>
-        ไม่สุก (ปากกาสีน้ำเงิน)
-      </SvgText>
-      <FwsCheckMark x={185} y={-8} size={10} />
-      <SvgText x={199} y={0} size={8.4} weight={700}>
-        สุก (ปากกาสีแดง)
-      </SvgText>
-      <FwsCircleSlashMark x={290} y={-8} size={10} />
-      <SvgText x={304} y={0} size={8.4} weight={700}>
-        ยางสุกแล้วยังไม่ออกเตา (อุ่นใช้ปากกาสีแดง)
+      <SvgText x={58} y={0} size={8.3} weight={700}>
+        * ✕ ไม่สุก (ปากกาสีน้ำเงิน)  ✓ สุก (ปากกาสีแดง)  Ø ยางสุกแล้วยังไม่ออกเตา (อุ่นใช้ปากกาสีแดง)
       </SvgText>
 
-      <SvgText x={58} y={12} size={8.4} weight={700}>
+      <SvgText x={58} y={12} size={8.3} weight={700}>
         ** ควบคุมอุณหภูมิ: [รมควัน] 40 - 60°C, [อุ่นยาง] 35-40°C
       </SvgText>
 
-      <SvgText x={58} y={25} size={8.2} weight={700}>
+      <SvgText x={58} y={25} size={8.1}>
         After the 3rd day of smoking, control the temperature between 40 - 55 °C.
       </SvgText>
 
-      <SvgText x={58} y={37} size={8.1} weight={700}>
+      <SvgText x={58} y={38} size={8.0}>
         (ประเมินอุณหภูมิวันที่ 3 หลังปิดเตา 2 วัน / เกณฑ์การรมควัน = ความชื้นยาง บวกลบ 1 วัน)
       </SvgText>
 
-      <SvgText x={58} y={57} size={9.2} weight={700}>
+      <SvgText x={58} y={59} size={8.8} weight={700}>
         ประเมินวันรมควัน
       </SvgText>
-      <SvgText x={58} y={68} size={7.8}>
+      <SvgText x={58} y={71} size={7.8}>
         Smoking period
       </SvgText>
 
-      <FwsCheckbox x={176} y={47} size={10} checked={form.smokingPeriodStatus === "under"} />
-      <SvgText x={191} y={57} size={9.2} weight={700}>
+      <FwsCheckbox x={178} y={49} size={10} checked={form.smokingPeriodStatus === "under"} />
+      <SvgText x={193} y={59} size={8.8} weight={700}>
         อยู่ในเกณฑ์
       </SvgText>
-      <SvgText x={191} y={68} size={7.8}>
+      <SvgText x={193} y={71} size={7.8}>
         Under period
       </SvgText>
 
-      <FwsCheckbox x={312} y={47} size={10} checked={form.smokingPeriodStatus === "over"} />
-      <SvgText x={327} y={57} size={8.5} weight={700}>
+      <FwsCheckbox x={315} y={49} size={10} checked={form.smokingPeriodStatus === "over"} />
+      <SvgText x={330} y={59} size={8.4}>
         เกินเกณฑ์ (เกณฑ์การรมควัน = ความชื้นยาง บวกลบ 1 วัน)
       </SvgText>
-      <SvgText x={327} y={68} size={7.8}>
+      <SvgText x={330} y={71} size={7.8}>
         Over period (+/- 1 day)
       </SvgText>
 
-      <SvgText x={58} y={87} size={9.2} weight={700}>
+      <SvgText x={58} y={91} size={8.8} weight={700}>
         อุณหภูมิ
       </SvgText>
-      <SvgText x={58} y={98} size={7.8}>
+      <SvgText x={58} y={103} size={7.8}>
         Temperature
       </SvgText>
 
-      <FwsCheckbox x={176} y={77} size={10} checked={form.temperatureControlStatus === "underControl"} />
-      <SvgText x={191} y={87} size={9.2} weight={700}>
+      <FwsCheckbox x={178} y={81} size={10} checked={form.temperatureControlStatus === "underControl"} />
+      <SvgText x={193} y={91} size={8.8} weight={700}>
         อยู่ในค่าควบคุม
       </SvgText>
-      <SvgText x={191} y={98} size={7.8}>
+      <SvgText x={193} y={103} size={7.8}>
         Under Control
       </SvgText>
 
-      <FwsCheckbox x={312} y={77} size={10} checked={form.temperatureControlStatus === "outOfControl"} />
-      <SvgText x={327} y={87} size={9.2} weight={700}>
+      <FwsCheckbox x={315} y={81} size={10} checked={form.temperatureControlStatus === "outOfControl"} />
+      <SvgText x={330} y={91} size={8.8} weight={700}>
         ไม่อยู่ในค่าควบคุม
       </SvgText>
-      <SvgText x={327} y={98} size={7.8}>
+      <SvgText x={330} y={103} size={7.8}>
         Out of Control
       </SvgText>
 
-      <SvgText x={760} y={57} size={9.2} weight={800}>
+      <SvgText x={760} y={59} size={8.8} weight={800}>
         สีน้ำเงิน = อุณหภูมิที่ต้องการ : หัวหน้างาน
       </SvgText>
-      <SvgText x={760} y={80} size={9.2} weight={800}>
+      <SvgText x={760} y={82} size={8.8} weight={800}>
         สีแดง = อุณหภูมิจริง : พนักงานคุมเตา
       </SvgText>
 
-      <SvgText x={350} y={109} size={9.6} weight={700}>
+      <SvgText x={350} y={116} size={9.4} weight={700}>
         สาเหตุ
       </SvgText>
-      <DottedLine x={390} y={109} width={430} />
+      <DottedLine x={390} y={116} width={430} />
       {form.reason ? (
-        <SvgText x={400} y={106} size={8.8}>
+        <SvgText x={400} y={113} size={8.4}>
           {form.reason}
         </SvgText>
       ) : null}
 
-      <SvgText x={290} y={123} size={10} weight={700}>
+      <SvgText x={290} y={131} size={9.6} weight={700}>
         ผู้รายงาน
       </SvgText>
-      <DottedLine x={345} y={123} width={210} />
+      <DottedLine x={345} y={131} width={210} />
       {form.reporter ? (
-        <SvgText x={355} y={120} size={8.8}>
+        <SvgText x={355} y={128} size={8.4}>
           {form.reporter}
         </SvgText>
       ) : null}
 
-      <SvgText x={650} y={123} size={10} weight={700}>
+      <SvgText x={650} y={131} size={9.6} weight={700}>
         หัวหน้าฝ่ายผลิต
       </SvgText>
-      <DottedLine x={740} y={123} width={245} />
+      <DottedLine x={740} y={131} width={245} />
       {form.productionHead ? (
-        <SvgText x={750} y={120} size={8.8}>
+        <SvgText x={750} y={128} size={8.4}>
           {form.productionHead}
         </SvgText>
       ) : null}
-    </g>
-  );
-}
-
-function FwsCrossMark({ x, y, size = 10 }: { x: number; y: number; size?: number }) {
-  return (
-    <g stroke="#000000" strokeWidth="1.3" strokeLinecap="round">
-      <line x1={x} y1={y} x2={x + size} y2={y + size} />
-      <line x1={x + size} y1={y} x2={x} y2={y + size} />
-    </g>
-  );
-}
-
-function FwsCheckMark({ x, y, size = 10 }: { x: number; y: number; size?: number }) {
-  return (
-    <path
-      d={`M ${x} ${y + size * 0.55} L ${x + size * 0.36} ${y + size} L ${x + size} ${y}`}
-      fill="none"
-      stroke="#000000"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  );
-}
-
-function FwsCircleSlashMark({ x, y, size = 10 }: { x: number; y: number; size?: number }) {
-  return (
-    <g stroke="#000000" strokeWidth="1.15" fill="none">
-      <circle cx={x + size / 2} cy={y + size / 2} r={size * 0.42} />
-      <line x1={x + size * 0.22} y1={y + size * 0.82} x2={x + size * 0.82} y2={y + size * 0.18} />
     </g>
   );
 }
@@ -1370,13 +1344,13 @@ function FwsCheckbox({
 }) {
   return (
     <g>
-      <rect x={x} y={y} width={size} height={size} fill="#ffffff" stroke="#000000" strokeWidth="1" />
+      <rect x={x} y={y} width={size} height={size} fill="#ffffff" stroke="#000000" strokeWidth="0.9" />
       {checked ? (
         <path
           d={`M ${x + size * 0.18} ${y + size * 0.58} L ${x + size * 0.42} ${y + size * 0.82} L ${x + size * 0.86} ${y + size * 0.18}`}
           fill="none"
           stroke="#000000"
-          strokeWidth="1.4"
+          strokeWidth="1.25"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -1393,8 +1367,8 @@ function DottedLine({ x, y, width }: { x: number; y: number; width: number }) {
       x2={x + width}
       y2={y}
       stroke="#000000"
-      strokeWidth="0.8"
-      strokeDasharray="1.6 2.1"
+      strokeWidth="0.65"
+      strokeDasharray="1.4 2.0"
     />
   );
 }
@@ -1572,8 +1546,8 @@ const fwsSvgStyles = `
     margin: 0 auto;
     background: #ffffff;
     color: #000000;
-    shape-rendering: crispEdges;
-    text-rendering: geometricPrecision;
+    shape-rendering: geometricPrecision;
+    text-rendering: optimizeLegibility;
   }
 
   .report-page-shell {
