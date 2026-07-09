@@ -494,7 +494,6 @@ export function ReportPage() {
         <FwsReportSheet
           refElement={reportRef}
           oven={oven}
-          cycle={selectedCycle}
           cycleRange={cycleRange}
           slots={reportSlots}
         />
@@ -506,13 +505,11 @@ export function ReportPage() {
 function FwsReportSheet({
   refElement,
   oven,
-  cycle,
   cycleRange,
   slots,
 }: {
   refElement: RefObject<HTMLDivElement | null>;
   oven: Oven;
-  cycle: number;
   cycleRange: { start: Date; end: Date };
   slots: ReportSlot[];
 }) {
@@ -523,6 +520,7 @@ function FwsReportSheet({
     <div className="fws-sheet" ref={refElement}>
       <style>{fwsStyles}</style>
 
+      {/* ---------- header: logo | title | document no. box ---------- */}
       <header className="fws-header">
         <div className="fws-logo-cell">
           <EditableVectorLogo />
@@ -545,14 +543,30 @@ function FwsReportSheet({
         </div>
       </header>
 
+      {/* ---------- meta: oven no / dates / weights / close time ---------- */}
       <section className="fws-meta">
-        <div className="fws-meta-left">
-          <p>
-            เตา No. <span className="line short">{oven.number}</span>
-          </p>
+        <div className="fws-meta-row1">
+          <span className="meta-item">
+            เตา No<span className="line dot oven-no">{oven.number}</span>
+          </span>
 
-          <div className="rubber-row">
-            <span>ชนิดยาง</span>
+          <span className="meta-item">
+            เข้าเตาวันที่<span className="line dot date">{formatReportDate(cycleRange.start)}</span>
+          </span>
+
+          <span className="meta-item">
+            ออกเตาวันที่<span className="line dot date">{formatReportDate(cycleRange.end)}</span>
+          </span>
+
+          <span className="meta-item meta-item-right">
+            เวลาปิดเตา (ติดไฟ)
+            <span className="line dot time">{formatReportTime(cycleRange.end)}</span> น.
+          </span>
+        </div>
+
+        <div className="fws-meta-row2">
+          <span className="rubber-type">
+            <b>ชนิดยาง</b>
 
             <label>
               <i />
@@ -572,37 +586,19 @@ function FwsReportSheet({
               <br />
               แต่ &lt; 96% (ควบคุมพิเศษ)
             </label>
-          </div>
+          </span>
+
+          <span className="weight-item">
+            ปริมาณน้ำหนักยางเข้าเตา (Net Weight) :<span className="line dot long" />
+            (ก.ก.)
+          </span>
         </div>
 
-        <div className="fws-meta-mid">
-          <p>
-            เข้าเตาวันที่ <span className="line">{formatReportDate(cycleRange.start)}</span>
-            ออกเตาวันที่ <span className="line">{formatReportDate(cycleRange.end)}</span>
-          </p>
-
-          <p>
-            ปริมาณน้ำหนักยางเข้าเตา (Net Weight) :
-            <span className="line long" />
+        <div className="fws-meta-row3">
+          <span className="weight-item">
+            ปริมาณน้ำหนักยางออกเตา (Net Weight) :<span className="line dot long" />
             (ก.ก.)
-          </p>
-
-          <p>
-            ปริมาณน้ำหนักยางออกเตา (Net Weight) :
-            <span className="line long" />
-            (ก.ก.)
-          </p>
-        </div>
-
-        <div className="fws-meta-right">
-          <p>
-            เวลาปิดเตา (ติดไฟ) <span className="line medium">{formatReportTime(cycleRange.end)}</span>{" "}
-            น.
-          </p>
-
-          <p>
-            รอบการอบ/ปี <span className="line short">{cycle}</span>
-          </p>
+          </span>
         </div>
       </section>
 
@@ -618,19 +614,22 @@ function FwsReportSheet({
         <p>** ควบคุมอุณหภูมิ: [รมควัน] 40 - 60°C, [อุ่นยาง] 35-40°C</p>
 
         <div className="fws-evaluate">
-          <div>
-            ประเมินวันรมควัน
+          <div className="fws-evaluate-left">
+            <span>ประเมินวันรมควัน</span>
+
             <label>
               <i />
               อยู่ในเกณฑ์
             </label>
+
             <label>
               <i />
-              เกินเกณฑ์
+              เกินเกณฑ์ (เกณฑ์รมควัน = ระยะเวลาการรมควันเกินที่ WI กำหนด (WI-WS-06))
             </label>
+
             <label>
               <i />
-              ไม่ถึงเกณฑ์
+              ไม่ถึงเกณฑ์ (เกณฑ์รมควัน = ระยะเวลาการรมควันไม่ถึงเกณฑ์ที่ WI กำหนด (WI-WS-06))
             </label>
           </div>
 
@@ -640,9 +639,9 @@ function FwsReportSheet({
           </div>
         </div>
 
-        <p>
+        <p className="fws-cause">
           สาเหตุ
-          <span className="line cause" />
+          <span className="line dot cause" />
         </p>
       </section>
 
@@ -657,7 +656,7 @@ function FwsReportSheet({
       </footer>
 
       <div className="fws-bottom-left">F-WS-05 รายงานการตรวจสอบอุณหภูมิเตา Rev.11</div>
-      <div className="fws-bottom-right">Effective Date : 1 Dec 2025</div>
+      <div className="fws-bottom-right">Effectived Date : 1 Dec 2025</div>
     </div>
   );
 }
@@ -693,14 +692,14 @@ function FwsTemperatureGraph({
   lower: number;
 }) {
   const width = 1074;
-  const height = 444;
+  const height = 466;
 
-  const left = 58;
-  const dayHeight = 28;
-  const timeHeight = 68;
-  const tempHeaderHeight = 23;
-  const chartTop = dayHeight + timeHeight + tempHeaderHeight;
-  const chartHeight = 288;
+  const left = 60;
+  const dayHeight = 24;
+  const timeHeight = 62;
+  const chartTop = dayHeight + timeHeight;
+  const chartHeight = 300;
+  const rubberRowHeight = height - chartTop - chartHeight;
   const chartWidth = width - left - 2;
   const cellWidth = chartWidth / reportSlotCount;
 
@@ -726,53 +725,76 @@ function FwsTemperatureGraph({
   );
 
   return (
-    <svg className="fws-graph" viewBox={`0 0 ${width} ${height}`} role="img">
-      <rect x="0" y="0" width={width} height={height} fill="#ffffff" stroke="#000000" />
+    <svg
+      className="fws-graph"
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      shapeRendering="crispEdges"
+      textRendering="geometricPrecision"
+    >
+      <rect x="0.5" y="0.5" width={width - 1} height={height - 1} fill="#ffffff" stroke="#000000" />
 
+      {/* row separators */}
       <line x1={left} y1="0" x2={left} y2={height} stroke="#000000" strokeWidth="1" />
       <line x1="0" y1={dayHeight} x2={width} y2={dayHeight} stroke="#000000" />
-      <line x1="0" y1={dayHeight + timeHeight} x2={width} y2={dayHeight + timeHeight} stroke="#000000" />
       <line x1="0" y1={chartTop} x2={width} y2={chartTop} stroke="#000000" />
       <line x1="0" y1={chartTop + chartHeight} x2={width} y2={chartTop + chartHeight} stroke="#000000" />
 
-      <text x="22" y="19" className="fws-svg-label">วัน</text>
-      <text x="19" y={dayHeight + 38} className="fws-svg-label">เวลา</text>
-      <text x="12" y={dayHeight + timeHeight + 16} className="fws-svg-label">อุณหภูมิ</text>
-      <text x="10" y={chartTop + chartHeight + 18} className="fws-svg-label">สภาพยาง</text>
+      <text x="14" y={dayHeight / 2 + 4} className="fws-svg-label" textAnchor="start">
+        วัน
+      </text>
+      <text x="10" y={dayHeight + timeHeight / 2 + 4} className="fws-svg-label" textAnchor="start">
+        เวลา
+      </text>
+      <text x="8" y={chartTop + 14} className="fws-svg-label" textAnchor="start">
+        อุณหภูมิ
+      </text>
+      <text
+        x="8"
+        y={chartTop + chartHeight + rubberRowHeight / 2 + 4}
+        className="fws-svg-label"
+        textAnchor="start"
+      >
+        สภาพยาง
+      </text>
 
+      {/* day header cells (1)..(10) */}
       {Array.from({ length: reportDayCount }).map((_, dayIndex) => {
         const x = left + dayIndex * timeSlots.length * cellWidth;
         const w = timeSlots.length * cellWidth;
 
         return (
           <g key={`day-${dayIndex}`}>
-            <rect x={x} y="0" width={w} height={dayHeight} fill="#ffffff" stroke="#000000" />
-            <text x={x + w / 2} y="18" textAnchor="middle" className="fws-svg-day">
+            <rect x={x} y="0" width={w} height={dayHeight} fill="#ffffff" stroke="#000000" strokeWidth="0.7" />
+            <text x={x + w / 2} y={dayHeight / 2 + 4.5} textAnchor="middle" className="fws-svg-day">
               ({dayIndex + 1})
             </text>
           </g>
         );
       })}
 
+      {/* per-slot vertical gridlines + rotated time labels, spanning the full sheet height */}
       {slots.map((slot) => {
         const x = left + slot.index * cellWidth;
         const isDayStart = slot.index % timeSlots.length === 0;
+        const labelX = x + cellWidth / 2 + 3;
+        const labelY = dayHeight + timeHeight - 6;
 
         return (
-          <g key={`time-${slot.index}`}>
+          <g key={`col-${slot.index}`}>
             <line
               x1={x}
-              y1="0"
+              y1={dayHeight}
               x2={x}
               y2={height}
               stroke="#000000"
-              strokeWidth={isDayStart ? 1.8 : 0.62}
+              strokeWidth={isDayStart ? 1.6 : 0.5}
             />
 
             <text
-              x={x + cellWidth / 2 + 2}
-              y={dayHeight + timeHeight - 5}
-              transform={`rotate(-90 ${x + cellWidth / 2 + 2} ${dayHeight + timeHeight - 5})`}
+              x={labelX}
+              y={labelY}
+              transform={`rotate(-90 ${labelX} ${labelY})`}
               textAnchor="start"
               className="fws-svg-time"
             >
@@ -782,8 +804,9 @@ function FwsTemperatureGraph({
         );
       })}
 
-      <line x1={width - 2} y1="0" x2={width - 2} y2={height} stroke="#000000" strokeWidth="1.2" />
+      <line x1={width - 1} y1="0" x2={width - 1} y2={height} stroke="#000000" strokeWidth="1.2" />
 
+      {/* temperature scale + horizontal gridlines */}
       {Array.from({ length: graphMaxTemp - graphMinTemp + 1 }).map((_, index) => {
         const temp = graphMaxTemp - index;
         const y = tempToY(temp);
@@ -795,10 +818,10 @@ function FwsTemperatureGraph({
             <line
               x1={left}
               y1={y}
-              x2={width}
+              x2={width - 1}
               y2={y}
               stroke="#000000"
-              strokeWidth={isMajor ? 1.8 : isFive ? 1.05 : 0.45}
+              strokeWidth={isMajor ? 1.6 : isFive ? 0.9 : 0.35}
             />
 
             {isFive ? (
@@ -810,16 +833,30 @@ function FwsTemperatureGraph({
         );
       })}
 
-      <text x="18" y={tempToY(50) + 4} className="fws-svg-band">รมควัน</text>
-      <text x="24" y={tempToY(35) + 4} className="fws-svg-band">อุ่น</text>
+      <text
+        x="22"
+        y={(tempToY(60) + tempToY(40)) / 2 + 4}
+        textAnchor="middle"
+        className="fws-svg-band"
+        writingMode="vertical-rl"
+      >
+        รมควัน
+      </text>
 
-      <line x1="0" y1={tempToY(60)} x2="28" y2={tempToY(60)} stroke="#000000" strokeWidth="1.4" />
-      <line x1="0" y1={tempToY(40)} x2="28" y2={tempToY(40)} stroke="#000000" strokeWidth="1.4" />
+      <text
+        x="26"
+        y={(tempToY(40) + tempToY(30)) / 2 + 4}
+        textAnchor="middle"
+        className="fws-svg-band"
+        writingMode="vertical-rl"
+      >
+        อุ่น
+      </text>
 
       <line
         x1={left}
         y1={tempToY(upper)}
-        x2={width}
+        x2={width - 1}
         y2={tempToY(upper)}
         stroke="#0f4c81"
         strokeWidth="1"
@@ -830,7 +867,7 @@ function FwsTemperatureGraph({
       <line
         x1={left}
         y1={tempToY(lower)}
-        x2={width}
+        x2={width - 1}
         y2={tempToY(lower)}
         stroke="#0f4c81"
         strokeWidth="1"
@@ -839,11 +876,11 @@ function FwsTemperatureGraph({
       />
 
       {targetPath ? (
-        <path d={targetPath} fill="none" stroke="#0f4c81" strokeWidth="1.8" opacity="0.9" />
+        <path d={targetPath} fill="none" stroke="#0f4c81" strokeWidth="1.8" opacity="0.9" shapeRendering="geometricPrecision" />
       ) : null}
 
       {actualPath ? (
-        <path d={actualPath} fill="none" stroke="#d62027" strokeWidth="2.1" opacity="0.95" />
+        <path d={actualPath} fill="none" stroke="#d62027" strokeWidth="2.1" opacity="0.95" shapeRendering="geometricPrecision" />
       ) : null}
 
       {slots
@@ -994,7 +1031,36 @@ function formatReportDateTime(value: Date): string {
   return `${formatReportDate(value)} ${formatReportTime(value)}`;
 }
 
+/**
+ * NOTE ON FONT / SHARPNESS:
+ * "TH Sarabun New" is a licensed desktop font and is almost never present on a
+ * server/browser used for PDF export (html2canvas / puppeteer), so it silently
+ * falls back to Tahoma — this changes letter widths and can misplace Thai tone
+ * marks, which reads as "blurry" once rasterized. Load the free, metric-close
+ * replacement "Sarabun" from Google Fonts in your app's <head> (index.html):
+ *
+ *   <link rel="preconnect" href="https://fonts.googleapis.com" />
+ *   <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+ *   <link
+ *     href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap"
+ *     rel="stylesheet"
+ *   />
+ *
+ * Loading it in <head> (rather than inside this component's <style>) matters:
+ * html2canvas snapshots the DOM before a component-scoped @import may have
+ * finished downloading, which is a common cause of a "flash of fallback font"
+ * baked into the exported PDF.
+ *
+ * Also check createLandscapePdfBlobFromElement / downloadElementAsLandscapePdf:
+ * if they call html2canvas with the default scale (1), text and hairlines will
+ * look soft once blown up to full-page PDF size. Use `scale: 3` (or `window.
+ * devicePixelRatio * 2`) and export as PNG, not JPEG, e.g.:
+ *
+ *   html2canvas(element, { scale: 3, useCORS: true, backgroundColor: "#ffffff" })
+ */
 const fwsStyles = `
+  @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap');
+
   .fws-sheet {
     position: relative;
     width: 1123px;
@@ -1005,15 +1071,17 @@ const fwsStyles = `
     border: 1.5px solid #000000;
     box-sizing: border-box;
     overflow: hidden;
-    font-family: "TH Sarabun New", "Sarabun", "Tahoma", sans-serif;
-    font-size: 12px;
-    line-height: 1.18;
+    font-family: "TH Sarabun New", "Sarabun", "Noto Sans Thai", "Tahoma", sans-serif;
+    font-size: 13px;
+    line-height: 1.2;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 
   .fws-header {
     display: grid;
-    grid-template-columns: 178px 1fr 210px;
-    height: 78px;
+    grid-template-columns: 168px 1fr 200px;
+    height: 74px;
     border-bottom: 1px solid #000000;
   }
 
@@ -1037,7 +1105,12 @@ const fwsStyles = `
     display: grid;
     place-items: center;
     gap: 2px;
-    font-size: 11px;
+    font-size: 11.5px;
+    text-align: center;
+  }
+
+  .fws-doc-cell b {
+    font-weight: 800;
   }
 
   .fws-logo-cell {
@@ -1046,8 +1119,8 @@ const fwsStyles = `
   }
 
   .fws-logo-svg {
-    width: 118px;
-    height: 66px;
+    width: 108px;
+    height: 60px;
     display: block;
   }
 
@@ -1058,113 +1131,170 @@ const fwsStyles = `
 
   .fws-title-cell h1 {
     margin: 0;
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 800;
   }
 
+  /* ---------------- meta block: mirrors the 3-row layout of the paper form ---------------- */
+
   .fws-meta {
-    display: grid;
-    grid-template-columns: 290px 520px 1fr;
-    height: 86px;
     border-bottom: 1px solid #000000;
+    padding: 7px 16px 6px;
   }
 
-  .fws-meta > div {
-    padding: 8px 12px 6px;
-  }
-
-  .fws-meta p {
-    margin: 0 0 7px;
+  .fws-meta-row1 {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: nowrap;
+    gap: 28px;
     white-space: nowrap;
+    margin-bottom: 7px;
+  }
+
+  .meta-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 13px;
+  }
+
+  .meta-item-right {
+    margin-left: auto;
+  }
+
+  .fws-meta-row2 {
+    display: flex;
+    align-items: flex-start;
+    gap: 30px;
+    margin-bottom: 6px;
+  }
+
+  .fws-meta-row3 {
+    display: flex;
+  }
+
+  .rubber-type {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    font-size: 11px;
+    flex: 0 0 auto;
+  }
+
+  .rubber-type > b {
+    font-size: 13px;
+    padding-top: 1px;
+  }
+
+  .rubber-type label {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    max-width: 108px;
+    line-height: 1.25;
+  }
+
+  .rubber-type i,
+  .fws-evaluate i {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    min-width: 12px;
+    border: 1px solid #000000;
+    margin-top: 1px;
+  }
+
+  .weight-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    white-space: nowrap;
+    font-size: 13px;
   }
 
   .line {
     display: inline-block;
-    min-width: 118px;
     border-bottom: 1px dotted #000000;
     text-align: center;
+    min-height: 14px;
+  }
+
+  .line.dot {
     padding: 0 4px;
-    min-height: 13px;
   }
 
-  .line.short {
-    min-width: 55px;
-  }
-
-  .line.medium {
+  .oven-no {
     min-width: 130px;
   }
 
-  .line.long {
+  .date {
+    min-width: 150px;
+  }
+
+  .time {
+    min-width: 100px;
+  }
+
+  .long {
     min-width: 230px;
   }
 
-  .line.cause {
-    width: 780px;
-    min-width: 780px;
+  .cause {
+    width: 860px;
+    min-width: 860px;
   }
 
-  .rubber-row {
-    display: grid;
-    grid-template-columns: 50px 78px 78px 1fr;
-    align-items: start;
-    gap: 8px;
-    font-size: 10px;
+  .fws-cause {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
   }
 
-  .rubber-row label {
-    display: grid;
-    justify-items: center;
-    gap: 4px;
-    text-align: center;
-  }
-
-  .rubber-row i,
-  .fws-evaluate i {
-    display: inline-block;
-    width: 13px;
-    height: 13px;
-    border: 1px solid #000000;
-    vertical-align: middle;
-    margin: 0 4px;
-  }
+  /* ---------------- temperature graph ---------------- */
 
   .fws-graph {
     display: block;
     width: 1074px;
-    height: 444px;
-    margin: 0 auto;
+    height: 466px;
+    margin: 2px auto 0;
+    shape-rendering: crispEdges;
   }
 
   .fws-svg-label,
   .fws-svg-band {
-    font-size: 11px;
+    font-size: 11.5px;
     fill: #000000;
     font-weight: 700;
+    font-family: "TH Sarabun New", "Sarabun", "Noto Sans Thai", sans-serif;
   }
 
   .fws-svg-day {
-    font-size: 10px;
+    font-size: 10.5px;
     fill: #000000;
     font-weight: 700;
+    font-family: "TH Sarabun New", "Sarabun", "Noto Sans Thai", sans-serif;
   }
 
   .fws-svg-time {
-    font-size: 8px;
+    font-size: 9px;
     fill: #000000;
     font-weight: 600;
+    font-family: "TH Sarabun New", "Sarabun", "Noto Sans Thai", sans-serif;
   }
 
   .fws-svg-temp {
-    font-size: 10px;
+    font-size: 10.5px;
     fill: #000000;
     font-weight: 700;
+    font-family: "TH Sarabun New", "Sarabun", "Noto Sans Thai", sans-serif;
   }
 
+  /* ---------------- footer notes ---------------- */
+
   .fws-notes {
-    width: 1030px;
-    margin: 4px auto 0;
-    font-size: 11px;
+    width: 1040px;
+    margin: 5px auto 0;
+    font-size: 11.5px;
   }
 
   .fws-notes p {
@@ -1173,13 +1303,32 @@ const fwsStyles = `
 
   .fws-evaluate {
     display: grid;
-    grid-template-columns: 1fr 330px;
+    grid-template-columns: 1fr 300px;
     gap: 20px;
     align-items: start;
   }
 
+  .fws-evaluate-left {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px 16px;
+  }
+
+  .fws-evaluate-left > span:first-child {
+    font-weight: 700;
+  }
+
   .fws-evaluate label {
-    margin-left: 12px;
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 4px;
+    font-size: 10.5px;
+    max-width: 260px;
+  }
+
+  .fws-evaluate label i {
+    margin-top: 2px;
   }
 
   .fws-color-note p {
@@ -1189,13 +1338,13 @@ const fwsStyles = `
 
   .fws-sign {
     position: absolute;
-    left: 295px;
-    right: 145px;
-    bottom: 28px;
+    left: 300px;
+    right: 150px;
+    bottom: 26px;
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 130px;
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .fws-sign p {
