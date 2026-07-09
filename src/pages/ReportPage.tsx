@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { useAppData } from "../app/providers";
-import { TimeSeriesChart } from "../components/charts/TimeSeriesChart";
 import { EmptyState } from "../components/ui/EmptyState";
 import { PageHeader } from "../components/ui/PageHeader";
 import { apiClient } from "../services/apiClient";
@@ -15,16 +14,29 @@ import {
 } from "../services/pdfExport";
 import { downloadCsv } from "../services/reportExport";
 import type { Oven, SensorKey, TimeSeriesPoint } from "../types";
-import { formatNumber } from "../utils/format";
-import { clampCycleStart, REPORT_CYCLE_DAYS, REPORT_CYCLE_MS } from "../utils/reportCycle";
-import { allSensorKeys, sensorByKey } from "../utils/sensors";
+import { clampCycleStart, REPORT_CYCLE_MS } from "../utils/reportCycle";
+import { allSensorKeys } from "../utils/sensors";
 
 type ReportMode = "current" | "history";
 type HistoricalDownloadMode = "single" | "range";
 
-const environmentReportSensors: SensorKey[] = ["chamberTemp", "humidity"];
-const heatReportSensors: SensorKey[] = ["furnaceTemp", "blowerTemp"];
-const reportSensors: SensorKey[] = [...environmentReportSensors, ...heatReportSensors];
+type ReportSlot = {
+  index: number;
+  dayIndex: number;
+  timeLabel: string;
+  date: Date;
+  actual: number | null;
+  target: number;
+};
+
+const reportSensors: SensorKey[] = ["chamberTemp", "humidity", "furnaceTemp", "blowerTemp"];
+
+const timeSlots = ["08.00", "11.00", "14.00", "17.00", "20.00", "23.00", "02.00", "05.00"];
+
+const reportDayCount = 10;
+const reportSlotCount = reportDayCount * timeSlots.length;
+const graphMinTemp = 30;
+const graphMaxTemp = 65;
 
 export function ReportPage() {
   const { ovens } = useAppData();
@@ -102,7 +114,16 @@ export function ReportPage() {
     void loadReport();
   }, [loadReport]);
 
-  const summaries = useMemo(() => summarizeReport(points), [points]);
+  const reportSlots = useMemo(() => {
+    if (!oven || !cycleRange) return [];
+
+    return buildReportSlots({
+      points,
+      start: cycleRange.start,
+      upper: oven.limits.chamberTemp.upper,
+      lower: oven.limits.chamberTemp.lower,
+    });
+  }, [cycleRange, oven, points]);
 
   const renderCycleAndCreatePdfBlob = useCallback(
     async (cycle: number): Promise<{ blob: Blob; filename: string }> => {
@@ -126,13 +147,13 @@ export function ReportPage() {
 
       setPoints(nextPoints);
 
-      await waitForRender(850);
+      await waitForRender(900);
 
       if (!reportRef.current) {
         throw new Error("ไม่สามารถสร้าง PDF ได้");
       }
 
-      const filename = `OVEN${oven.number}_Cycle${safeCycle}_${formatFileDate(
+      const filename = `F-WS-05_OVEN${oven.number}_Cycle${safeCycle}_${formatFileDate(
         range.start,
       )}_to_${formatFileDate(range.end)}.pdf`;
 
@@ -163,15 +184,15 @@ export function ReportPage() {
       });
 
       setPoints(nextPoints);
-      await waitForRender(850);
+      await waitForRender(900);
 
       if (!reportRef.current) return;
 
       await downloadElementAsLandscapePdf(
         reportRef.current,
-        `OVEN${oven.number}_Cycle${safeCycle}_${formatFileDate(range.start)}_to_${formatFileDate(
-          range.end,
-        )}.pdf`,
+        `F-WS-05_OVEN${oven.number}_Cycle${safeCycle}_${formatFileDate(
+          range.start,
+        )}_to_${formatFileDate(range.end)}.pdf`,
       );
     } finally {
       setDownloadMessage("");
@@ -190,7 +211,7 @@ export function ReportPage() {
 
     try {
       const zip = new JSZip();
-      const folder = zip.folder(`OVEN${oven.number}_reports`) ?? zip;
+      const folder = zip.folder(`F-WS-05_OVEN${oven.number}`) ?? zip;
 
       for (const [index, cycle] of cycles.entries()) {
         setDownloadMessage(`กำลังสร้างไฟล์ ${index + 1}/${cycles.length} · รอบ ${cycle}`);
@@ -198,7 +219,7 @@ export function ReportPage() {
         const { blob, filename } = await renderCycleAndCreatePdfBlob(cycle);
         folder.file(filename, blob);
 
-        await waitForRender(250);
+        await waitForRender(260);
       }
 
       setDownloadMessage("กำลังรวมไฟล์เป็น ZIP...");
@@ -214,7 +235,7 @@ export function ReportPage() {
       const high = Math.max(rangeFromCycle, rangeToCycle);
       const low = Math.min(rangeFromCycle, rangeToCycle);
 
-      downloadBlob(zipBlob, `OVEN${oven.number}_Cycle${high}_to_${low}_reports.zip`);
+      downloadBlob(zipBlob, `F-WS-05_OVEN${oven.number}_Cycle${high}_to_${low}.zip`);
     } finally {
       setDownloadMessage("");
       setDownloadingPdf(false);
@@ -228,7 +249,7 @@ export function ReportPage() {
 
     window.setTimeout(() => {
       void downloadSelectedPdf();
-    }, 520);
+    }, 620);
   }, [autoDownloaded, autoPdf, downloadSelectedPdf, loadingReport, oven, points.length]);
 
   if (!oven) {
@@ -253,7 +274,7 @@ export function ReportPage() {
     <>
       <PageHeader
         title={mode === "current" ? "รายงานรอบปัจจุบัน" : "ดาวน์โหลดรายงานย้อนหลัง"}
-        description={`${oven.name} · รอบ ${selectedCycle} · 1 กราฟต่อ 1 รอบอบ (${REPORT_CYCLE_DAYS} วันหรือต่ำกว่า)`}
+        description={`${oven.name} · รอบ ${selectedCycle} · แบบฟอร์ม F-WS-05 รายงานการตรวจสอบอุณหภูมิเตา`}
         actions={
           <>
             <Link className="button" to={`/ovens/${oven.id}`}>
@@ -276,7 +297,7 @@ export function ReportPage() {
               className="button"
               type="button"
               onClick={() =>
-                downloadCsv(`${oven.name}-cycle-${selectedCycle}-report.csv`, points, reportSensors)
+                downloadCsv(`F-WS-05-${oven.name}-cycle-${selectedCycle}.csv`, points, reportSensors)
               }
               disabled={loadingReport || !points.length || downloadingPdf}
             >
@@ -468,100 +489,395 @@ export function ReportPage() {
       </section>
 
       <section className="report-page-shell">
-        <div className="report-sheet" ref={reportRef}>
-          <header className="report-sheet-header">
-            <h1>รายงานการตรวจสอบอุณหภูมิและความชื้น หน้า 1/1 OVEN{oven.number}</h1>
-          </header>
-
-          <section className="report-meta-grid">
-            <div>
-              <p>ชนิดยาง : ........................</p>
-              <p>ปริมาณน้ำหนักยางเข้าเตา (ก.ก.) : ........................</p>
-              <p>ปริมาณน้ำหนักยางออกเตา (ก.ก.) : ........................</p>
-            </div>
-
-            <div>
-              <p>
-                เริ่มอบวันที่ : {formatReportDate(cycleRange.start)} &nbsp; เวลา:{" "}
-                {formatReportTime(cycleRange.start)}
-              </p>
-              <p>ระยะเวลาการอบ : {formatDuration(cycleRange.start, cycleRange.end)}</p>
-              <p>รอบการอบ/ปี : {selectedCycle}</p>
-            </div>
-
-            <div>
-              <p>
-                หยุดอบวันที่ : {formatReportDate(cycleRange.end)} &nbsp; เวลา :{" "}
-                {formatReportTime(cycleRange.end)}
-              </p>
-            </div>
-          </section>
-
-          <div className="report-chart-title">Temperature and Humidity Variation 1</div>
-
-          <div className="report-chart-frame compact-report-chart">
-            <TimeSeriesChart
-              points={points}
-              sensors={environmentReportSensors}
-              limits={oven.limits}
-              title=""
-              realtime={mode === "current"}
-              rightAxisSensors={["humidity"]}
-              leftAxisName="Temperature Oven"
-              rightAxisName="Humidity Oven"
-              limitSensors={["chamberTemp"]}
-              theme="print"
-              showDataZoom={false}
-            />
-          </div>
-
-          <div className="report-chart-title">Furnace and Blower Temperature Variation 2</div>
-
-          <div className="report-chart-frame compact-report-chart">
-            <TimeSeriesChart
-              points={points}
-              sensors={heatReportSensors}
-              limits={oven.limits}
-              title=""
-              realtime={mode === "current"}
-              rightAxisSensors={[]}
-              leftAxisName="Furnace / Blower Temperature"
-              rightAxisName=""
-              limitSensors={["furnaceTemp"]}
-              theme="print"
-              showDataZoom={false}
-            />
-          </div>
-
-          <div className="report-summary-row">
-            {summaries.map((summary) => {
-              const definition = sensorByKey[summary.sensor];
-              const unit = definition.unit === "C" ? "°C" : "%";
-
-              return (
-                <div key={summary.sensor}>
-                  <strong>{definition.label}</strong>
-                  <span>
-                    Avg {formatNumber(summary.average)} {unit} · Min{" "}
-                    {formatNumber(summary.min)} · Max {formatNumber(summary.max)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          <footer className="report-signatures">
-            <p>
-              ผู้รายงาน <span />
-            </p>
-
-            <p>
-              หัวหน้าฝ่ายผลิต <span />
-            </p>
-          </footer>
-        </div>
+        <FwsReportSheet
+          refElement={reportRef}
+          oven={oven}
+          cycle={selectedCycle}
+          cycleRange={cycleRange}
+          slots={reportSlots}
+        />
       </section>
     </>
+  );
+}
+
+function FwsReportSheet({
+  refElement,
+  oven,
+  cycle,
+  cycleRange,
+  slots,
+}: {
+  refElement: React.RefObject<HTMLDivElement | null>;
+  oven: Oven;
+  cycle: number;
+  cycleRange: { start: Date; end: Date };
+  slots: ReportSlot[];
+}) {
+  const upper = oven.limits.chamberTemp.upper;
+  const lower = oven.limits.chamberTemp.lower;
+
+  return (
+    <div className="fws-sheet" ref={refElement}>
+      <style>{fwsStyles}</style>
+
+      <header className="fws-header">
+        <div className="fws-logo-cell">
+          <div className="fws-logo-mark">
+            <span>ยาง</span>
+          </div>
+        </div>
+
+        <div className="fws-title-cell">
+          <h1>รายงานการตรวจสอบอุณหภูมิเตา</h1>
+        </div>
+
+        <div className="fws-doc-cell">
+          <div>
+            <strong>Document No.</strong>
+            <b>F-WS-05 Rev.11</b>
+          </div>
+
+          <div>
+            <strong>เริ่มใช้วันที่</strong>
+            <b>1-ธ.ค.-68</b>
+          </div>
+        </div>
+      </header>
+
+      <section className="fws-meta">
+        <div className="fws-meta-left">
+          <p>
+            เตา No. <span className="line short">{oven.number}</span>
+          </p>
+
+          <div className="rubber-row">
+            <span>ชนิดยาง</span>
+
+            <label>
+              <i />
+              USS ≥ 97%
+            </label>
+
+            <label>
+              <i />
+              USS ≥ 96%
+              <br />
+              แต่ &lt; 97%
+            </label>
+
+            <label>
+              <i />
+              USS ≥94%
+              <br />
+              แต่ &lt; 96% (ควบคุมพิเศษ)
+            </label>
+          </div>
+        </div>
+
+        <div className="fws-meta-mid">
+          <p>
+            เข้าเตาวันที่ <span className="line">{formatReportDate(cycleRange.start)}</span>
+            ออกเตาวันที่ <span className="line">{formatReportDate(cycleRange.end)}</span>
+          </p>
+
+          <p>
+            ปริมาณน้ำหนักยางเข้าเตา (Net Weight) :
+            <span className="line long" />
+            (ก.ก.)
+          </p>
+
+          <p>
+            ปริมาณน้ำหนักยางออกเตา (Net Weight) :
+            <span className="line long" />
+            (ก.ก.)
+          </p>
+        </div>
+
+        <div className="fws-meta-right">
+          <p>
+            เวลาปิดเตา (ติดไฟ) <span className="line medium">{formatReportTime(cycleRange.end)}</span>{" "}
+            น.
+          </p>
+
+          <p>
+            รอบการอบ/ปี <span className="line short">{cycle}</span>
+          </p>
+        </div>
+      </section>
+
+      <FwsTemperatureGraph slots={slots} upper={upper} lower={lower} />
+
+      <section className="fws-notes">
+        <p>
+          * ✕ ไม่สุก (ปากกาสีน้ำเงิน) &nbsp; ✓ สุก (ปากกาสีแดง) &nbsp; Ø
+          ยางสุกแล้วยังไม่ออกเตา (อุ่นใช้ปากกาสีแดง) / เกณฑ์ประเมินวันรมยาง
+          ต้องใช้ระยะเวลาการรมควันตามที่ WI กำหนด (WI-WS-06)
+        </p>
+
+        <p>** ควบคุมอุณหภูมิ: [รมควัน] 40 - 60°C, [อุ่นยาง] 35-40°C</p>
+
+        <div className="fws-evaluate">
+          <div>
+            ประเมินวันรมควัน
+            <label>
+              <i />
+              อยู่ในเกณฑ์
+            </label>
+            <label>
+              <i />
+              เกินเกณฑ์
+            </label>
+            <label>
+              <i />
+              ไม่ถึงเกณฑ์
+            </label>
+          </div>
+
+          <div className="fws-color-note">
+            <p>สีน้ำเงิน = อุณหภูมิที่ต้องการ : หัวหน้างาน</p>
+            <p>สีแดง = อุณหภูมิจริง : พนักงานคุมเตา</p>
+          </div>
+        </div>
+
+        <p>
+          สาเหตุ
+          <span className="line cause" />
+        </p>
+      </section>
+
+      <footer className="fws-sign">
+        <p>
+          ผู้รายงาน <span />
+        </p>
+
+        <p>
+          หัวหน้าฝ่ายผลิต <span />
+        </p>
+      </footer>
+
+      <div className="fws-bottom-left">F-WS-05 รายงานการตรวจสอบอุณหภูมิเตา Rev.11</div>
+      <div className="fws-bottom-right">Effective Date : 1 Dec 2025</div>
+    </div>
+  );
+}
+
+function FwsTemperatureGraph({
+  slots,
+  upper,
+  lower,
+}: {
+  slots: ReportSlot[];
+  upper: number;
+  lower: number;
+}) {
+  const width = 1074;
+  const height = 444;
+  const left = 58;
+  const topDay = 0;
+  const dayHeight = 28;
+  const timeHeight = 68;
+  const tempLabelHeight = 23;
+  const chartTop = topDay + dayHeight + timeHeight + tempLabelHeight;
+  const chartHeight = 288;
+  const conditionHeight = 28;
+  const chartWidth = width - left - 2;
+  const cellWidth = chartWidth / reportSlotCount;
+
+  const tempToY = (value: number) => {
+    const clamped = Math.max(graphMinTemp, Math.min(graphMaxTemp, value));
+    return chartTop + ((graphMaxTemp - clamped) / (graphMaxTemp - graphMinTemp)) * chartHeight;
+  };
+
+  const actualPath = buildLinePath(
+    slots
+      .filter((slot) => slot.actual !== null)
+      .map((slot) => ({
+        x: left + (slot.index + 0.5) * cellWidth,
+        y: tempToY(slot.actual ?? graphMinTemp),
+      })),
+  );
+
+  const targetPath = buildLinePath(
+    slots.map((slot) => ({
+      x: left + (slot.index + 0.5) * cellWidth,
+      y: tempToY(slot.target),
+    })),
+  );
+
+  return (
+    <svg
+      className="fws-graph"
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      aria-label="กราฟรายงานการตรวจสอบอุณหภูมิเตา"
+    >
+      <rect x="0" y="0" width={width} height={height} fill="#ffffff" stroke="#000000" />
+
+      <line x1={left} y1="0" x2={left} y2={height} stroke="#000000" strokeWidth="1" />
+      <line x1="0" y1={dayHeight} x2={width} y2={dayHeight} stroke="#000000" />
+      <line
+        x1="0"
+        y1={dayHeight + timeHeight}
+        x2={width}
+        y2={dayHeight + timeHeight}
+        stroke="#000000"
+      />
+      <line x1="0" y1={chartTop} x2={width} y2={chartTop} stroke="#000000" />
+      <line
+        x1="0"
+        y1={chartTop + chartHeight}
+        x2={width}
+        y2={chartTop + chartHeight}
+        stroke="#000000"
+      />
+
+      <text x="22" y="19" className="fws-svg-label">
+        วัน
+      </text>
+
+      <text x="19" y={dayHeight + 38} className="fws-svg-label">
+        เวลา
+      </text>
+
+      <text x="12" y={dayHeight + timeHeight + 16} className="fws-svg-label">
+        อุณหภูมิ
+      </text>
+
+      <text x="10" y={chartTop + chartHeight + 18} className="fws-svg-label">
+        สภาพยาง
+      </text>
+
+      {Array.from({ length: reportDayCount }).map((_, dayIndex) => {
+        const x = left + dayIndex * timeSlots.length * cellWidth;
+        const w = timeSlots.length * cellWidth;
+
+        return (
+          <g key={`day-${dayIndex}`}>
+            <rect x={x} y={topDay} width={w} height={dayHeight} fill="#ffffff" stroke="#000000" />
+            <text x={x + w / 2} y="18" textAnchor="middle" className="fws-svg-day">
+              ({dayIndex + 1})
+            </text>
+          </g>
+        );
+      })}
+
+      {slots.map((slot) => {
+        const x = left + slot.index * cellWidth;
+        const isDayStart = slot.index % timeSlots.length === 0;
+
+        return (
+          <g key={`time-${slot.index}`}>
+            <line
+              x1={x}
+              y1={0}
+              x2={x}
+              y2={height}
+              stroke="#000000"
+              strokeWidth={isDayStart ? 1.8 : 0.65}
+            />
+
+            <text
+              x={x + cellWidth / 2 + 2}
+              y={dayHeight + timeHeight - 5}
+              transform={`rotate(-90 ${x + cellWidth / 2 + 2} ${dayHeight + timeHeight - 5})`}
+              textAnchor="start"
+              className="fws-svg-time"
+            >
+              {slot.timeLabel}
+            </text>
+          </g>
+        );
+      })}
+
+      <line
+        x1={width - 2}
+        y1={0}
+        x2={width - 2}
+        y2={height}
+        stroke="#000000"
+        strokeWidth="1.2"
+      />
+
+      {Array.from({ length: graphMaxTemp - graphMinTemp + 1 }).map((_, index) => {
+        const temp = graphMaxTemp - index;
+        const y = tempToY(temp);
+        const isFive = temp % 5 === 0;
+        const isMajor = temp === 40 || temp === 60;
+
+        return (
+          <g key={`temp-${temp}`}>
+            <line
+              x1={left}
+              y1={y}
+              x2={width}
+              y2={y}
+              stroke="#000000"
+              strokeWidth={isMajor ? 1.8 : isFive ? 1.05 : 0.45}
+            />
+
+            {isFive ? (
+              <text x={left - 8} y={y + 3.5} textAnchor="end" className="fws-svg-temp">
+                {temp}
+              </text>
+            ) : null}
+          </g>
+        );
+      })}
+
+      <text x="18" y={tempToY(50) + 4} className="fws-svg-band">
+        รมควัน
+      </text>
+
+      <text x="24" y={tempToY(35) + 4} className="fws-svg-band">
+        อุ่น
+      </text>
+
+      <line x1="0" y1={tempToY(60)} x2="28" y2={tempToY(60)} stroke="#000000" strokeWidth="1.4" />
+      <line x1="0" y1={tempToY(40)} x2="28" y2={tempToY(40)} stroke="#000000" strokeWidth="1.4" />
+
+      <line
+        x1={left}
+        y1={tempToY(upper)}
+        x2={width}
+        y2={tempToY(upper)}
+        stroke="#0f4c81"
+        strokeWidth="1"
+        strokeDasharray="4 4"
+        opacity="0.75"
+      />
+
+      <line
+        x1={left}
+        y1={tempToY(lower)}
+        x2={width}
+        y2={tempToY(lower)}
+        stroke="#0f4c81"
+        strokeWidth="1"
+        strokeDasharray="4 4"
+        opacity="0.75"
+      />
+
+      {targetPath ? (
+        <path d={targetPath} fill="none" stroke="#0f4c81" strokeWidth="1.8" opacity="0.9" />
+      ) : null}
+
+      {actualPath ? (
+        <path d={actualPath} fill="none" stroke="#d62027" strokeWidth="2.1" opacity="0.95" />
+      ) : null}
+
+      {slots
+        .filter((slot) => slot.actual !== null)
+        .map((slot) => (
+          <circle
+            key={`point-${slot.index}`}
+            cx={left + (slot.index + 0.5) * cellWidth}
+            cy={tempToY(slot.actual ?? graphMinTemp)}
+            r="1.6"
+            fill="#d62027"
+          />
+        ))}
+    </svg>
   );
 }
 
@@ -591,23 +907,69 @@ function getDefaultHistoricalCycle(oven: Oven): number {
   return Math.max(1, oven.cycleCount);
 }
 
-function summarizeReport(points: TimeSeriesPoint[]) {
-  return reportSensors.map((sensor) => {
-    const values = points.map((point) => point[sensor]);
+function buildReportSlots({
+  points,
+  start,
+  upper,
+  lower,
+}: {
+  points: TimeSeriesPoint[];
+  start: Date;
+  upper: number;
+  lower: number;
+}): ReportSlot[] {
+  const target = Math.round((upper + lower) / 2);
+  const indexedPoints = points
+    .map((point) => ({
+      time: new Date(point.timestamp).getTime(),
+      value: point.chamberTemp,
+    }))
+    .filter((point) => Number.isFinite(point.time) && Number.isFinite(point.value));
 
-    if (!values.length) {
-      return { sensor, min: 0, max: 0, average: 0 };
-    }
-
-    const total = values.reduce((sum, value) => sum + value, 0);
+  return Array.from({ length: reportSlotCount }, (_, index) => {
+    const date = new Date(start.getTime() + index * 3 * 60 * 60 * 1000);
+    const closest = findClosestPoint(indexedPoints, date.getTime());
 
     return {
-      sensor,
-      min: Math.min(...values),
-      max: Math.max(...values),
-      average: total / values.length,
+      index,
+      dayIndex: Math.floor(index / timeSlots.length),
+      timeLabel: timeSlots[index % timeSlots.length],
+      date,
+      actual: closest ? closest.value : null,
+      target,
     };
   });
+}
+
+function findClosestPoint(
+  points: Array<{ time: number; value: number }>,
+  targetTime: number,
+): { time: number; value: number } | null {
+  if (!points.length) return null;
+
+  const maxDistance = 90 * 60 * 1000;
+
+  let closest = points[0];
+  let distance = Math.abs(points[0].time - targetTime);
+
+  for (const point of points) {
+    const nextDistance = Math.abs(point.time - targetTime);
+
+    if (nextDistance < distance) {
+      closest = point;
+      distance = nextDistance;
+    }
+  }
+
+  return distance <= maxDistance ? closest : null;
+}
+
+function buildLinePath(points: Array<{ x: number; y: number }>): string {
+  if (!points.length) return "";
+
+  return points
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
+    .join(" ");
 }
 
 function clampCycleNumber(cycle: number, oven: Oven): number {
@@ -652,11 +1014,254 @@ function formatReportDateTime(value: Date): string {
   return `${formatReportDate(value)} ${formatReportTime(value)}`;
 }
 
-function formatDuration(start: Date, end: Date): string {
-  const totalMinutes = Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
-  const days = Math.floor(totalMinutes / 1440);
-  const hours = Math.floor((totalMinutes % 1440) / 60);
-  const minutes = totalMinutes % 60;
+const fwsStyles = `
+  .fws-sheet {
+    position: relative;
+    width: 1123px;
+    height: 794px;
+    margin: 0 auto;
+    background: #ffffff;
+    color: #000000;
+    border: 1.5px solid #000000;
+    box-sizing: border-box;
+    overflow: hidden;
+    font-family: "TH Sarabun New", "Sarabun", "Tahoma", sans-serif;
+    font-size: 12px;
+    line-height: 1.18;
+  }
 
-  return `${days} วัน ${hours} ชั่วโมง ${minutes} นาที`;
-}
+  .fws-header {
+    display: grid;
+    grid-template-columns: 178px 1fr 210px;
+    height: 78px;
+    border-bottom: 1px solid #000000;
+  }
+
+  .fws-logo-cell,
+  .fws-title-cell,
+  .fws-doc-cell {
+    border-right: 1px solid #000000;
+  }
+
+  .fws-doc-cell {
+    border-right: 0;
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+  }
+
+  .fws-doc-cell > div:first-child {
+    border-bottom: 1px solid #000000;
+  }
+
+  .fws-doc-cell > div {
+    display: grid;
+    place-items: center;
+    gap: 2px;
+    font-size: 11px;
+  }
+
+  .fws-doc-cell strong,
+  .fws-doc-cell b {
+    display: block;
+  }
+
+  .fws-logo-cell {
+    display: grid;
+    place-items: center;
+  }
+
+  .fws-logo-mark {
+    width: 92px;
+    height: 46px;
+    border-radius: 15px;
+    display: grid;
+    place-items: center;
+    color: #c06b00;
+    font-weight: 900;
+    font-size: 24px;
+    letter-spacing: 8px;
+    background: linear-gradient(135deg, #ffb132, #ffe06b 48%, #f08a00);
+    border: 1px solid rgba(0, 0, 0, 0.5);
+  }
+
+  .fws-logo-mark span {
+    transform: translateX(4px);
+  }
+
+  .fws-title-cell {
+    display: grid;
+    place-items: center;
+  }
+
+  .fws-title-cell h1 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 800;
+  }
+
+  .fws-meta {
+    display: grid;
+    grid-template-columns: 290px 520px 1fr;
+    height: 86px;
+    border-bottom: 1px solid #000000;
+  }
+
+  .fws-meta > div {
+    padding: 8px 12px 6px;
+  }
+
+  .fws-meta p {
+    margin: 0 0 7px;
+    white-space: nowrap;
+  }
+
+  .line {
+    display: inline-block;
+    min-width: 118px;
+    border-bottom: 1px dotted #000000;
+    text-align: center;
+    padding: 0 4px;
+    min-height: 13px;
+  }
+
+  .line.short {
+    min-width: 55px;
+  }
+
+  .line.medium {
+    min-width: 130px;
+  }
+
+  .line.long {
+    min-width: 230px;
+  }
+
+  .line.cause {
+    width: 780px;
+    min-width: 780px;
+  }
+
+  .rubber-row {
+    display: grid;
+    grid-template-columns: 50px 78px 78px 1fr;
+    align-items: start;
+    gap: 8px;
+    font-size: 10px;
+  }
+
+  .rubber-row label {
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+    text-align: center;
+  }
+
+  .rubber-row i,
+  .fws-evaluate i {
+    display: inline-block;
+    width: 13px;
+    height: 13px;
+    border: 1px solid #000000;
+    vertical-align: middle;
+    margin: 0 4px;
+  }
+
+  .fws-graph {
+    display: block;
+    width: 1074px;
+    height: 444px;
+    margin: 0 auto;
+  }
+
+  .fws-svg-label,
+  .fws-svg-band {
+    font-size: 11px;
+    fill: #000000;
+    font-weight: 700;
+  }
+
+  .fws-svg-day {
+    font-size: 10px;
+    fill: #000000;
+    font-weight: 700;
+  }
+
+  .fws-svg-time {
+    font-size: 8px;
+    fill: #000000;
+    font-weight: 600;
+  }
+
+  .fws-svg-temp {
+    font-size: 10px;
+    fill: #000000;
+    font-weight: 700;
+  }
+
+  .fws-notes {
+    width: 1030px;
+    margin: 4px auto 0;
+    font-size: 11px;
+  }
+
+  .fws-notes p {
+    margin: 0 0 4px;
+  }
+
+  .fws-evaluate {
+    display: grid;
+    grid-template-columns: 1fr 330px;
+    gap: 20px;
+    align-items: start;
+  }
+
+  .fws-evaluate label {
+    margin-left: 12px;
+  }
+
+  .fws-color-note p {
+    margin: 0 0 4px;
+    font-weight: 700;
+  }
+
+  .fws-sign {
+    position: absolute;
+    left: 295px;
+    right: 145px;
+    bottom: 28px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 130px;
+    font-size: 12px;
+  }
+
+  .fws-sign p {
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .fws-sign span {
+    display: inline-block;
+    width: 220px;
+    border-bottom: 1px dotted #000000;
+  }
+
+  .fws-bottom-left,
+  .fws-bottom-right {
+    position: absolute;
+    bottom: 5px;
+    font-size: 8px;
+  }
+
+  .fws-bottom-left {
+    left: 8px;
+  }
+
+  .fws-bottom-right {
+    right: 8px;
+  }
+
+  .report-page-shell {
+    overflow-x: auto;
+  }
+`;
