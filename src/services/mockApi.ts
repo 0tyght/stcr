@@ -94,12 +94,17 @@ function isTtnAccount(): boolean {
 
 function getVisibleOvens(): Oven[] {
   if (isTtnAccount()) {
-    return ovens.slice(0, 9);
+    return ovens.slice(0, 10).map((oven, index) => ({
+      ...oven,
+      number: index + 1,
+      name: `เตา ${index + 1}`,
+      zone: "TTN",
+      line: "Smoking Line",
+    }));
   }
 
   return ovens;
 }
-
 function getVisibleOvenIds(): Set<string> {
   return new Set(getVisibleOvens().map((oven) => oven.id));
 }
