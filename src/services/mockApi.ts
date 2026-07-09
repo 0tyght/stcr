@@ -80,8 +80,32 @@ function wait<T>(value: T, ms = 120): Promise<T> {
   });
 }
 
+function getCurrentAccount(): string {
+  if (typeof window === "undefined") {
+    return "gr_dev_admin";
+  }
+
+  return localStorage.getItem("stcr-account") || "gr_dev_admin";
+}
+
+function isTtnAccount(): boolean {
+  return getCurrentAccount().toLowerCase().startsWith("ttn");
+}
+
+function getVisibleOvens(): Oven[] {
+  if (isTtnAccount()) {
+    return ovens.slice(0, 9);
+  }
+
+  return ovens;
+}
+
+function getVisibleOvenIds(): Set<string> {
+  return new Set(getVisibleOvens().map((oven) => oven.id));
+}
+
 function pushAudit(action: string, target: string, detail: string): void {
-  const account = localStorage.getItem("stcr-account") || "gr_dev_admin";
+  const account = getCurrentAccount();
 
   auditEvents = [
     {
@@ -97,7 +121,7 @@ function pushAudit(action: string, target: string, detail: string): void {
 }
 
 function getOvenOrThrow(ovenId: string): Oven {
-  const oven = ovens.find((item) => item.id === ovenId);
+  const oven = getVisibleOvens().find((item) => item.id === ovenId);
 
   if (!oven) {
     throw new Error(`Oven not found: ${ovenId}`);
@@ -107,7 +131,7 @@ function getOvenOrThrow(ovenId: string): Oven {
 }
 
 function getActiveAlarms(): Alarm[] {
-  return ovens.flatMap((oven) => {
+  return getVisibleOvens().flatMap((oven) => {
     if (isStale(oven.lastUpdatedAt)) {
       return [
         {
@@ -125,6 +149,12 @@ function getActiveAlarms(): Alarm[] {
 
     return buildLimitAlarms(oven.id, oven.name, oven.readings, oven.limits);
   });
+}
+
+function getVisibleHistoricalAlarms(): Alarm[] {
+  const visibleIds = getVisibleOvenIds();
+
+  return historicalAlarms.filter((alarm) => visibleIds.has(alarm.ovenId));
 }
 
 function applyAlarmFilter(alarms: Alarm[], filter?: AlarmFilter): Alarm[] {
@@ -153,7 +183,7 @@ function applyAlarmFilter(alarms: Alarm[], filter?: AlarmFilter): Alarm[] {
 }
 
 function getAllAlarms(filter?: AlarmFilter): Alarm[] {
-  const alarms = [...getActiveAlarms(), ...historicalAlarms].sort(
+  const alarms = [...getActiveAlarms(), ...getVisibleHistoricalAlarms()].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
 
@@ -162,7 +192,7 @@ function getAllAlarms(filter?: AlarmFilter): Alarm[] {
 
 export const mockApi = {
   async getOvens(): Promise<Oven[]> {
-    return wait(ovens);
+    return wait(getVisibleOvens());
   },
 
   async getOven(ovenId: string): Promise<Oven> {
@@ -171,6 +201,7 @@ export const mockApi = {
 
   async getHistory(query: HistoryQuery): Promise<TimeSeriesPoint[]> {
     const oven = getOvenOrThrow(query.ovenId);
+
     return wait(createHistory(query, oven), 160);
   },
 
@@ -238,11 +269,12 @@ export const mockApi = {
 
     ovens = ovens.map((oven) => advanceOvenReadings(oven, now));
 
-    return wait(ovens, 60);
+    return wait(getVisibleOvens(), 60);
   },
 
   async acknowledgeAlarm(alarmId: string): Promise<Alarm[]> {
     pushAudit("รับทราบ Alarm", alarmId, "ผู้ใช้รับทราบรายการแจ้งเตือน");
+
     return wait(getAllAlarms());
   },
 
@@ -257,6 +289,7 @@ export const mockApi = {
     );
 
     const header = ["timestamp", ...sensors];
+
     const rows = points.map((point) => [
       point.timestamp,
       ...sensors.map((sensor) => point[sensor]),
