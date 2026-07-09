@@ -869,10 +869,10 @@ function FwsSvgHeader({
 
       <image
         href={logoHref}
-        x={company === "ttn" ? 54 : 37}
-        y={company === "ttn" ? 8 : 7}
-        width={company === "ttn" ? 66 : 100}
-        height={company === "ttn" ? 60 : 60}
+        x={company === "ttn" ? 14 : 37}
+        y={company === "ttn" ? 5 : 7}
+        width={company === "ttn" ? 145 : 100}
+        height={company === "ttn" ? 65 : 60}
         preserveAspectRatio="xMidYMid meet"
       />
 
@@ -934,12 +934,20 @@ function FwsSvgMeta({
       </SvgText>
 
       {rubberOptions.map((item, index) => {
-        const x = 88 + index * 67;
+        const x = 88 + index * 50;
 
         return (
           <g key={item.value}>
-            <FwsCheckbox x={x} y={22} checked={form.rubberType === item.value} />
-            <SvgText x={x + 6.5} y={62} size={9.2} anchor="middle">
+            <FwsCheckbox x={x} y={23} checked={form.rubberType === item.value} />
+            <line
+              x1={x + 6.5}
+              y1={36}
+              x2={x + 1.5}
+              y2={44}
+              stroke="#000000"
+              strokeWidth="0.75"
+            />
+            <SvgText x={x + 6.5} y={55} size={8.6} anchor="middle">
               {item.label}
             </SvgText>
           </g>
@@ -1204,104 +1212,147 @@ function FwsSvgTemperatureGrid({
 function FwsSvgNotes({ y, form }: { y: number; form: ReportFormState }) {
   return (
     <g transform={`translate(0 ${y})`}>
-      <SvgText x={58} y={0} size={8.5} weight={700}>
-        * ✕ ไม่สุก (ปากกาสีน้ำเงิน)  ✓ สุก (ปากกาสีแดง)  Ø ยางสุกแล้วยังไม่ออกเตา (อุ่นใช้ปากกาสีแดง)
+      <SvgText x={58} y={0} size={8.4} weight={700}>
+        *
+      </SvgText>
+      <FwsCrossMark x={71} y={-8} size={9} />
+      <SvgText x={84} y={0} size={8.4} weight={700}>
+        ไม่สุก (ปากกาสีน้ำเงิน)
+      </SvgText>
+      <FwsCheckMark x={185} y={-8} size={10} />
+      <SvgText x={199} y={0} size={8.4} weight={700}>
+        สุก (ปากกาสีแดง)
+      </SvgText>
+      <FwsCircleSlashMark x={290} y={-8} size={10} />
+      <SvgText x={304} y={0} size={8.4} weight={700}>
+        ยางสุกแล้วยังไม่ออกเตา (อุ่นใช้ปากกาสีแดง)
       </SvgText>
 
-      <SvgText x={58} y={13} size={8.5} weight={700}>
+      <SvgText x={58} y={12} size={8.4} weight={700}>
         ** ควบคุมอุณหภูมิ: [รมควัน] 40 - 60°C, [อุ่นยาง] 35-40°C
       </SvgText>
 
-      <SvgText x={58} y={27} size={8.3} weight={700}>
+      <SvgText x={58} y={25} size={8.2} weight={700}>
         After the 3rd day of smoking, control the temperature between 40 - 55 °C.
       </SvgText>
 
-      <SvgText x={58} y={40} size={8.2} weight={700}>
+      <SvgText x={58} y={37} size={8.1} weight={700}>
         (ประเมินอุณหภูมิวันที่ 3 หลังปิดเตา 2 วัน / เกณฑ์การรมควัน = ความชื้นยาง บวกลบ 1 วัน)
       </SvgText>
 
-      <SvgText x={58} y={61} size={9.4} weight={700}>
+      <SvgText x={58} y={57} size={9.2} weight={700}>
         ประเมินวันรมควัน
       </SvgText>
-      <SvgText x={58} y={73} size={8}>
+      <SvgText x={58} y={68} size={7.8}>
         Smoking period
       </SvgText>
 
-      <FwsCheckbox x={178} y={51} size={10} checked={form.smokingPeriodStatus === "under"} />
-      <SvgText x={193} y={61} size={9.4} weight={700}>
+      <FwsCheckbox x={176} y={47} size={10} checked={form.smokingPeriodStatus === "under"} />
+      <SvgText x={191} y={57} size={9.2} weight={700}>
         อยู่ในเกณฑ์
       </SvgText>
-      <SvgText x={193} y={73} size={8}>
+      <SvgText x={191} y={68} size={7.8}>
         Under period
       </SvgText>
 
-      <FwsCheckbox x={316} y={51} size={10} checked={form.smokingPeriodStatus === "over"} />
-      <SvgText x={331} y={61} size={8.8} weight={700}>
+      <FwsCheckbox x={312} y={47} size={10} checked={form.smokingPeriodStatus === "over"} />
+      <SvgText x={327} y={57} size={8.5} weight={700}>
         เกินเกณฑ์ (เกณฑ์การรมควัน = ความชื้นยาง บวกลบ 1 วัน)
       </SvgText>
-      <SvgText x={331} y={73} size={8}>
+      <SvgText x={327} y={68} size={7.8}>
         Over period (+/- 1 day)
       </SvgText>
 
-      <SvgText x={58} y={93} size={9.4} weight={700}>
+      <SvgText x={58} y={87} size={9.2} weight={700}>
         อุณหภูมิ
       </SvgText>
-      <SvgText x={58} y={105} size={8}>
+      <SvgText x={58} y={98} size={7.8}>
         Temperature
       </SvgText>
 
-      <FwsCheckbox x={178} y={83} size={10} checked={form.temperatureControlStatus === "underControl"} />
-      <SvgText x={193} y={93} size={9.4} weight={700}>
+      <FwsCheckbox x={176} y={77} size={10} checked={form.temperatureControlStatus === "underControl"} />
+      <SvgText x={191} y={87} size={9.2} weight={700}>
         อยู่ในค่าควบคุม
       </SvgText>
-      <SvgText x={193} y={105} size={8}>
+      <SvgText x={191} y={98} size={7.8}>
         Under Control
       </SvgText>
 
-      <FwsCheckbox x={316} y={83} size={10} checked={form.temperatureControlStatus === "outOfControl"} />
-      <SvgText x={331} y={93} size={9.4} weight={700}>
+      <FwsCheckbox x={312} y={77} size={10} checked={form.temperatureControlStatus === "outOfControl"} />
+      <SvgText x={327} y={87} size={9.2} weight={700}>
         ไม่อยู่ในค่าควบคุม
       </SvgText>
-      <SvgText x={331} y={105} size={8}>
+      <SvgText x={327} y={98} size={7.8}>
         Out of Control
       </SvgText>
 
-      <SvgText x={760} y={61} size={9.4} weight={800}>
+      <SvgText x={760} y={57} size={9.2} weight={800}>
         สีน้ำเงิน = อุณหภูมิที่ต้องการ : หัวหน้างาน
       </SvgText>
-      <SvgText x={760} y={84} size={9.4} weight={800}>
+      <SvgText x={760} y={80} size={9.2} weight={800}>
         สีแดง = อุณหภูมิจริง : พนักงานคุมเตา
       </SvgText>
 
-      <SvgText x={350} y={118} size={9.8} weight={700}>
+      <SvgText x={350} y={109} size={9.6} weight={700}>
         สาเหตุ
       </SvgText>
-      <DottedLine x={390} y={118} width={430} />
+      <DottedLine x={390} y={109} width={430} />
       {form.reason ? (
-        <SvgText x={400} y={115} size={9}>
+        <SvgText x={400} y={106} size={8.8}>
           {form.reason}
         </SvgText>
       ) : null}
 
-      <SvgText x={290} y={133} size={10.2} weight={700}>
+      <SvgText x={290} y={123} size={10} weight={700}>
         ผู้รายงาน
       </SvgText>
-      <DottedLine x={345} y={133} width={210} />
+      <DottedLine x={345} y={123} width={210} />
       {form.reporter ? (
-        <SvgText x={355} y={130} size={9}>
+        <SvgText x={355} y={120} size={8.8}>
           {form.reporter}
         </SvgText>
       ) : null}
 
-      <SvgText x={650} y={133} size={10.2} weight={700}>
+      <SvgText x={650} y={123} size={10} weight={700}>
         หัวหน้าฝ่ายผลิต
       </SvgText>
-      <DottedLine x={740} y={133} width={245} />
+      <DottedLine x={740} y={123} width={245} />
       {form.productionHead ? (
-        <SvgText x={750} y={130} size={9}>
+        <SvgText x={750} y={120} size={8.8}>
           {form.productionHead}
         </SvgText>
       ) : null}
+    </g>
+  );
+}
+
+function FwsCrossMark({ x, y, size = 10 }: { x: number; y: number; size?: number }) {
+  return (
+    <g stroke="#000000" strokeWidth="1.3" strokeLinecap="round">
+      <line x1={x} y1={y} x2={x + size} y2={y + size} />
+      <line x1={x + size} y1={y} x2={x} y2={y + size} />
+    </g>
+  );
+}
+
+function FwsCheckMark({ x, y, size = 10 }: { x: number; y: number; size?: number }) {
+  return (
+    <path
+      d={`M ${x} ${y + size * 0.55} L ${x + size * 0.36} ${y + size} L ${x + size} ${y}`}
+      fill="none"
+      stroke="#000000"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  );
+}
+
+function FwsCircleSlashMark({ x, y, size = 10 }: { x: number; y: number; size?: number }) {
+  return (
+    <g stroke="#000000" strokeWidth="1.15" fill="none">
+      <circle cx={x + size / 2} cy={y + size / 2} r={size * 0.42} />
+      <line x1={x + size * 0.22} y1={y + size * 0.82} x2={x + size * 0.82} y2={y + size * 0.18} />
     </g>
   );
 }
