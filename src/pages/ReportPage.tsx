@@ -11,6 +11,9 @@ import {
 } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
+import grLogo from "../assets/gr-logo.png";
+import ttnLogo from "../assets/ttn-logo.png";
+
 import { useAppData } from "../app/providers";
 import { EmptyState } from "../components/ui/EmptyState";
 import { PageHeader } from "../components/ui/PageHeader";
@@ -28,6 +31,15 @@ import { allSensorKeys } from "../utils/sensors";
 type ReportMode = "current" | "history";
 type HistoricalDownloadMode = "single" | "range";
 type SvgTextAnchor = "start" | "middle" | "end";
+
+type ReportCompany = "gr" | "ttn";
+
+function getReportCompany(): ReportCompany {
+  if (typeof window === "undefined") return "gr";
+
+  const account = (window.localStorage.getItem("stcr-account") ?? "").toLowerCase();
+  return account.startsWith("ttn") ? "ttn" : "gr";
+}
 
 type ReportSlot = {
   index: number;
@@ -54,6 +66,8 @@ const svgHeight = 794;
 export function ReportPage() {
   const { ovens } = useAppData();
   const [searchParams] = useSearchParams();
+
+  const company = useMemo<ReportCompany>(() => getReportCompany(), []);
 
   const ovenId = searchParams.get("ovenId") ?? "";
   const mode: ReportMode = searchParams.get("mode") === "history" ? "history" : "current";
@@ -505,6 +519,7 @@ export function ReportPage() {
           cycle={selectedCycle}
           cycleRange={cycleRange}
           slots={reportSlots}
+          company={company}
         />
       </section>
     </>
@@ -517,12 +532,14 @@ function FwsSvgReport({
   cycle,
   cycleRange,
   slots,
+  company,
 }: {
   refElement: RefObject<SVGSVGElement | null>;
   oven: Oven;
   cycle: number;
   cycleRange: { start: Date; end: Date };
   slots: ReportSlot[];
+  company: ReportCompany;
 }) {
   const upper = oven.limits.chamberTemp.upper;
   const lower = oven.limits.chamberTemp.lower;
@@ -557,7 +574,7 @@ function FwsSvgReport({
       <g transform={`translate(${mainX} ${mainY})`}>
         <rect x="0" y="0" width={mainW} height={mainH} fill="#ffffff" stroke="#000000" strokeWidth="1" />
 
-        <FwsSvgHeader width={mainW} height={headerH} />
+        <FwsSvgHeader width={mainW} height={headerH} company={company} />
 
         <FwsSvgMeta
           y={metaY}
@@ -591,7 +608,15 @@ function FwsSvgReport({
   );
 }
 
-function FwsSvgHeader({ width, height }: { width: number; height: number }) {
+function FwsSvgHeader({
+  width,
+  height,
+  company,
+}: {
+  width: number;
+  height: number;
+  company: ReportCompany;
+}) {
   const logoW = 174;
   const docW = 205;
   const titleW = width - logoW - docW;
@@ -603,9 +628,10 @@ function FwsSvgHeader({ width, height }: { width: number; height: number }) {
       <line x1={logoW} y1="0" x2={logoW} y2={height} stroke="#000000" />
       <line x1={docX} y1="0" x2={docX} y2={height} stroke="#000000" />
       <line x1={docX} y1={height / 2} x2={width} y2={height / 2} stroke="#000000" />
+      <line x1={docX + 92} y1={height / 2} x2={docX + 92} y2={height} stroke="#000000" />
 
-      <g transform="translate(30 5)">
-        <EditableVectorLogo />
+      <g transform="translate(12 5)">
+        <CompanyReportLogo company={company} />
       </g>
 
       <SvgText x={logoW + titleW / 2} y={43} size={16} weight={800} anchor="middle">
@@ -1005,46 +1031,34 @@ function FwsSvgNotes({ y }: { y: number }) {
   );
 }
 
-function EditableVectorLogo() {
-  return (
-    <svg width="115" height="65" viewBox="0 0 115 65" aria-label="โลโก้">
-      <defs>
-        <linearGradient id="fwsLogoSun" x1="0" x2="1" y1="0" y2="1">
-          <stop offset="0%" stopColor="#ffb329" />
-          <stop offset="48%" stopColor="#ffe37a" />
-          <stop offset="100%" stopColor="#f08a00" />
-        </linearGradient>
-      </defs>
+function CompanyReportLogo({ company }: { company: ReportCompany }) {
+  const href = company === "ttn" ? ttnLogo : grLogo;
 
-      <ellipse cx="57" cy="25" rx="35" ry="23" fill="url(#fwsLogoSun)" stroke="#9a5700" strokeWidth="1" />
-      <path
-        d="M24 36 C38 18, 49 16, 66 35 C76 24, 88 22, 101 36"
-        fill="none"
-        stroke="#453171"
-        strokeWidth="5.8"
-        strokeLinecap="round"
+  if (company === "ttn") {
+    return (
+      <svg width="150" height="64" viewBox="0 0 150 64" aria-label="TTN logo">
+        <image
+          href={href}
+          x="8"
+          y="2"
+          width="58"
+          height="58"
+          preserveAspectRatio="xMidYMid meet"
+        />
+      </svg>
+    );
+  }
+
+  return (
+    <svg width="150" height="64" viewBox="0 0 150 64" aria-label="GR logo">
+      <image
+        href={href}
+        x="4"
+        y="7"
+        width="132"
+        height="50"
+        preserveAspectRatio="xMinYMid meet"
       />
-      <path
-        d="M34 41 C47 33, 64 33, 81 42"
-        fill="none"
-        stroke="#fff4d5"
-        strokeWidth="3.7"
-        strokeLinecap="round"
-      />
-      <text
-        x="57"
-        y="60"
-        textAnchor="middle"
-        fontFamily="Sarabun"
-        fontSize="17"
-        fontWeight="bold"
-        fill="#f08a00"
-        stroke="#8a4a00"
-        strokeWidth="0.35"
-        letterSpacing="7"
-      >
-        ยาง
-      </text>
     </svg>
   );
 }
