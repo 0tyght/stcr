@@ -833,25 +833,37 @@ function FwsTemperatureGraph({
         );
       })}
 
-      <text
-        x="22"
-        y={(tempToY(60) + tempToY(40)) / 2 + 4}
-        textAnchor="middle"
-        className="fws-svg-band"
-        writingMode="vertical-rl"
-      >
-        รมควัน
-      </text>
+      {(() => {
+        const bandX = 22;
+        const bandY = (tempToY(60) + tempToY(40)) / 2;
+        return (
+          <text
+            x={bandX}
+            y={bandY}
+            transform={`rotate(-90 ${bandX} ${bandY})`}
+            textAnchor="middle"
+            className="fws-svg-band"
+          >
+            รมควัน
+          </text>
+        );
+      })()}
 
-      <text
-        x="26"
-        y={(tempToY(40) + tempToY(30)) / 2 + 4}
-        textAnchor="middle"
-        className="fws-svg-band"
-        writingMode="vertical-rl"
-      >
-        อุ่น
-      </text>
+      {(() => {
+        const bandX = 26;
+        const bandY = (tempToY(40) + tempToY(30)) / 2;
+        return (
+          <text
+            x={bandX}
+            y={bandY}
+            transform={`rotate(-90 ${bandX} ${bandY})`}
+            textAnchor="middle"
+            className="fws-svg-band"
+          >
+            อุ่น
+          </text>
+        );
+      })()}
 
       <line
         x1={left}
@@ -1057,6 +1069,18 @@ function formatReportDateTime(value: Date): string {
  * devicePixelRatio * 2`) and export as PNG, not JPEG, e.g.:
  *
  *   html2canvas(element, { scale: 3, useCORS: true, backgroundColor: "#ffffff" })
+ *
+ * IMPORTANT — this graph has 80 columns x 36 rows of hairlines. Even with a
+ * higher html2canvas scale, a *raster* PDF (canvas -> PNG -> pdf.addImage)
+ * will show moiré/fuzziness on this much fine grid once a PDF viewer zooms
+ * in, because you're stretching a fixed-resolution bitmap. Increasing scale
+ * only pushes the problem further out, it doesn't remove it. The real fix is
+ * a *vector* PDF: either render this SVG straight into the PDF with
+ * svg2pdf.js (https://github.com/yWorks/svg2pdf.js) instead of html2canvas,
+ * or use the browser's native print-to-PDF via `window.print()` with an
+ * `@page { size: landscape; margin: 0 }` stylesheet. Both keep every line and
+ * glyph crisp at any zoom level. I can wire this up directly if you share
+ * pdfExport.ts (createLandscapePdfBlobFromElement / downloadElementAsLandscapePdf).
  */
 const fwsStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap');
