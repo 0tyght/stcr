@@ -11,6 +11,9 @@ import {
 } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
+import grLogo from "../assets/gr-logo.png";
+import ttnLogo from "../assets/ttn-logo.png";
+
 import { useAppData } from "../app/providers";
 import { EmptyState } from "../components/ui/EmptyState";
 import { PageHeader } from "../components/ui/PageHeader";
@@ -28,6 +31,15 @@ import { allSensorKeys } from "../utils/sensors";
 type ReportMode = "current" | "history";
 type HistoricalDownloadMode = "single" | "range";
 type SvgTextAnchor = "start" | "middle" | "end";
+
+type ReportCompany = "gr" | "ttn";
+
+function getReportCompany(): ReportCompany {
+  if (typeof window === "undefined") return "gr";
+
+  const account = (window.localStorage.getItem("stcr-account") ?? "").toLowerCase();
+  return account.startsWith("ttn") ? "ttn" : "gr";
+}
 
 type ReportSlot = {
   index: number;
@@ -54,6 +66,8 @@ const svgHeight = 794;
 export function ReportPage() {
   const { ovens } = useAppData();
   const [searchParams] = useSearchParams();
+
+  const company = useMemo<ReportCompany>(() => getReportCompany(), []);
 
   const ovenId = searchParams.get("ovenId") ?? "";
   const mode: ReportMode = searchParams.get("mode") === "history" ? "history" : "current";
@@ -505,6 +519,7 @@ export function ReportPage() {
           cycle={selectedCycle}
           cycleRange={cycleRange}
           slots={reportSlots}
+          company={company}
         />
       </section>
     </>
@@ -517,12 +532,14 @@ function FwsSvgReport({
   cycle,
   cycleRange,
   slots,
+  company,
 }: {
   refElement: RefObject<SVGSVGElement | null>;
   oven: Oven;
   cycle: number;
   cycleRange: { start: Date; end: Date };
   slots: ReportSlot[];
+  company: ReportCompany;
 }) {
   const upper = oven.limits.chamberTemp.upper;
   const lower = oven.limits.chamberTemp.lower;
@@ -557,7 +574,7 @@ function FwsSvgReport({
       <g transform={`translate(${mainX} ${mainY})`}>
         <rect x="0" y="0" width={mainW} height={mainH} fill="#ffffff" stroke="#000000" strokeWidth="1" />
 
-        <FwsSvgHeader width={mainW} height={headerH} />
+        <FwsSvgHeader width={mainW} height={headerH} company={company} />
 
         <FwsSvgMeta
           y={metaY}
@@ -591,7 +608,15 @@ function FwsSvgReport({
   );
 }
 
-function FwsSvgHeader({ width, height }: { width: number; height: number }) {
+function FwsSvgHeader({
+  width,
+  height,
+  company,
+}: {
+  width: number;
+  height: number;
+  company: ReportCompany;
+}) {
   const logoW = 174;
   const docW = 205;
   const titleW = width - logoW - docW;
@@ -603,9 +628,10 @@ function FwsSvgHeader({ width, height }: { width: number; height: number }) {
       <line x1={logoW} y1="0" x2={logoW} y2={height} stroke="#000000" />
       <line x1={docX} y1="0" x2={docX} y2={height} stroke="#000000" />
       <line x1={docX} y1={height / 2} x2={width} y2={height / 2} stroke="#000000" />
+      <line x1={docX + 92} y1={height / 2} x2={docX + 92} y2={height} stroke="#000000" />
 
-      <g transform="translate(30 5)">
-        <EditableVectorLogo />
+      <g transform="translate(12 5)">
+        <CompanyReportLogo company={company} />
       </g>
 
       <SvgText x={logoW + titleW / 2} y={43} size={16} weight={800} anchor="middle">
@@ -619,10 +645,10 @@ function FwsSvgHeader({ width, height }: { width: number; height: number }) {
         F-WS-05 Rev.11
       </SvgText>
 
-      <SvgText x={docX + 42} y={59} size={11} weight={800} anchor="middle">
+      <SvgText x={docX + 46} y={59} size={10.5} weight={800} anchor="middle">
         เริ่มใช้วันที่
       </SvgText>
-      <SvgText x={docX + 150} y={59} size={11} weight={800} anchor="middle">
+      <SvgText x={docX + 148} y={59} size={11} weight={800} anchor="middle">
         1-ธ.ค.-68
       </SvgText>
     </g>
@@ -644,6 +670,13 @@ function FwsSvgMeta({
   cycle: number;
   cycleRange: { start: Date; end: Date };
 }) {
+  const rubberItems = [
+    { x: 98, label: "ยางบาง" },
+    { x: 165, label: "ยางเหลือง" },
+    { x: 232, label: "ยางดำ" },
+    { x: 299, label: "ยางต่างๆ" },
+  ];
+
   return (
     <g transform={`translate(0 ${y})`}>
       <rect x="0" y="0" width={width} height={height} fill="#ffffff" stroke="#000000" />
@@ -656,31 +689,29 @@ function FwsSvgMeta({
         {oven.number}
       </SvgText>
 
-      <SvgText x={14} y={40} size={11} weight={700}>
+      <SvgText x={14} y={39} size={11} weight={700}>
         ชนิดยาง
       </SvgText>
-
-      <FwsCheckbox x={70} y={31} />
-      <FwsCheckbox x={145} y={31} />
-      <FwsCheckbox x={220} y={31} />
-
-      <SvgText x={84} y={64} size={8.5} anchor="middle">
-        USS ≥ 97%
+      <SvgText x={14} y={53} size={8.8}>
+        Type of rubber
       </SvgText>
 
-      <SvgText x={159} y={58} size={8.5} anchor="middle">
-        USS ≥ 96%
-      </SvgText>
-      <SvgText x={159} y={70} size={8.5} anchor="middle">
-        แต่ &lt; 97 %
-      </SvgText>
-
-      <SvgText x={235} y={58} size={8.5} anchor="middle">
-        USS ≥94%
-      </SvgText>
-      <SvgText x={235} y={70} size={8.5} anchor="middle">
-        แต่ &lt; 96 % (ควบคุมพิเศษ)
-      </SvgText>
+      {rubberItems.map((item) => (
+        <g key={item.label}>
+          <FwsCheckbox x={item.x} y={21} />
+          <line
+            x1={item.x + 6.5}
+            y1={34}
+            x2={item.x + 1}
+            y2={48}
+            stroke="#000000"
+            strokeWidth="0.8"
+          />
+          <SvgText x={item.x + 6.5} y={62} size={9.5} anchor="middle">
+            {item.label}
+          </SvgText>
+        </g>
+      ))}
 
       <SvgText x={335} y={18} size={11} weight={700}>
         เข้าเตาวันที่
@@ -800,7 +831,7 @@ function FwsSvgTemperatureGrid({
       <SvgText x={22} y={dayH + 38} size={11} weight={700} anchor="middle">
         เวลา
       </SvgText>
-      <SvgText x={28} y={dayH + timeH + 17} size={11} weight={700} anchor="middle">
+      <SvgText x={28} y={dayH + timeH + 14} size={10.5} weight={700} anchor="middle">
         อุณหภูมิ
       </SvgText>
       <SvgText x={30} y={chartBottom + 18} size={10.5} weight={700} anchor="middle">
@@ -953,37 +984,52 @@ function FwsSvgTemperatureGrid({
 function FwsSvgNotes({ y }: { y: number }) {
   return (
     <g transform={`translate(0 ${y})`}>
-      <SvgText x={58} y={0} size={9.3} weight={700}>
-        * ✕ ไม่สุก (ปากกาสีน้ำเงิน)  ✓ สุก (ปากกาสีแดง)  Ø ยางสุกแล้วยังไม่ออกเตา (อุ่นใช้ปากกาสีแดง) / เกณฑ์ประเมินวันรมยาง ต้องใช้ระยะเวลาการรมควันตามที่ WI กำหนด (WI-WS-06)
+      <SvgText x={58} y={0} size={9.2} weight={700}>
+        After the 3rd day of smoking, control the temperature between 40 -55 °C.
       </SvgText>
 
-      <SvgText x={58} y={17} size={10.2} weight={700}>
-        ** ควบคุมอุณหภูมิ: [รมควัน] 40 - 60°C, [อุ่นยาง] 35-40°C
+      <SvgText x={58} y={14} size={9.2} weight={700}>
+        (ประเมินอุณหภูมิวันที่ 3 หลังปิดเตา 2 วัน / เกณฑ์การควบคุมอุณหภูมิ = ความชื้นยาง + 1 วัน)
       </SvgText>
 
-      <SvgText x={100} y={44} size={10.3} weight={700}>
-        ประเมินวันรมควัน
+      <SvgText x={58} y={36} size={10} weight={700}>
+        Smoking period
+      </SvgText>
+      <SvgText x={220} y={36} size={10} weight={700}>
+        Under period
+      </SvgText>
+      <SvgText x={395} y={36} size={10} weight={700}>
+        Over period (+/- 1 day)
       </SvgText>
 
-      <FwsCheckbox x={205} y={33} size={9} />
-      <SvgText x={220} y={44} size={10}>
-        อยู่ในเกณฑ์
+      <FwsCheckbox x={58} y={47} size={9} />
+      <SvgText x={72} y={58} size={10.2} weight={700}>
+        อุณหภูมิ
+      </SvgText>
+      <SvgText x={72} y={71} size={8.8}>
+        Temperature
       </SvgText>
 
-      <FwsCheckbox x={305} y={33} size={9} />
-      <SvgText x={320} y={44} size={9.5}>
-        เกินเกณฑ์ (เกณฑ์รมควัน = ระยะเวลาการรมควันเกินที่ WI กำหนด (WI-WS-06))
+      <FwsCheckbox x={220} y={47} size={9} />
+      <SvgText x={234} y={58} size={10.2} weight={700}>
+        อุ่นในห้องควบคุม
+      </SvgText>
+      <SvgText x={234} y={71} size={8.8}>
+        Under Control
       </SvgText>
 
-      <FwsCheckbox x={305} y={56} size={9} />
-      <SvgText x={320} y={67} size={9.5}>
-        ไม่ถึงเกณฑ์ (เกณฑ์รมควัน = ระยะเวลาการรมควันไม่ถึงเกณฑ์ที่ WI กำหนด (WI-WS-06))
+      <FwsCheckbox x={395} y={47} size={9} />
+      <SvgText x={409} y={58} size={10.2} weight={700}>
+        ไม่อยู่ในห้องควบคุม
+      </SvgText>
+      <SvgText x={409} y={71} size={8.8}>
+        Out of Control
       </SvgText>
 
-      <SvgText x={770} y={44} size={10.2} weight={800}>
+      <SvgText x={770} y={36} size={10.2} weight={800}>
         สีน้ำเงิน = อุณหภูมิที่ต้องการ : หัวหน้างาน
       </SvgText>
-      <SvgText x={770} y={67} size={10.2} weight={800}>
+      <SvgText x={770} y={58} size={10.2} weight={800}>
         สีแดง = อุณหภูมิจริง : พนักงานคุมเตา
       </SvgText>
 
@@ -992,59 +1038,47 @@ function FwsSvgNotes({ y }: { y: number }) {
       </SvgText>
       <DottedLine x={400} y={92} width={420} />
 
-      <SvgText x={295} y={125} size={11} weight={700}>
+      <SvgText x={295} y={112} size={11} weight={700}>
         ผู้รายงาน
       </SvgText>
-      <DottedLine x={350} y={125} width={210} />
+      <DottedLine x={350} y={112} width={210} />
 
-      <SvgText x={660} y={125} size={11} weight={700}>
+      <SvgText x={660} y={112} size={11} weight={700}>
         หัวหน้าฝ่ายผลิต
       </SvgText>
-      <DottedLine x={750} y={125} width={245} />
+      <DottedLine x={750} y={112} width={245} />
     </g>
   );
 }
 
-function EditableVectorLogo() {
-  return (
-    <svg width="115" height="65" viewBox="0 0 115 65" aria-label="โลโก้">
-      <defs>
-        <linearGradient id="fwsLogoSun" x1="0" x2="1" y1="0" y2="1">
-          <stop offset="0%" stopColor="#ffb329" />
-          <stop offset="48%" stopColor="#ffe37a" />
-          <stop offset="100%" stopColor="#f08a00" />
-        </linearGradient>
-      </defs>
+function CompanyReportLogo({ company }: { company: ReportCompany }) {
+  const href = company === "ttn" ? ttnLogo : grLogo;
 
-      <ellipse cx="57" cy="25" rx="35" ry="23" fill="url(#fwsLogoSun)" stroke="#9a5700" strokeWidth="1" />
-      <path
-        d="M24 36 C38 18, 49 16, 66 35 C76 24, 88 22, 101 36"
-        fill="none"
-        stroke="#453171"
-        strokeWidth="5.8"
-        strokeLinecap="round"
+  if (company === "ttn") {
+    return (
+      <svg width="140" height="64" viewBox="0 0 140 64" aria-label="TTN logo">
+        <image
+          href={href}
+          x="4"
+          y="2"
+          width="60"
+          height="60"
+          preserveAspectRatio="xMidYMid meet"
+        />
+      </svg>
+    );
+  }
+
+  return (
+    <svg width="150" height="64" viewBox="0 0 150 64" aria-label="GR logo">
+      <image
+        href={href}
+        x="4"
+        y="7"
+        width="125"
+        height="50"
+        preserveAspectRatio="xMinYMid meet"
       />
-      <path
-        d="M34 41 C47 33, 64 33, 81 42"
-        fill="none"
-        stroke="#fff4d5"
-        strokeWidth="3.7"
-        strokeLinecap="round"
-      />
-      <text
-        x="57"
-        y="60"
-        textAnchor="middle"
-        fontFamily="Sarabun"
-        fontSize="17"
-        fontWeight="bold"
-        fill="#f08a00"
-        stroke="#8a4a00"
-        strokeWidth="0.35"
-        letterSpacing="7"
-      >
-        ยาง
-      </text>
     </svg>
   );
 }
