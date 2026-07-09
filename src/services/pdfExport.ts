@@ -65,7 +65,6 @@ export async function createLandscapePdfBlobFromSvg(svgElement: SVGSVGElement): 
   svgClone.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
   forceSvgThaiFont(svgClone);
-  await inlineSvgImages(svgClone);
 
   await svg2pdf(svgClone, pdf, {
     x: 0,
@@ -178,55 +177,6 @@ function forceSvgThaiFont(svgElement: SVGSVGElement): void {
     } else {
       text.setAttribute("font-weight", "normal");
     }
-  });
-}
-
-
-async function inlineSvgImages(svgElement: SVGSVGElement): Promise<void> {
-  const imageElements = Array.from(svgElement.querySelectorAll("image"));
-
-  await Promise.all(
-    imageElements.map(async (image) => {
-      const href =
-        image.getAttribute("href") ??
-        image.getAttributeNS("http://www.w3.org/1999/xlink", "href");
-
-      if (!href || href.startsWith("data:")) return;
-
-      try {
-        const absoluteUrl = new URL(href, window.location.href).toString();
-        const response = await fetch(absoluteUrl);
-
-        if (!response.ok) {
-          console.error(`Image not found: ${absoluteUrl}`);
-          return;
-        }
-
-        const blob = await response.blob();
-        const dataUrl = await blobToDataUrl(blob);
-
-        image.setAttribute("href", dataUrl);
-        image.setAttributeNS("http://www.w3.org/1999/xlink", "href", dataUrl);
-      } catch (error) {
-        console.error("Cannot inline SVG image for PDF export", error);
-      }
-    }),
-  );
-}
-
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      resolve(String(reader.result));
-    };
-
-    reader.onerror = () => {
-      reject(reader.error ?? new Error("Cannot read image blob"));
-    };
-
-    reader.readAsDataURL(blob);
   });
 }
 
