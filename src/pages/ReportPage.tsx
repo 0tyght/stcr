@@ -1,6 +1,13 @@
 import JSZip from "jszip";
 import { Download, FileArchive, FileDown, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { useAppData } from "../app/providers";
@@ -35,6 +42,7 @@ const timeSlots = ["08.00", "11.00", "14.00", "17.00", "20.00", "23.00", "02.00"
 
 const reportDayCount = 10;
 const reportSlotCount = reportDayCount * timeSlots.length;
+
 const graphMinTemp = 30;
 const graphMaxTemp = 65;
 
@@ -327,13 +335,7 @@ export function ReportPage() {
             โหลดรายงานใหม่
           </button>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gap: 12,
-              width: "100%",
-            }}
-          >
+          <div style={{ display: "grid", gap: 12, width: "100%" }}>
             <div
               style={{
                 display: "flex",
@@ -508,7 +510,7 @@ function FwsReportSheet({
   cycleRange,
   slots,
 }: {
-  refElement: React.RefObject<HTMLDivElement | null>;
+  refElement: RefObject<HTMLDivElement | null>;
   oven: Oven;
   cycle: number;
   cycleRange: { start: Date; end: Date };
@@ -523,9 +525,7 @@ function FwsReportSheet({
 
       <header className="fws-header">
         <div className="fws-logo-cell">
-          <div className="fws-logo-mark">
-            <span>ยาง</span>
-          </div>
+          <EditableVectorLogo />
         </div>
 
         <div className="fws-title-cell">
@@ -662,6 +662,27 @@ function FwsReportSheet({
   );
 }
 
+function EditableVectorLogo() {
+  return (
+    <svg className="fws-logo-svg" viewBox="0 0 120 68" aria-label="โลโก้">
+      <defs>
+        <linearGradient id="logoSun" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stopColor="#ffb329" />
+          <stop offset="55%" stopColor="#ffe174" />
+          <stop offset="100%" stopColor="#ef8500" />
+        </linearGradient>
+      </defs>
+
+      <ellipse cx="60" cy="27" rx="38" ry="25" fill="url(#logoSun)" stroke="#a65b00" strokeWidth="1" />
+      <path d="M25 38 C42 18, 52 18, 70 37 C80 25, 90 22, 105 37" fill="none" stroke="#453171" strokeWidth="6" strokeLinecap="round" />
+      <path d="M35 43 C48 34, 65 34, 83 44" fill="none" stroke="#f6f1d5" strokeWidth="4" strokeLinecap="round" />
+      <text x="60" y="62" textAnchor="middle" fontSize="18" fontWeight="900" fill="#f08a00" stroke="#8a4a00" strokeWidth="0.35" letterSpacing="7">
+        ยาง
+      </text>
+    </svg>
+  );
+}
+
 function FwsTemperatureGraph({
   slots,
   upper,
@@ -673,14 +694,13 @@ function FwsTemperatureGraph({
 }) {
   const width = 1074;
   const height = 444;
+
   const left = 58;
-  const topDay = 0;
   const dayHeight = 28;
   const timeHeight = 68;
-  const tempLabelHeight = 23;
-  const chartTop = topDay + dayHeight + timeHeight + tempLabelHeight;
+  const tempHeaderHeight = 23;
+  const chartTop = dayHeight + timeHeight + tempHeaderHeight;
   const chartHeight = 288;
-  const conditionHeight = 28;
   const chartWidth = width - left - 2;
   const cellWidth = chartWidth / reportSlotCount;
 
@@ -706,47 +726,19 @@ function FwsTemperatureGraph({
   );
 
   return (
-    <svg
-      className="fws-graph"
-      viewBox={`0 0 ${width} ${height}`}
-      role="img"
-      aria-label="กราฟรายงานการตรวจสอบอุณหภูมิเตา"
-    >
+    <svg className="fws-graph" viewBox={`0 0 ${width} ${height}`} role="img">
       <rect x="0" y="0" width={width} height={height} fill="#ffffff" stroke="#000000" />
 
       <line x1={left} y1="0" x2={left} y2={height} stroke="#000000" strokeWidth="1" />
       <line x1="0" y1={dayHeight} x2={width} y2={dayHeight} stroke="#000000" />
-      <line
-        x1="0"
-        y1={dayHeight + timeHeight}
-        x2={width}
-        y2={dayHeight + timeHeight}
-        stroke="#000000"
-      />
+      <line x1="0" y1={dayHeight + timeHeight} x2={width} y2={dayHeight + timeHeight} stroke="#000000" />
       <line x1="0" y1={chartTop} x2={width} y2={chartTop} stroke="#000000" />
-      <line
-        x1="0"
-        y1={chartTop + chartHeight}
-        x2={width}
-        y2={chartTop + chartHeight}
-        stroke="#000000"
-      />
+      <line x1="0" y1={chartTop + chartHeight} x2={width} y2={chartTop + chartHeight} stroke="#000000" />
 
-      <text x="22" y="19" className="fws-svg-label">
-        วัน
-      </text>
-
-      <text x="19" y={dayHeight + 38} className="fws-svg-label">
-        เวลา
-      </text>
-
-      <text x="12" y={dayHeight + timeHeight + 16} className="fws-svg-label">
-        อุณหภูมิ
-      </text>
-
-      <text x="10" y={chartTop + chartHeight + 18} className="fws-svg-label">
-        สภาพยาง
-      </text>
+      <text x="22" y="19" className="fws-svg-label">วัน</text>
+      <text x="19" y={dayHeight + 38} className="fws-svg-label">เวลา</text>
+      <text x="12" y={dayHeight + timeHeight + 16} className="fws-svg-label">อุณหภูมิ</text>
+      <text x="10" y={chartTop + chartHeight + 18} className="fws-svg-label">สภาพยาง</text>
 
       {Array.from({ length: reportDayCount }).map((_, dayIndex) => {
         const x = left + dayIndex * timeSlots.length * cellWidth;
@@ -754,7 +746,7 @@ function FwsTemperatureGraph({
 
         return (
           <g key={`day-${dayIndex}`}>
-            <rect x={x} y={topDay} width={w} height={dayHeight} fill="#ffffff" stroke="#000000" />
+            <rect x={x} y="0" width={w} height={dayHeight} fill="#ffffff" stroke="#000000" />
             <text x={x + w / 2} y="18" textAnchor="middle" className="fws-svg-day">
               ({dayIndex + 1})
             </text>
@@ -770,11 +762,11 @@ function FwsTemperatureGraph({
           <g key={`time-${slot.index}`}>
             <line
               x1={x}
-              y1={0}
+              y1="0"
               x2={x}
               y2={height}
               stroke="#000000"
-              strokeWidth={isDayStart ? 1.8 : 0.65}
+              strokeWidth={isDayStart ? 1.8 : 0.62}
             />
 
             <text
@@ -790,14 +782,7 @@ function FwsTemperatureGraph({
         );
       })}
 
-      <line
-        x1={width - 2}
-        y1={0}
-        x2={width - 2}
-        y2={height}
-        stroke="#000000"
-        strokeWidth="1.2"
-      />
+      <line x1={width - 2} y1="0" x2={width - 2} y2={height} stroke="#000000" strokeWidth="1.2" />
 
       {Array.from({ length: graphMaxTemp - graphMinTemp + 1 }).map((_, index) => {
         const temp = graphMaxTemp - index;
@@ -825,13 +810,8 @@ function FwsTemperatureGraph({
         );
       })}
 
-      <text x="18" y={tempToY(50) + 4} className="fws-svg-band">
-        รมควัน
-      </text>
-
-      <text x="24" y={tempToY(35) + 4} className="fws-svg-band">
-        อุ่น
-      </text>
+      <text x="18" y={tempToY(50) + 4} className="fws-svg-band">รมควัน</text>
+      <text x="24" y={tempToY(35) + 4} className="fws-svg-band">อุ่น</text>
 
       <line x1="0" y1={tempToY(60)} x2="28" y2={tempToY(60)} stroke="#000000" strokeWidth="1.4" />
       <line x1="0" y1={tempToY(40)} x2="28" y2={tempToY(40)} stroke="#000000" strokeWidth="1.4" />
@@ -1060,32 +1040,15 @@ const fwsStyles = `
     font-size: 11px;
   }
 
-  .fws-doc-cell strong,
-  .fws-doc-cell b {
-    display: block;
-  }
-
   .fws-logo-cell {
     display: grid;
     place-items: center;
   }
 
-  .fws-logo-mark {
-    width: 92px;
-    height: 46px;
-    border-radius: 15px;
-    display: grid;
-    place-items: center;
-    color: #c06b00;
-    font-weight: 900;
-    font-size: 24px;
-    letter-spacing: 8px;
-    background: linear-gradient(135deg, #ffb132, #ffe06b 48%, #f08a00);
-    border: 1px solid rgba(0, 0, 0, 0.5);
-  }
-
-  .fws-logo-mark span {
-    transform: translateX(4px);
+  .fws-logo-svg {
+    width: 118px;
+    height: 66px;
+    display: block;
   }
 
   .fws-title-cell {
