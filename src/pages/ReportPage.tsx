@@ -33,6 +33,60 @@ type HistoricalDownloadMode = "single" | "range";
 type SvgTextAnchor = "start" | "middle" | "end";
 
 type ReportCompany = "gr" | "ttn";
+type RubberType = "latex" | "yellow" | "black" | "angka" | "";
+type SmokingPeriodStatus = "under" | "over" | "";
+type TemperatureControlStatus = "underControl" | "outOfControl" | "";
+
+type ReportFormState = {
+  rubberType: RubberType;
+  smokingPeriodStatus: SmokingPeriodStatus;
+  temperatureControlStatus: TemperatureControlStatus;
+  reason: string;
+  reporter: string;
+  productionHead: string;
+  targetTemperature: number;
+  showTargetLine: boolean;
+};
+
+const defaultReportForm: ReportFormState = {
+  rubberType: "",
+  smokingPeriodStatus: "",
+  temperatureControlStatus: "",
+  reason: "",
+  reporter: "",
+  productionHead: "",
+  targetTemperature: 45,
+  showTargetLine: true,
+};
+
+const rubberOptions: Array<{ value: Exclude<RubberType, "">; label: string }> = [
+  { value: "latex", label: "น้ำยาง" },
+  { value: "yellow", label: "ยางเหลือง" },
+  { value: "black", label: "ยางดำ" },
+  { value: "angka", label: "ยางอังคา" },
+];
+
+const smokingPeriodOptions: Array<{
+  value: Exclude<SmokingPeriodStatus, "">;
+  label: string;
+  description: string;
+}> = [
+  { value: "under", label: "อยู่ในเกณฑ์", description: "Under period" },
+  {
+    value: "over",
+    label: "เกินเกณฑ์ (เกณฑ์การรมควัน = ความชื้นยาง บวกลบ 1 วัน)",
+    description: "Over period (+/- 1 day)",
+  },
+];
+
+const temperatureControlOptions: Array<{
+  value: Exclude<TemperatureControlStatus, "">;
+  label: string;
+  description: string;
+}> = [
+  { value: "underControl", label: "อยู่ในค่าควบคุม", description: "Under Control" },
+  { value: "outOfControl", label: "ไม่อยู่ในค่าควบคุม", description: "Out of Control" },
+];
 
 function getReportCompany(): ReportCompany {
   if (typeof window === "undefined") return "gr";
@@ -90,6 +144,7 @@ export function ReportPage() {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [downloadMessage, setDownloadMessage] = useState("");
   const [autoDownloaded, setAutoDownloaded] = useState(false);
+  const [reportForm, setReportForm] = useState<ReportFormState>(defaultReportForm);
 
   const reportRef = useRef<SVGSVGElement | null>(null);
 
@@ -99,6 +154,17 @@ export function ReportPage() {
     const latest = Math.max(oven.cycleCount || 1, 1);
     return Array.from({ length: latest }, (_, index) => latest - index);
   }, [oven]);
+
+  useEffect(() => {
+    if (!oven) return;
+
+    setReportForm((current) => ({
+      ...current,
+      targetTemperature: Math.round(
+        (oven.limits.chamberTemp.upper + oven.limits.chamberTemp.lower) / 2,
+      ),
+    }));
+  }, [oven?.id]);
 
   useEffect(() => {
     if (!oven) return;
@@ -512,6 +578,8 @@ export function ReportPage() {
         )}
       </section>
 
+      <ReportFormControls form={reportForm} onChange={setReportForm} />
+
       <section className="report-page-shell" style={{ overflowX: "auto" }}>
         <FwsSvgReport
           refElement={reportRef}
@@ -520,9 +588,148 @@ export function ReportPage() {
           cycleRange={cycleRange}
           slots={reportSlots}
           company={company}
+          form={reportForm}
         />
       </section>
     </>
+  );
+}
+
+function ReportFormControls({
+  form,
+  onChange,
+}: {
+  form: ReportFormState;
+  onChange: (next: ReportFormState) => void;
+}) {
+  function update<Key extends keyof ReportFormState>(key: Key, value: ReportFormState[Key]) {
+    onChange({
+      ...form,
+      [key]: value,
+    });
+  }
+
+  return (
+    <section className="panel report-form-controls">
+      <div className="report-form-controls__header">
+        <div>
+          <strong>ข้อมูลเพิ่มเติมสำหรับฟอร์ม F-WS-05</strong>
+          <span>เลือก/กรอกข้อมูลก่อนดาวน์โหลด PDF ระบบจะนำข้อมูลไปติ๊กและแสดงในแบบฟอร์ม</span>
+        </div>
+      </div>
+
+      <div className="report-form-controls__grid">
+        <fieldset>
+          <legend>ชนิดยาง / Type of rubber</legend>
+          <div className="report-choice-row">
+            {rubberOptions.map((option) => (
+              <label key={option.value} className="report-choice">
+                <input
+                  type="radio"
+                  name="rubberType"
+                  checked={form.rubberType === option.value}
+                  onChange={() => update("rubberType", option.value)}
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>ประเมินวันรมควัน / Smoking period</legend>
+          <div className="report-choice-row">
+            {smokingPeriodOptions.map((option) => (
+              <label key={option.value} className="report-choice">
+                <input
+                  type="radio"
+                  name="smokingPeriodStatus"
+                  checked={form.smokingPeriodStatus === option.value}
+                  onChange={() => update("smokingPeriodStatus", option.value)}
+                />
+                <span>
+                  {option.label}
+                  <small>{option.description}</small>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>อุณหภูมิ / Temperature</legend>
+          <div className="report-choice-row">
+            {temperatureControlOptions.map((option) => (
+              <label key={option.value} className="report-choice">
+                <input
+                  type="radio"
+                  name="temperatureControlStatus"
+                  checked={form.temperatureControlStatus === option.value}
+                  onChange={() => update("temperatureControlStatus", option.value)}
+                />
+                <span>
+                  {option.label}
+                  <small>{option.description}</small>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>อุณหภูมิที่ต้องการ</legend>
+          <div className="report-target-row">
+            <label className="report-choice">
+              <input
+                type="checkbox"
+                checked={form.showTargetLine}
+                onChange={(event) => update("showTargetLine", event.target.checked)}
+              />
+              <span>แสดงเส้นสีน้ำเงินในกราฟ</span>
+            </label>
+
+            <label className="field compact-field">
+              <span>ค่าเป้าหมาย (°C)</span>
+              <input
+                type="number"
+                min={graphMinTemp}
+                max={graphMaxTemp}
+                step={1}
+                value={form.targetTemperature}
+                onChange={(event) => update("targetTemperature", Number(event.target.value))}
+              />
+            </label>
+          </div>
+        </fieldset>
+
+        <label className="field compact-field">
+          <span>สาเหตุ</span>
+          <input
+            value={form.reason}
+            onChange={(event) => update("reason", event.target.value)}
+            placeholder="ระบุสาเหตุถ้ามี"
+          />
+        </label>
+
+        <label className="field compact-field">
+          <span>ผู้รายงาน</span>
+          <input
+            value={form.reporter}
+            onChange={(event) => update("reporter", event.target.value)}
+            placeholder="ชื่อผู้รายงาน"
+          />
+        </label>
+
+        <label className="field compact-field">
+          <span>หัวหน้าฝ่ายผลิต</span>
+          <input
+            value={form.productionHead}
+            onChange={(event) => update("productionHead", event.target.value)}
+            placeholder="ชื่อหัวหน้าฝ่ายผลิต"
+          />
+        </label>
+      </div>
+    </section>
   );
 }
 
@@ -533,6 +740,7 @@ function FwsSvgReport({
   cycleRange,
   slots,
   company,
+  form,
 }: {
   refElement: RefObject<SVGSVGElement | null>;
   oven: Oven;
@@ -540,6 +748,7 @@ function FwsSvgReport({
   cycleRange: { start: Date; end: Date };
   slots: ReportSlot[];
   company: ReportCompany;
+  form: ReportFormState;
 }) {
   const upper = oven.limits.chamberTemp.upper;
   const lower = oven.limits.chamberTemp.lower;
@@ -583,6 +792,7 @@ function FwsSvgReport({
           oven={oven}
           cycle={cycle}
           cycleRange={cycleRange}
+          form={form}
         />
 
         <FwsSvgTemperatureGrid
@@ -592,9 +802,10 @@ function FwsSvgReport({
           slots={slots}
           upper={upper}
           lower={lower}
+          form={form}
         />
 
-        <FwsSvgNotes y={noteY} />
+        <FwsSvgNotes y={noteY} form={form} />
       </g>
 
       <SvgText x={8} y={779} size={8}>
@@ -602,7 +813,7 @@ function FwsSvgReport({
       </SvgText>
 
       <SvgText x={1096} y={779} size={8} anchor="end">
-        Effective Date : 1 Dec 2025
+        Effectived Date : 1 Dec 2025
       </SvgText>
     </svg>
   );
@@ -621,6 +832,7 @@ function FwsSvgHeader({
   const docW = 205;
   const titleW = width - logoW - docW;
   const docX = logoW + titleW;
+  const logoHref = company === "ttn" ? ttnLogo : grLogo;
 
   return (
     <g>
@@ -630,9 +842,14 @@ function FwsSvgHeader({
       <line x1={docX} y1={height / 2} x2={width} y2={height / 2} stroke="#000000" />
       <line x1={docX + 92} y1={height / 2} x2={docX + 92} y2={height} stroke="#000000" />
 
-      <g transform="translate(12 5)">
-        <CompanyReportLogo company={company} />
-      </g>
+      <image
+        href={logoHref}
+        x={company === "ttn" ? 54 : 37}
+        y={company === "ttn" ? 8 : 7}
+        width={company === "ttn" ? 66 : 100}
+        height={company === "ttn" ? 60 : 60}
+        preserveAspectRatio="xMidYMid meet"
+      />
 
       <SvgText x={logoW + titleW / 2} y={43} size={16} weight={800} anchor="middle">
         รายงานการตรวจสอบอุณหภูมิเตา
@@ -645,10 +862,10 @@ function FwsSvgHeader({
         F-WS-05 Rev.11
       </SvgText>
 
-      <SvgText x={docX + 42} y={59} size={11} weight={800} anchor="middle">
+      <SvgText x={docX + 46} y={59} size={10.5} weight={800} anchor="middle">
         เริ่มใช้วันที่
       </SvgText>
-      <SvgText x={docX + 150} y={59} size={11} weight={800} anchor="middle">
+      <SvgText x={docX + 148} y={59} size={11} weight={800} anchor="middle">
         1-ธ.ค.-68
       </SvgText>
     </g>
@@ -662,6 +879,7 @@ function FwsSvgMeta({
   oven,
   cycle,
   cycleRange,
+  form,
 }: {
   y: number;
   width: number;
@@ -669,6 +887,7 @@ function FwsSvgMeta({
   oven: Oven;
   cycle: number;
   cycleRange: { start: Date; end: Date };
+  form: ReportFormState;
 }) {
   return (
     <g transform={`translate(0 ${y})`}>
@@ -682,31 +901,25 @@ function FwsSvgMeta({
         {oven.number}
       </SvgText>
 
-      <SvgText x={14} y={40} size={11} weight={700}>
+      <SvgText x={14} y={39} size={11} weight={700}>
         ชนิดยาง
       </SvgText>
-
-      <FwsCheckbox x={70} y={31} />
-      <FwsCheckbox x={145} y={31} />
-      <FwsCheckbox x={220} y={31} />
-
-      <SvgText x={84} y={64} size={8.5} anchor="middle">
-        USS ≥ 97%
+      <SvgText x={14} y={53} size={8.5}>
+        Type of rubber
       </SvgText>
 
-      <SvgText x={159} y={58} size={8.5} anchor="middle">
-        USS ≥ 96%
-      </SvgText>
-      <SvgText x={159} y={70} size={8.5} anchor="middle">
-        แต่ &lt; 97 %
-      </SvgText>
+      {rubberOptions.map((item, index) => {
+        const x = 88 + index * 67;
 
-      <SvgText x={235} y={58} size={8.5} anchor="middle">
-        USS ≥94%
-      </SvgText>
-      <SvgText x={235} y={70} size={8.5} anchor="middle">
-        แต่ &lt; 96 % (ควบคุมพิเศษ)
-      </SvgText>
+        return (
+          <g key={item.value}>
+            <FwsCheckbox x={x} y={22} checked={form.rubberType === item.value} />
+            <SvgText x={x + 6.5} y={62} size={9.2} anchor="middle">
+              {item.label}
+            </SvgText>
+          </g>
+        );
+      })}
 
       <SvgText x={335} y={18} size={11} weight={700}>
         เข้าเตาวันที่
@@ -769,6 +982,7 @@ function FwsSvgTemperatureGrid({
   slots,
   upper,
   lower,
+  form,
 }: {
   y: number;
   width: number;
@@ -776,6 +990,7 @@ function FwsSvgTemperatureGrid({
   slots: ReportSlot[];
   upper: number;
   lower: number;
+  form: ReportFormState;
 }) {
   const left = 58;
   const dayH = 29;
@@ -803,12 +1018,14 @@ function FwsSvgTemperatureGrid({
       })),
   );
 
-  const targetPath = buildLinePath(
-    slots.map((slot) => ({
-      x: slotToX(slot.index),
-      y: tempToY(slot.target),
-    })),
-  );
+  const targetPath = form.showTargetLine
+    ? buildLinePath(
+        slots.map((slot) => ({
+          x: slotToX(slot.index),
+          y: tempToY(form.targetTemperature),
+        })),
+      )
+    : "";
 
   return (
     <g transform={`translate(0 ${y})`}>
@@ -826,7 +1043,7 @@ function FwsSvgTemperatureGrid({
       <SvgText x={22} y={dayH + 38} size={11} weight={700} anchor="middle">
         เวลา
       </SvgText>
-      <SvgText x={28} y={dayH + timeH + 17} size={11} weight={700} anchor="middle">
+      <SvgText x={28} y={dayH + timeH + 14} size={10.5} weight={700} anchor="middle">
         อุณหภูมิ
       </SvgText>
       <SvgText x={30} y={chartBottom + 18} size={10.5} weight={700} anchor="middle">
@@ -976,95 +1193,133 @@ function FwsSvgTemperatureGrid({
   );
 }
 
-function FwsSvgNotes({ y }: { y: number }) {
+function FwsSvgNotes({ y, form }: { y: number; form: ReportFormState }) {
   return (
     <g transform={`translate(0 ${y})`}>
-      <SvgText x={58} y={0} size={9.3} weight={700}>
-        * ✕ ไม่สุก (ปากกาสีน้ำเงิน)  ✓ สุก (ปากกาสีแดง)  Ø ยางสุกแล้วยังไม่ออกเตา (อุ่นใช้ปากกาสีแดง) / เกณฑ์ประเมินวันรมยาง ต้องใช้ระยะเวลาการรมควันตามที่ WI กำหนด (WI-WS-06)
+      <SvgText x={58} y={0} size={8.7} weight={700}>
+        * ✕ ไม่สุก (ปากกาสีน้ำเงิน)  ✓ สุก (ปากกาสีแดง)  Ø ยางสุกแล้วยังไม่ออกเตา (อุ่นใช้ปากกาสีแดง)
       </SvgText>
 
-      <SvgText x={58} y={17} size={10.2} weight={700}>
-        ** ควบคุมอุณหภูมิ: [รมควัน] 40 - 60°C, [อุ่นยาง] 35-40°C
+      <SvgText x={58} y={14} size={8.7} weight={700}>
+        After the 3rd day of smoking, control the temperature between 40 - 55 °C.
       </SvgText>
 
-      <SvgText x={100} y={44} size={10.3} weight={700}>
+      <SvgText x={58} y={28} size={8.5} weight={700}>
+        (ประเมินอุณหภูมิวันที่ 3 หลังปิดเตา 2 วัน / เกณฑ์การรมควัน = ความชื้นยาง บวกลบ 1 วัน)
+      </SvgText>
+
+      <SvgText x={58} y={51} size={9.8} weight={700}>
         ประเมินวันรมควัน
       </SvgText>
+      <SvgText x={58} y={64} size={8.4}>
+        Smoking period
+      </SvgText>
 
-      <FwsCheckbox x={205} y={33} size={9} />
-      <SvgText x={220} y={44} size={10}>
+      <FwsCheckbox x={178} y={42} size={10} checked={form.smokingPeriodStatus === "under"} />
+      <SvgText x={193} y={52} size={9.8} weight={700}>
         อยู่ในเกณฑ์
       </SvgText>
-
-      <FwsCheckbox x={305} y={33} size={9} />
-      <SvgText x={320} y={44} size={9.5}>
-        เกินเกณฑ์ (เกณฑ์รมควัน = ระยะเวลาการรมควันเกินที่ WI กำหนด (WI-WS-06))
+      <SvgText x={193} y={65} size={8.4}>
+        Under period
       </SvgText>
 
-      <FwsCheckbox x={305} y={56} size={9} />
-      <SvgText x={320} y={67} size={9.5}>
-        ไม่ถึงเกณฑ์ (เกณฑ์รมควัน = ระยะเวลาการรมควันไม่ถึงเกณฑ์ที่ WI กำหนด (WI-WS-06))
+      <FwsCheckbox x={316} y={42} size={10} checked={form.smokingPeriodStatus === "over"} />
+      <SvgText x={331} y={52} size={9.2} weight={700}>
+        เกินเกณฑ์ (เกณฑ์การรมควัน = ความชื้นยาง บวกลบ 1 วัน)
+      </SvgText>
+      <SvgText x={331} y={65} size={8.4}>
+        Over period (+/- 1 day)
       </SvgText>
 
-      <SvgText x={770} y={44} size={10.2} weight={800}>
+      <SvgText x={58} y={86} size={9.8} weight={700}>
+        อุณหภูมิ
+      </SvgText>
+      <SvgText x={58} y={99} size={8.4}>
+        Temperature
+      </SvgText>
+
+      <FwsCheckbox x={178} y={77} size={10} checked={form.temperatureControlStatus === "underControl"} />
+      <SvgText x={193} y={87} size={9.8} weight={700}>
+        อยู่ในค่าควบคุม
+      </SvgText>
+      <SvgText x={193} y={100} size={8.4}>
+        Under Control
+      </SvgText>
+
+      <FwsCheckbox x={316} y={77} size={10} checked={form.temperatureControlStatus === "outOfControl"} />
+      <SvgText x={331} y={87} size={9.8} weight={700}>
+        ไม่อยู่ในค่าควบคุม
+      </SvgText>
+      <SvgText x={331} y={100} size={8.4}>
+        Out of Control
+      </SvgText>
+
+      <SvgText x={760} y={52} size={9.6} weight={800}>
         สีน้ำเงิน = อุณหภูมิที่ต้องการ : หัวหน้างาน
       </SvgText>
-      <SvgText x={770} y={67} size={10.2} weight={800}>
+      <SvgText x={760} y={77} size={9.6} weight={800}>
         สีแดง = อุณหภูมิจริง : พนักงานคุมเตา
       </SvgText>
 
-      <SvgText x={360} y={92} size={10.5} weight={700}>
+      <SvgText x={350} y={114} size={10} weight={700}>
         สาเหตุ
       </SvgText>
-      <DottedLine x={400} y={92} width={420} />
+      <DottedLine x={390} y={114} width={430} />
+      {form.reason ? (
+        <SvgText x={400} y={111} size={9.4}>
+          {form.reason}
+        </SvgText>
+      ) : null}
 
-      <SvgText x={295} y={125} size={11} weight={700}>
+      <SvgText x={290} y={132} size={10.5} weight={700}>
         ผู้รายงาน
       </SvgText>
-      <DottedLine x={350} y={125} width={210} />
+      <DottedLine x={345} y={132} width={210} />
+      {form.reporter ? (
+        <SvgText x={355} y={129} size={9.4}>
+          {form.reporter}
+        </SvgText>
+      ) : null}
 
-      <SvgText x={660} y={125} size={11} weight={700}>
+      <SvgText x={650} y={132} size={10.5} weight={700}>
         หัวหน้าฝ่ายผลิต
       </SvgText>
-      <DottedLine x={750} y={125} width={245} />
+      <DottedLine x={740} y={132} width={245} />
+      {form.productionHead ? (
+        <SvgText x={750} y={129} size={9.4}>
+          {form.productionHead}
+        </SvgText>
+      ) : null}
     </g>
   );
 }
 
-function CompanyReportLogo({ company }: { company: ReportCompany }) {
-  const href = company === "ttn" ? ttnLogo : grLogo;
-
-  if (company === "ttn") {
-    return (
-      <svg width="150" height="64" viewBox="0 0 150 64" aria-label="TTN logo">
-        <image
-          href={href}
-          x="8"
-          y="2"
-          width="58"
-          height="58"
-          preserveAspectRatio="xMidYMid meet"
-        />
-      </svg>
-    );
-  }
-
+function FwsCheckbox({
+  x,
+  y,
+  size = 13,
+  checked = false,
+}: {
+  x: number;
+  y: number;
+  size?: number;
+  checked?: boolean;
+}) {
   return (
-    <svg width="150" height="64" viewBox="0 0 150 64" aria-label="GR logo">
-      <image
-        href={href}
-        x="4"
-        y="7"
-        width="132"
-        height="50"
-        preserveAspectRatio="xMinYMid meet"
-      />
-    </svg>
+    <g>
+      <rect x={x} y={y} width={size} height={size} fill="#ffffff" stroke="#000000" strokeWidth="1" />
+      {checked ? (
+        <path
+          d={`M ${x + size * 0.18} ${y + size * 0.58} L ${x + size * 0.42} ${y + size * 0.82} L ${x + size * 0.86} ${y + size * 0.18}`}
+          fill="none"
+          stroke="#000000"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : null}
+    </g>
   );
-}
-
-function FwsCheckbox({ x, y, size = 13 }: { x: number; y: number; size?: number }) {
-  return <rect x={x} y={y} width={size} height={size} fill="#ffffff" stroke="#000000" strokeWidth="1" />;
 }
 
 function DottedLine({ x, y, width }: { x: number; y: number; width: number }) {
@@ -1260,5 +1515,85 @@ const fwsSvgStyles = `
 
   .report-page-shell {
     overflow-x: auto;
+  }
+
+  .report-form-controls {
+    margin-bottom: 18px;
+  }
+
+  .report-form-controls__header {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .report-form-controls__header strong {
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .report-form-controls__header span {
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .report-form-controls__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .report-form-controls fieldset {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px;
+    margin: 0;
+    background: var(--surface-soft);
+  }
+
+  .report-form-controls legend {
+    padding: 0 6px;
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--ink-strong);
+  }
+
+  .report-choice-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+  }
+
+  .report-choice {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 7px;
+    font-size: 13px;
+    color: var(--ink-strong);
+  }
+
+  .report-choice input {
+    margin-top: 2px;
+  }
+
+  .report-choice small {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .report-target-row {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) 140px;
+    gap: 12px;
+    align-items: end;
+  }
+
+  @media (max-width: 980px) {
+    .report-form-controls__grid {
+      grid-template-columns: 1fr;
+    }
   }
 `;
