@@ -27,6 +27,7 @@ import { allSensorKeys } from "../utils/sensors";
 
 type ReportMode = "current" | "history";
 type HistoricalDownloadMode = "single" | "range";
+type SvgTextAnchor = "start" | "middle" | "end";
 
 type ReportSlot = {
   index: number;
@@ -36,8 +37,6 @@ type ReportSlot = {
   actual: number | null;
   target: number;
 };
-
-type SvgTextAnchor = "start" | "middle" | "end";
 
 const reportSensors: SensorKey[] = ["chamberTemp", "humidity", "furnaceTemp", "blowerTemp"];
 
@@ -164,7 +163,7 @@ export function ReportPage() {
 
       setPoints(nextPoints);
 
-      await waitForRender(280);
+      await waitForRender(300);
 
       if (!reportRef.current) {
         throw new Error("ไม่สามารถสร้าง PDF ได้");
@@ -201,7 +200,7 @@ export function ReportPage() {
       });
 
       setPoints(nextPoints);
-      await waitForRender(280);
+      await waitForRender(300);
 
       if (!reportRef.current) return;
 
@@ -538,7 +537,7 @@ function FwsSvgReport({
   const metaH = 78;
   const graphY = metaY + metaH;
   const graphH = 445;
-  const noteY = graphY + graphH + 10;
+  const noteY = graphY + graphH + 9;
 
   return (
     <svg
@@ -842,9 +841,9 @@ function FwsSvgTemperatureGrid({
               y={dayH + timeH - 5}
               transform={`rotate(-90 ${x + cellW / 2 + 2} ${dayH + timeH - 5})`}
               textAnchor="start"
-              fontFamily="Sarabun, Tahoma, Arial, sans-serif"
+              fontFamily="Sarabun"
               fontSize="8"
-              fontWeight="700"
+              fontWeight="bold"
               fill="#000000"
             >
               {slot.timeLabel}
@@ -954,37 +953,37 @@ function FwsSvgTemperatureGrid({
 function FwsSvgNotes({ y }: { y: number }) {
   return (
     <g transform={`translate(0 ${y})`}>
-      <SvgText x={58} y={0} size={10.5} weight={700}>
+      <SvgText x={58} y={0} size={9.3} weight={700}>
         * ✕ ไม่สุก (ปากกาสีน้ำเงิน)  ✓ สุก (ปากกาสีแดง)  Ø ยางสุกแล้วยังไม่ออกเตา (อุ่นใช้ปากกาสีแดง) / เกณฑ์ประเมินวันรมยาง ต้องใช้ระยะเวลาการรมควันตามที่ WI กำหนด (WI-WS-06)
       </SvgText>
 
-      <SvgText x={58} y={18} size={10.5} weight={700}>
+      <SvgText x={58} y={17} size={10.2} weight={700}>
         ** ควบคุมอุณหภูมิ: [รมควัน] 40 - 60°C, [อุ่นยาง] 35-40°C
       </SvgText>
 
-      <SvgText x={100} y={45} size={10.5} weight={700}>
+      <SvgText x={100} y={44} size={10.3} weight={700}>
         ประเมินวันรมควัน
       </SvgText>
 
-      <FwsCheckbox x={205} y={34} size={9} />
-      <SvgText x={220} y={45} size={10}>
+      <FwsCheckbox x={205} y={33} size={9} />
+      <SvgText x={220} y={44} size={10}>
         อยู่ในเกณฑ์
       </SvgText>
 
-      <FwsCheckbox x={305} y={34} size={9} />
-      <SvgText x={320} y={45} size={10}>
+      <FwsCheckbox x={305} y={33} size={9} />
+      <SvgText x={320} y={44} size={9.5}>
         เกินเกณฑ์ (เกณฑ์รมควัน = ระยะเวลาการรมควันเกินที่ WI กำหนด (WI-WS-06))
       </SvgText>
 
-      <FwsCheckbox x={305} y={57} size={9} />
-      <SvgText x={320} y={68} size={10}>
+      <FwsCheckbox x={305} y={56} size={9} />
+      <SvgText x={320} y={67} size={9.5}>
         ไม่ถึงเกณฑ์ (เกณฑ์รมควัน = ระยะเวลาการรมควันไม่ถึงเกณฑ์ที่ WI กำหนด (WI-WS-06))
       </SvgText>
 
-      <SvgText x={770} y={45} size={10.5} weight={800}>
+      <SvgText x={770} y={44} size={10.2} weight={800}>
         สีน้ำเงิน = อุณหภูมิที่ต้องการ : หัวหน้างาน
       </SvgText>
-      <SvgText x={770} y={68} size={10.5} weight={800}>
+      <SvgText x={770} y={67} size={10.2} weight={800}>
         สีแดง = อุณหภูมิจริง : พนักงานคุมเตา
       </SvgText>
 
@@ -1036,9 +1035,9 @@ function EditableVectorLogo() {
         x="57"
         y="60"
         textAnchor="middle"
-        fontFamily="Sarabun, Tahoma, Arial, sans-serif"
+        fontFamily="Sarabun"
         fontSize="17"
-        fontWeight="900"
+        fontWeight="bold"
         fill="#f08a00"
         stroke="#8a4a00"
         strokeWidth="0.35"
@@ -1087,9 +1086,10 @@ function SvgText({
     <text
       x={x}
       y={y}
-      fontFamily="Sarabun, Tahoma, Arial, sans-serif"
+      fontFamily="Sarabun"
       fontSize={size}
-      fontWeight={weight}
+      fontWeight={weight >= 700 ? "bold" : "normal"}
+      data-weight={weight >= 700 ? "700" : "400"}
       textAnchor={anchor}
       fill="#000000"
     >

@@ -51,16 +51,20 @@ export async function createLandscapePdfBlobFromSvg(svgElement: SVGSVGElement): 
     compress: true,
   });
 
-  await registerOptionalThaiFonts(pdf);
+  await registerThaiFonts(pdf);
 
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
 
   const svgClone = svgElement.cloneNode(true) as SVGSVGElement;
+  const viewBox = svgClone.getAttribute("viewBox") ?? "0 0 1123 794";
 
+  svgClone.setAttribute("viewBox", viewBox);
   svgClone.setAttribute("width", String(pageWidth));
   svgClone.setAttribute("height", String(pageHeight));
   svgClone.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+  forceSvgThaiFont(svgClone);
 
   await svg2pdf(svgClone, pdf, {
     x: 0,
@@ -97,7 +101,7 @@ export function downloadBlob(blob: Blob, filename: string): void {
   }, 1000);
 }
 
-async function registerOptionalThaiFonts(pdf: jsPDF): Promise<void> {
+async function registerThaiFonts(pdf: jsPDF): Promise<void> {
   const baseUrl = `${import.meta.env.BASE_URL}fonts`;
 
   const regularLoaded = await tryRegisterFont({
@@ -116,15 +120,13 @@ async function registerOptionalThaiFonts(pdf: jsPDF): Promise<void> {
     style: "bold",
   });
 
-  if (regularLoaded) {
-    pdf.setFont("Sarabun", "normal");
-  }
-
   if (!regularLoaded || !boldLoaded) {
-    console.warn(
-      "PDF Thai font was not fully loaded. Put Sarabun-Regular.ttf and Sarabun-Bold.ttf in public/fonts for best Thai PDF output.",
+    throw new Error(
+      "ไม่พบไฟล์ฟอนต์ไทย กรุณาใส่ Sarabun-Regular.ttf และ Sarabun-Bold.ttf ใน public/fonts",
     );
   }
+
+  pdf.setFont("Sarabun", "normal");
 }
 
 async function tryRegisterFont({
@@ -143,7 +145,10 @@ async function tryRegisterFont({
   try {
     const response = await fetch(url);
 
-    if (!response.ok) return false;
+    if (!response.ok) {
+      console.error(`Font not found: ${url}`);
+      return false;
+    }
 
     const buffer = await response.arrayBuffer();
     const base64 = arrayBufferToBase64(buffer);
@@ -152,9 +157,27 @@ async function tryRegisterFont({
     pdf.addFont(filename, family, style);
 
     return true;
-  } catch {
+  } catch (error) {
+    console.error(`Cannot load font: ${url}`, error);
     return false;
   }
+}
+
+function forceSvgThaiFont(svgElement: SVGSVGElement): void {
+  const textElements = svgElement.querySelectorAll("text, tspan");
+
+  textElements.forEach((text) => {
+    text.setAttribute("font-family", "Sarabun");
+
+    const weight = text.getAttribute("font-weight") ?? text.getAttribute("data-weight") ?? "normal";
+    const weightNumber = Number(weight);
+
+    if (weight === "bold" || weightNumber >= 700) {
+      text.setAttribute("font-weight", "bold");
+    } else {
+      text.setAttribute("font-weight", "normal");
+    }
+  });
 }
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
