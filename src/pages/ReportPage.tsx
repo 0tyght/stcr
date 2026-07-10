@@ -56,7 +56,7 @@ const defaultReportForm: ReportFormState = {
   reporter: "",
   productionHead: "",
   targetTemperature: 45,
-  showTargetLine: false,
+  showTargetLine: true,
 };
 
 const rubberOptions: Array<{ value: Exclude<RubberType, "">; label: string }> = [
@@ -264,7 +264,7 @@ export function ReportPage() {
     if (!oven || selectedCycle == null) return;
 
     setDownloadingPdf(true);
-    setDownloadMessage("กำลังสร้าง PDF แบบ vector...");
+    setDownloadMessage("กำลังสร้าง PDF...");
 
     try {
       const safeCycle = clampCycleNumber(selectedCycle, oven);
@@ -626,7 +626,7 @@ function ReportFormControls({
             onChange({
               ...defaultReportForm,
               targetTemperature: form.targetTemperature,
-              showTargetLine: false,
+              showTargetLine: true,
             })
           }
         >
@@ -838,7 +838,7 @@ function FwsSvgReport({
       </SvgText>
 
       <SvgText x={1096} y={779} size={8} anchor="end">
-        Effectived Date : 1 Dec 2025
+        Effective Date : 1 Dec 2025
       </SvgText>
     </svg>
   );
@@ -1516,14 +1516,18 @@ function waitForRender(ms: number): Promise<void> {
 }
 
 function formatReportDate(value: Date): string {
+  const buddhistShortYear = String(value.getFullYear() + 543).slice(-2);
   return `${String(value.getDate()).padStart(2, "0")}-${String(value.getMonth() + 1).padStart(
     2,
     "0",
-  )}-${value.getFullYear()}`;
+  )}-${buddhistShortYear}`;
 }
 
 function formatFileDate(value: Date): string {
-  return formatReportDate(value).replaceAll("-", "");
+  return `${String(value.getDate()).padStart(2, "0")}${String(value.getMonth() + 1).padStart(
+    2,
+    "0",
+  )}${value.getFullYear()}`;
 }
 
 function formatReportTime(value: Date): string {

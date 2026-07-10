@@ -1,6 +1,9 @@
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { svg2pdf } from "svg2pdf.js";
+
+const defaultSvgWidth = 1123;
+const defaultSvgHeight = 794;
+const pdfRenderScale = 3;
 
 export async function createLandscapePdfBlobFromElement(element: HTMLElement): Promise<Blob> {
   const canvas = await html2canvas(element, {
@@ -51,28 +54,23 @@ export async function createLandscapePdfBlobFromSvg(svgElement: SVGSVGElement): 
     compress: true,
   });
 
-  await registerThaiFonts(pdf);
-
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-
   const svgClone = svgElement.cloneNode(true) as SVGSVGElement;
-  const viewBox = svgClone.getAttribute("viewBox") ?? "0 0 1123 794";
+  const viewBox = svgClone.getAttribute("viewBox") ?? `0 0 ${defaultSvgWidth} ${defaultSvgHeight}`;
+  const { width: svgWidth, height: svgHeight } = getSvgViewBoxSize(viewBox);
 
   svgClone.setAttribute("viewBox", viewBox);
-  svgClone.setAttribute("width", String(pageWidth));
-  svgClone.setAttribute("height", String(pageHeight));
+  svgClone.setAttribute("width", String(svgWidth));
+  svgClone.setAttribute("height", String(svgHeight));
   svgClone.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
   forceSvgThaiFont(svgClone);
+  await embedSvgThaiFonts(svgClone);
   await inlineSvgImages(svgClone);
 
-  await svg2pdf(svgClone, pdf, {
-    x: 0,
-    y: 0,
-    width: pageWidth,
-    height: pageHeight,
-  });
+  const imageData = await svgToPngDataUrl(svgClone, svgWidth, svgHeight, pdfRenderScale);
+  pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight, undefined, "FAST");
 
   return pdf.output("blob");
 }
@@ -102,68 +100,6 @@ export function downloadBlob(blob: Blob, filename: string): void {
   }, 1000);
 }
 
-async function registerThaiFonts(pdf: jsPDF): Promise<void> {
-  const baseUrl = `${import.meta.env.BASE_URL}fonts`;
-
-  const regularLoaded = await tryRegisterFont({
-    pdf,
-    url: `${baseUrl}/Sarabun-Regular.ttf`,
-    filename: "Sarabun-Regular.ttf",
-    family: "Sarabun",
-    style: "normal",
-  });
-
-  const boldLoaded = await tryRegisterFont({
-    pdf,
-    url: `${baseUrl}/Sarabun-Bold.ttf`,
-    filename: "Sarabun-Bold.ttf",
-    family: "Sarabun",
-    style: "bold",
-  });
-
-  if (!regularLoaded || !boldLoaded) {
-    throw new Error(
-      "ไม่พบไฟล์ฟอนต์ไทย กรุณาใส่ Sarabun-Regular.ttf และ Sarabun-Bold.ttf ใน public/fonts",
-    );
-  }
-
-  pdf.setFont("Sarabun", "normal");
-}
-
-async function tryRegisterFont({
-  pdf,
-  url,
-  filename,
-  family,
-  style,
-}: {
-  pdf: jsPDF;
-  url: string;
-  filename: string;
-  family: string;
-  style: "normal" | "bold";
-}): Promise<boolean> {
-  try {
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      console.error(`Font not found: ${url}`);
-      return false;
-    }
-
-    const buffer = await response.arrayBuffer();
-    const base64 = arrayBufferToBase64(buffer);
-
-    pdf.addFileToVFS(filename, base64);
-    pdf.addFont(filename, family, style);
-
-    return true;
-  } catch (error) {
-    console.error(`Cannot load font: ${url}`, error);
-    return false;
-  }
-}
-
 function forceSvgThaiFont(svgElement: SVGSVGElement): void {
   const textElements = svgElement.querySelectorAll("text, tspan");
 
@@ -181,6 +117,110 @@ function forceSvgThaiFont(svgElement: SVGSVGElement): void {
   });
 }
 
+async function embedSvgThaiFonts(svgElement: SVGSVGElement): Promise<void> {
+  const baseUrl = `${import.meta.env.BASE_URL}fonts`;
+
+  try {
+    const [regularFont, boldFont] = await Promise.all([
+      fetchFontDataUrl(`${baseUrl}/Sarabun-Regular.ttf`),
+      fetchFontDataUrl(`${baseUrl}/Sarabun-Bold.ttf`),
+    ]);
+
+    const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
+    style.textContent = `
+      @font-face {
+        font-family: "Sarabun";
+        src: url("${regularFont}") format("truetype");
+        font-weight: 400;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: "Sarabun";
+        src: url("${boldFont}") format("truetype");
+        font-weight: 700;
+        font-style: normal;
+      }
+      text, tspan {
+        font-family: "Sarabun", "Tahoma", sans-serif;
+        dominant-baseline: alphabetic;
+      }
+    `;
+
+    svgElement.insertBefore(style, svgElement.firstChild);
+  } catch (error) {
+    console.error("Cannot embed Thai fonts for PDF export", error);
+    throw new Error(
+      "ไม่พบไฟล์ฟอนต์ไทย กรุณาใส่ Sarabun-Regular.ttf และ Sarabun-Bold.ttf ใน public/fonts",
+    );
+  }
+}
+
+async function fetchFontDataUrl(url: string): Promise<string> {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Font not found: ${url}`);
+  }
+
+  const buffer = await response.arrayBuffer();
+  return `data:font/ttf;base64,${arrayBufferToBase64(buffer)}`;
+}
+
+function getSvgViewBoxSize(viewBox: string): { width: number; height: number } {
+  const parts = viewBox.split(/\s+/).map((value) => Number.parseFloat(value));
+  const width = parts[2];
+  const height = parts[3];
+
+  return {
+    width: Number.isFinite(width) && width > 0 ? width : defaultSvgWidth,
+    height: Number.isFinite(height) && height > 0 ? height : defaultSvgHeight,
+  };
+}
+
+async function svgToPngDataUrl(
+  svgElement: SVGSVGElement,
+  width: number,
+  height: number,
+  scale: number,
+): Promise<string> {
+  if (document.fonts) {
+    await document.fonts.ready;
+  }
+
+  const serializedSvg = new XMLSerializer().serializeToString(svgElement);
+  const svgBlob = new Blob([serializedSvg], { type: "image/svg+xml;charset=utf-8" });
+  const svgUrl = URL.createObjectURL(svgBlob);
+
+  try {
+    const image = await loadImage(svgUrl);
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      throw new Error("Cannot create canvas context for PDF export");
+    }
+
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    return canvas.toDataURL("image/png");
+  } finally {
+    URL.revokeObjectURL(svgUrl);
+  }
+}
+
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Cannot render SVG image for PDF export"));
+    image.src = url;
+  });
+}
 
 async function inlineSvgImages(svgElement: SVGSVGElement): Promise<void> {
   const imageElements = Array.from(svgElement.querySelectorAll("image"));

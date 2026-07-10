@@ -17,8 +17,7 @@
     "lucide-react": "^0.546.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "react-router-dom": "^7.9.4",
-    "svg2pdf.js": "^2.7.0"
+    "react-router-dom": "^7.9.4"
   },
   "devDependencies": {
     "@types/react": "^19.1.13",
