@@ -71,7 +71,7 @@ const defaultReportForm: ReportFormState = {
   reporter: "",
   productionHead: "",
   targetTemperature: 45,
-  showTargetLine: true,
+  showTargetLine: false,
 };
 
 const rubberOptions: Array<{ value: Exclude<RubberType, "">; label: string }> = [
@@ -720,32 +720,33 @@ function ReportFormControls({
   return (
     <section className="panel report-form-controls">
       <div className="report-form-controls__header">
-        <div>
+        <div className="report-form-controls__heading">
           <strong>ข้อมูลเพิ่มเติมสำหรับฟอร์ม F-WS-05</strong>
-          <span>เลือก/กรอกข้อมูลก่อนดาวน์โหลด PDF ช่องเหล่านี้ไม่บังคับเลือก และกดตัวเดิมซ้ำเพื่อล้างค่าได้</span>
+          <span>เลือกเฉพาะข้อมูลที่ต้องการแสดงในเอกสาร ช่องทั้งหมดไม่บังคับกรอก</span>
         </div>
 
         <button
-          className="button"
+          className="button report-clear-button"
           type="button"
           onClick={() =>
             onChange({
               ...defaultReportForm,
               targetTemperature: form.targetTemperature,
-              showTargetLine: true,
+              showTargetLine: false,
             })
           }
         >
-          ล้างข้อมูลที่เลือก
+          ล้างข้อมูล
         </button>
       </div>
 
       <div className="report-form-controls__grid">
-        <fieldset>
-          <legend>ชนิดยาง / Type of rubber</legend>
-          <div className="report-choice-row">
+        <fieldset className="report-form-group report-form-group--rubber">
+          <legend>ชนิดยาง <span>/ Type of rubber</span></legend>
+
+          <div className="report-choice-row report-choice-row--rubber">
             {rubberOptions.map((option) => (
-              <label key={option.value} className="report-choice">
+              <label key={option.value} className="report-choice report-choice--chip">
                 <input
                   type="checkbox"
                   checked={form.rubberType === option.value}
@@ -759,11 +760,12 @@ function ReportFormControls({
           </div>
         </fieldset>
 
-        <fieldset>
-          <legend>ประเมินวันรมควัน / Smoking period</legend>
-          <div className="report-choice-row">
+        <fieldset className="report-form-group report-form-group--smoking">
+          <legend>ประเมินวันรมควัน <span>/ Smoking period</span></legend>
+
+          <div className="report-choice-list">
             {smokingPeriodOptions.map((option) => (
-              <label key={option.value} className="report-choice">
+              <label key={option.value} className="report-choice report-choice--option">
                 <input
                   type="checkbox"
                   checked={form.smokingPeriodStatus === option.value}
@@ -774,20 +776,22 @@ function ReportFormControls({
                     )
                   }
                 />
-                <span>
-                  {option.label}
-                  <small>{option.description}</small>
+
+                <span className="report-choice__content">
+                  <strong>{option.label}</strong>
+                  {option.description ? <small>{option.description}</small> : null}
                 </span>
               </label>
             ))}
           </div>
         </fieldset>
 
-        <fieldset>
-          <legend>อุณหภูมิ / Temperature</legend>
-          <div className="report-choice-row">
+        <fieldset className="report-form-group report-form-group--temperature">
+          <legend>อุณหภูมิ <span>/ Temperature</span></legend>
+
+          <div className="report-choice-row report-choice-row--temperature">
             {temperatureControlOptions.map((option) => (
-              <label key={option.value} className="report-choice">
+              <label key={option.value} className="report-choice report-choice--option">
                 <input
                   type="checkbox"
                   checked={form.temperatureControlStatus === option.value}
@@ -798,8 +802,9 @@ function ReportFormControls({
                     )
                   }
                 />
-                <span>
-                  {option.label}
+
+                <span className="report-choice__content">
+                  <strong>{option.label}</strong>
                   <small>{option.description}</small>
                 </span>
               </label>
@@ -807,19 +812,24 @@ function ReportFormControls({
           </div>
         </fieldset>
 
-        <fieldset>
+        <fieldset className="report-form-group report-form-group--target">
           <legend>อุณหภูมิที่ต้องการ</legend>
+
           <div className="report-target-row">
-            <label className="report-choice">
+            <label className="report-target-toggle">
               <input
                 type="checkbox"
                 checked={form.showTargetLine}
                 onChange={(event) => update("showTargetLine", event.target.checked)}
               />
-              <span>แสดงเส้นสีน้ำเงินในกราฟ</span>
+
+              <span>
+                <strong>แสดงเส้นสีน้ำเงินในกราฟ</strong>
+                <small>เปิดใช้เมื่อต้องการระบุค่าเป้าหมายในเอกสาร</small>
+              </span>
             </label>
 
-            <label className="field compact-field">
+            <label className="field compact-field report-target-value">
               <span>ค่าเป้าหมาย (°C)</span>
               <input
                 type="number"
@@ -827,13 +837,16 @@ function ReportFormControls({
                 max={graphMaxTemp}
                 step={1}
                 value={form.targetTemperature}
+                disabled={!form.showTargetLine}
                 onChange={(event) => update("targetTemperature", Number(event.target.value))}
               />
             </label>
           </div>
         </fieldset>
+      </div>
 
-        <label className="field compact-field">
+      <div className="report-form-fields">
+        <label className="field compact-field report-form-field report-form-field--reason">
           <span>สาเหตุ</span>
           <input
             value={form.reason}
@@ -842,7 +855,7 @@ function ReportFormControls({
           />
         </label>
 
-        <label className="field compact-field">
+        <label className="field compact-field report-form-field">
           <span>ผู้รายงาน</span>
           <input
             value={form.reporter}
@@ -851,7 +864,7 @@ function ReportFormControls({
           />
         </label>
 
-        <label className="field compact-field">
+        <label className="field compact-field report-form-field">
           <span>หัวหน้าฝ่ายผลิต</span>
           <input
             value={form.productionHead}
@@ -1717,14 +1730,14 @@ function formatReportDateTime(value: Date): string {
 const reportPageStyles = `
   .report-page {
     display: grid;
-    gap: 14px;
+    gap: 12px;
+    min-width: 0;
   }
 
   .report-page .report-cycle-toolbar,
   .report-page .report-form-controls,
   .report-page .report-page-shell {
     border: 1px solid var(--line);
-    border-top: 3px solid var(--company-primary);
     border-radius: 12px;
     background: var(--surface);
     box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
@@ -1732,71 +1745,332 @@ const reportPageStyles = `
 
   .report-page .report-cycle-toolbar {
     margin: 0;
-    padding: 12px 14px;
+    padding: 11px 14px;
+    border-top: 3px solid var(--company-primary);
+  }
+
+  .report-page .report-cycle-toolbar > div:first-child {
+    display: grid;
+    gap: 2px;
+  }
+
+  .report-page .report-cycle-toolbar strong {
+    color: var(--ink-strong);
+    font-size: 14px;
+  }
+
+  .report-page .report-cycle-toolbar span {
+    color: var(--muted);
+    font-size: 12px;
   }
 
   .report-page .report-form-controls {
     margin: 0;
-    padding: 14px;
+    padding: 12px;
+    border-top: 3px solid var(--company-primary);
   }
 
-  .report-page .report-form-controls__header {
+  .report-form-controls__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
     margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
   }
 
-  .report-page .report-form-controls__grid {
+  .report-form-controls__heading {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .report-form-controls__heading strong {
+    color: var(--ink-strong);
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  .report-form-controls__heading span {
+    color: var(--muted);
+    font-size: 11.5px;
+    line-height: 1.4;
+  }
+
+  .report-page .report-clear-button {
+    min-height: 32px;
+    padding: 6px 10px;
+    flex: 0 0 auto;
+  }
+
+  .report-form-controls__grid {
+    display: grid;
+    grid-template-columns: minmax(250px, 0.82fr) minmax(460px, 1.6fr);
     gap: 10px;
+    align-items: start;
   }
 
-  .report-page .report-form-controls fieldset {
-    padding: 9px 10px;
+  .report-form-group {
+    min-width: 0;
+    align-self: start;
+    margin: 0;
+    padding: 9px 10px 10px;
+    border: 1px solid color-mix(in srgb, var(--company-primary) 22%, var(--line));
     border-radius: 10px;
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--company-primary) 5%, var(--surface)) 0%,
+        var(--surface-soft) 100%
+      );
+  }
+
+  .report-form-group legend {
+    padding: 0 5px;
+    color: var(--ink-strong);
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .report-form-group legend span {
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .report-choice-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 7px;
+  }
+
+  .report-choice-row--rubber {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .report-choice-row--temperature {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .report-choice-list {
+    display: grid;
+    grid-template-columns: 0.72fr 1.14fr 1.14fr;
+    gap: 7px;
+    align-items: stretch;
+  }
+
+  .report-choice {
+    min-width: 0;
+    color: var(--ink-strong);
+    cursor: pointer;
+  }
+
+  .report-choice input,
+  .report-target-toggle input {
+    width: 14px;
+    height: 14px;
+    min-height: 0 !important;
+    margin: 1px 0 0;
+    flex: 0 0 auto;
+    accent-color: var(--company-accent);
+  }
+
+  .report-choice--chip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 34px;
+    padding: 6px 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .report-choice--option {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    min-height: 46px;
+    padding: 7px 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+
+  .report-choice__content {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .report-choice__content strong {
+    color: var(--ink-strong);
+    font-size: 11.5px;
+    line-height: 1.3;
+  }
+
+  .report-choice__content small {
+    color: var(--muted);
+    font-size: 9.5px;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+
+  .report-choice--chip:has(input:checked),
+  .report-choice--option:has(input:checked),
+  .report-target-toggle:has(input:checked) {
+    border-color: color-mix(in srgb, var(--company-primary) 65%, var(--line));
+    background: color-mix(in srgb, var(--company-primary) 10%, var(--surface));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--company-primary) 16%, transparent);
+  }
+
+  .report-target-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 126px;
+    gap: 9px;
+    align-items: stretch;
+  }
+
+  .report-target-toggle {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+    min-height: 46px;
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--ink-strong);
+    cursor: pointer;
+  }
+
+  .report-target-toggle > span {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .report-target-toggle strong {
+    font-size: 11.5px;
+    line-height: 1.3;
+  }
+
+  .report-target-toggle small {
+    color: var(--muted);
+    font-size: 9.5px;
+    line-height: 1.3;
+  }
+
+  .report-target-value {
+    align-self: stretch;
+  }
+
+  .report-target-value input:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
     background: var(--surface-soft);
   }
 
-  .report-page .report-choice-row {
-    gap: 7px 12px;
+  .report-form-fields {
+    display: grid;
+    grid-template-columns: minmax(260px, 1.45fr) minmax(180px, 0.78fr) minmax(180px, 0.78fr);
+    gap: 10px;
+    margin-top: 10px;
   }
 
-  .report-page .report-choice {
-    font-size: 12.5px;
+  .report-form-field {
+    min-width: 0;
   }
 
-  .report-page .report-choice small {
-    font-size: 10.5px;
-    line-height: 1.35;
+  .report-page .field > span {
+    margin-bottom: 4px;
+    color: var(--ink-strong);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .report-page input:not([type="checkbox"]),
+  .report-page select {
+    min-height: 34px;
+    padding: 6px 9px;
+    border-color: var(--line);
+    border-radius: 8px;
+    font-size: 12px;
+  }
+
+  .report-page input:not([type="checkbox"]):focus,
+  .report-page select:focus {
+    border-color: var(--company-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--company-primary) 14%, transparent);
+    outline: none;
   }
 
   .report-page .button {
     min-height: 34px;
     padding: 7px 11px;
-    font-size: 12.5px;
-  }
-
-  .report-page input,
-  .report-page select {
-    min-height: 36px;
-  }
-
-  .report-page input[type="checkbox"] {
-    min-height: auto;
-    accent-color: var(--company-accent);
+    font-size: 12px;
   }
 
   .report-page .report-page-shell {
     overflow: auto;
-    padding: 12px;
+    padding: 10px;
+    border-top: 3px solid var(--company-primary);
   }
 
   .report-page .report-page-shell .fws-svg-report {
+    display: block;
     width: min(100%, 1123px) !important;
     max-width: 1123px !important;
     height: auto !important;
+    margin-inline: auto;
   }
 
-  @media (max-width: 980px) {
-    .report-page .report-form-controls__grid {
+  @media (max-width: 1180px) {
+    .report-form-controls__grid {
       grid-template-columns: 1fr;
+    }
+
+    .report-choice-list {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 820px) {
+    .report-form-controls__header {
+      align-items: flex-start;
+    }
+
+    .report-choice-list,
+    .report-choice-row--temperature,
+    .report-form-fields {
+      grid-template-columns: 1fr;
+    }
+
+    .report-choice-row--rubber {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .report-target-row {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .report-form-controls__header {
+      flex-direction: column;
+    }
+
+    .report-page .report-clear-button {
+      width: 100%;
     }
   }
 `;
@@ -1812,90 +2086,5 @@ const fwsSvgStyles = `
     color: #000000;
     shape-rendering: geometricPrecision;
     text-rendering: optimizeLegibility;
-  }
-
-  .report-page-shell {
-    overflow-x: auto;
-  }
-
-  .report-form-controls {
-    margin-bottom: 18px;
-  }
-
-  .report-form-controls__header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-    margin-bottom: 14px;
-  }
-
-  .report-form-controls__header strong {
-    display: block;
-    margin-bottom: 4px;
-  }
-
-  .report-form-controls__header span {
-    color: var(--muted);
-    font-size: 13px;
-  }
-
-  .report-form-controls__grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-  }
-
-  .report-form-controls fieldset {
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 12px;
-    margin: 0;
-    background: var(--surface-soft);
-  }
-
-  .report-form-controls legend {
-    padding: 0 6px;
-    font-size: 13px;
-    font-weight: 800;
-    color: var(--ink-strong);
-  }
-
-  .report-choice-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px 14px;
-  }
-
-  .report-choice {
-    display: inline-flex;
-    align-items: flex-start;
-    gap: 7px;
-    font-size: 13px;
-    color: var(--ink-strong);
-  }
-
-  .report-choice input {
-    margin-top: 2px;
-  }
-
-  .report-choice small {
-    display: block;
-    margin-top: 2px;
-    color: var(--muted);
-    font-size: 11px;
-  }
-
-  .report-target-row {
-    display: grid;
-    grid-template-columns: minmax(180px, 1fr) 140px;
-    gap: 12px;
-    align-items: end;
-  }
-
-  @media (max-width: 980px) {
-    .report-form-controls__grid {
-      grid-template-columns: 1fr;
-    }
   }
 `;
