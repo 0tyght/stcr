@@ -232,7 +232,6 @@ export function advanceOvenReadings(oven: Oven, now = new Date()): Oven {
 
   const nextOven: Oven = {
     ...oven,
-    cycleCount: oven.cycleCount + (now.getSeconds() % 3 === 0 ? 1 : 0),
     lastUpdatedAt: now.toISOString(),
     readings,
   };

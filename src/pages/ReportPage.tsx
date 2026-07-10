@@ -23,7 +23,7 @@ import {
   downloadBlob,
 } from "../services/pdfExport";
 import type { Oven, SensorKey, TimeSeriesPoint } from "../types";
-import { clampCycleStart, REPORT_CYCLE_MS } from "../utils/reportCycle";
+import { clampCycleStart, getHistoricalCycleRange, REPORT_CYCLE_MS } from "../utils/reportCycle";
 import { allSensorKeys } from "../utils/sensors";
 
 type ReportMode = "current" | "history";
@@ -1602,13 +1602,7 @@ function getCycleRange(
     return { start: clampCycleStart(new Date(oven.startedAt), end), end };
   }
 
-  const latestCycle = Math.max(oven.cycleCount, 1);
-  const cycleOffset = Math.max(0, latestCycle - cycleNumber);
-  const baseEnd = new Date(oven.stoppedAt ?? oven.lastUpdatedAt ?? now);
-  const end = new Date(baseEnd.getTime() - cycleOffset * (REPORT_CYCLE_MS + 12 * 60 * 60 * 1000));
-  const start = new Date(end.getTime() - REPORT_CYCLE_MS);
-
-  return { start, end };
+  return getHistoricalCycleRange(oven, cycleNumber);
 }
 
 function getDefaultHistoricalCycle(oven: Oven): number {

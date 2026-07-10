@@ -29,7 +29,7 @@ import { downloadCsv } from "../services/reportExport";
 import type { LimitMap, Oven, OvenStatus, SensorKey, TimeSeriesPoint } from "../types";
 import { formatDateTime } from "../utils/format";
 import { getReadingState } from "../utils/limits";
-import { clampCycleStart, REPORT_CYCLE_MS } from "../utils/reportCycle";
+import { clampCycleStart, getHistoricalCycleRange } from "../utils/reportCycle";
 import { allSensorKeys } from "../utils/sensors";
 
 type ChartMode = "realtime" | "historical";
@@ -134,8 +134,8 @@ export function OvenDetailPage() {
     if (!selectedRecord || historyPickMode !== "cycle") return;
 
     setSelectedDateKey(selectedRecord.endDateKey);
-    setCalendarCursor(selectedRecord.end);
-  }, [historyPickMode, selectedRecord]);
+    setCalendarCursor(createDateFromKey(selectedRecord.endDateKey));
+  }, [historyPickMode, selectedRecord?.cycle, selectedRecord?.endDateKey]);
 
   const effectiveMode = realtimeAvailable ? mode : "historical";
 
@@ -457,6 +457,7 @@ export function OvenDetailPage() {
       ) : (
         <HistoricalChartSection
           cycleRecords={cycleRecords}
+          historyPickMode={historyPickMode}
           selectedCycle={selectedCycle}
           selectedDateKey={selectedDateKey}
           selectedDateRecords={selectedDateRecords}
@@ -465,10 +466,13 @@ export function OvenDetailPage() {
           calendarCells={calendarCells}
           points={points}
           limits={oven.limits}
+          onChangePickMode={setHistoryPickMode}
           onSelectCycle={handleSelectCycle}
           onSelectDate={handleSelectDate}
           onReset={handleResetHistory}
-          onShiftMonth={(direction) => setCalendarCursor(shiftMonth(calendarCursor, direction))}
+          onShiftMonth={(direction) =>
+            setCalendarCursor((current) => shiftMonth(current, direction))
+          }
           onSelectDateCycle={(cycle) => {
             setHistoryPickMode("date");
             setSelectedCycle(cycle);
@@ -532,6 +536,7 @@ export function OvenDetailPage() {
 
 function HistoricalChartSection({
   cycleRecords,
+  historyPickMode,
   selectedCycle,
   selectedDateKey,
   selectedDateRecords,
@@ -540,6 +545,7 @@ function HistoricalChartSection({
   calendarCells,
   points,
   limits,
+  onChangePickMode,
   onSelectCycle,
   onSelectDate,
   onReset,
@@ -547,6 +553,7 @@ function HistoricalChartSection({
   onSelectDateCycle,
 }: {
   cycleRecords: CycleRecord[];
+  historyPickMode: HistoryPickMode;
   selectedCycle: number | null;
   selectedDateKey: string | null;
   selectedDateRecords: CycleRecord[];
@@ -555,6 +562,7 @@ function HistoricalChartSection({
   calendarCells: Date[];
   points: TimeSeriesPoint[];
   limits: LimitMap;
+  onChangePickMode: (mode: HistoryPickMode) => void;
   onSelectCycle: (cycle: number) => void;
   onSelectDate: (dateKey: string) => void;
   onReset: () => void;
@@ -578,35 +586,35 @@ function HistoricalChartSection({
 
       <div style={styles.historyFilterPanel}>
         <div style={styles.historyFilterHeader}>
-          <div>
-            <strong style={styles.historyTitle}>ตัวกรองข้อมูลย้อนหลัง</strong>
-            <p style={styles.historyDescription}>
-              เลือกได้จากรอบอบโดยตรง หรือเลือกวันที่ที่มีข้อมูล ระบบจะไฮไลต์วันที่อยู่ในรอบเดียวกันให้
-            </p>
+          <div style={styles.historyModeTabs} aria-label="วิธีเลือกข้อมูลย้อนหลัง">
+            <button
+              className={`tab ${historyPickMode === "cycle" ? "is-active" : ""}`}
+              type="button"
+              onClick={() => onChangePickMode("cycle")}
+            >
+              <ListFilter size={15} />
+              ตามรอบอบ
+            </button>
+            <button
+              className={`tab ${historyPickMode === "date" ? "is-active" : ""}`}
+              type="button"
+              onClick={() => onChangePickMode("date")}
+            >
+              <CalendarDays size={15} />
+              ตามวันที่
+            </button>
           </div>
 
           <button className="button" type="button" onClick={onReset}>
-            <RotateCcw size={16} />
-            ดูรอบล่าสุด
+            <RotateCcw size={15} />
+            รอบล่าสุด
           </button>
         </div>
 
-        <div style={styles.historyFilterGrid}>
-          <div style={styles.historyCard}>
-            <div style={styles.historyCardHead}>
-              <span style={styles.historyIconBox}>
-                <ListFilter size={18} />
-              </span>
-
-              <div>
-                <strong>เลือกตามรอบอบ</strong>
-                <p>เหมาะกับการดูรายงานตามรอบการอบ</p>
-              </div>
-            </div>
-
-            <label className="field">
-              <span>เลือกรอบที่</span>
-
+        {historyPickMode === "cycle" ? (
+          <div style={styles.cyclePickerRow}>
+            <label className="field compact-field" style={styles.cycleSelectField}>
+              <span>รอบอบ</span>
               <select
                 value={selectedCycle ?? ""}
                 onChange={(event) => onSelectCycle(Number(event.target.value))}
@@ -619,86 +627,63 @@ function HistoricalChartSection({
               </select>
             </label>
 
-            <div style={styles.selectedSummary}>
-              <span>รอบที่กำลังแสดง</span>
+            <div style={styles.compactSelectionSummary}>
               <strong>{selectedRecord ? selectedRecord.label : "-"}</strong>
-              <p>{selectedRecord ? selectedRecord.rangeLabel : "ยังไม่ได้เลือกรอบ"}</p>
+              <span>{selectedRecord ? selectedRecord.rangeLabel : "ยังไม่ได้เลือกรอบ"}</span>
             </div>
           </div>
+        ) : (
+          <div style={styles.calendarLayout}>
+            <CalendarPicker
+              cursor={calendarCursor}
+              cells={calendarCells}
+              cycleRecords={cycleRecords}
+              selectedDateKey={selectedDateKey}
+              selectedRecord={selectedRecord}
+              onSelectDate={onSelectDate}
+              onShiftMonth={onShiftMonth}
+            />
 
-          <div style={styles.historyCard}>
-            <div style={styles.historyCardHead}>
-              <span style={styles.historyIconBox}>
-                <CalendarDays size={18} />
-              </span>
+            <div style={styles.dateSidePanel}>
+              <label className="field compact-field">
+                <span>รอบของวันที่เลือก</span>
+                <select
+                  value={selectedCycle ?? ""}
+                  disabled={!selectedDateRecords.length}
+                  onChange={(event) => onSelectDateCycle(Number(event.target.value))}
+                >
+                  {selectedDateRecords.length ? (
+                    selectedDateRecords.map((record) => (
+                      <option key={record.cycle} value={record.cycle}>
+                        {record.label} · {record.rangeLabel}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">ไม่มีรอบในวันที่เลือก</option>
+                  )}
+                </select>
+              </label>
 
-              <div>
-                <strong>เลือกตามวันที่</strong>
-                <p>วันที่ที่มีพื้นสีจาง คือวันที่อยู่ในรอบเดียวกัน</p>
+              <div style={styles.compactSelectionSummary}>
+                <strong>
+                  {selectedDateKey
+                    ? formatThaiDate(createDateFromKey(selectedDateKey))
+                    : "ยังไม่ได้เลือกวันที่"}
+                </strong>
+                <span>
+                  {selectedDateRecords.length
+                    ? `${selectedDateRecords.length} รอบที่เกี่ยวข้อง`
+                    : "วันที่นี้ไม่มีข้อมูลรอบอบ"}
+                </span>
               </div>
-            </div>
 
-            <div style={styles.calendarLayout}>
-              <CalendarPicker
-                cursor={calendarCursor}
-                cells={calendarCells}
-                cycleRecords={cycleRecords}
-                selectedDateKey={selectedDateKey}
-                selectedRecord={selectedRecord}
-                onSelectDate={onSelectDate}
-                onShiftMonth={onShiftMonth}
-              />
-
-              <div style={styles.dateSidePanel}>
-                <label className="field">
-                  <span>รอบของวันที่เลือก</span>
-
-                  <select
-                    value={selectedCycle ?? ""}
-                    disabled={!selectedDateRecords.length}
-                    onChange={(event) => onSelectDateCycle(Number(event.target.value))}
-                  >
-                    {selectedDateRecords.length ? (
-                      selectedDateRecords.map((record) => (
-                        <option key={record.cycle} value={record.cycle}>
-                          {record.label} · {record.rangeLabel}
-                        </option>
-                      ))
-                    ) : (
-                      <option value="">ไม่มีรอบในวันที่เลือก</option>
-                    )}
-                  </select>
-                </label>
-
-                <div style={styles.selectedSummary}>
-                  <span>วันที่เลือก</span>
-                  <strong>
-                    {selectedDateKey
-                      ? formatThaiDate(createDateFromKey(selectedDateKey))
-                      : "ยังไม่ได้เลือกวันที่"}
-                  </strong>
-                  <p>
-                    {selectedDateRecords.length
-                      ? `พบ ${selectedDateRecords.length} รอบที่เกี่ยวข้องกับวันนี้`
-                      : "วันที่นี้ไม่มีข้อมูลรอบอบ"}
-                  </p>
-                </div>
-
-                <div style={styles.calendarLegend}>
-                  <span>
-                    <i style={styles.legendDot} />
-                    มีข้อมูล
-                  </span>
-
-                  <span>
-                    <i style={styles.legendPill} />
-                    อยู่ในรอบเดียวกัน
-                  </span>
-                </div>
+              <div style={styles.calendarLegend}>
+                <span><i style={styles.legendDot} />มีข้อมูล</span>
+                <span><i style={styles.legendPill} />อยู่ในรอบเดียวกัน</span>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       <div style={styles.chartCardGrid}>
@@ -938,13 +923,7 @@ function getDetailCycleRange(
     };
   }
 
-  const latestCycle = Math.max(oven.cycleCount, 1);
-  const cycleOffset = Math.max(0, latestCycle - cycleNumber);
-  const baseEnd = new Date(oven.stoppedAt ?? oven.lastUpdatedAt ?? now);
-  const end = new Date(baseEnd.getTime() - cycleOffset * (REPORT_CYCLE_MS + 12 * 60 * 60 * 1000));
-  const start = new Date(end.getTime() - REPORT_CYCLE_MS);
-
-  return { start, end };
+  return getHistoricalCycleRange(oven, cycleNumber);
 }
 
 function canUseRealtime(status: OvenStatus): boolean {
@@ -1052,25 +1031,60 @@ function createReportFrameUrl({
 const styles = {
   historicalShell: {
     display: "grid",
-    gap: 18,
+    gap: 12,
     borderWidth: 1,
   },
 
   historyFilterPanel: {
     display: "grid",
-    gap: 16,
-    padding: 16,
-    border: "1px solid var(--line)",
-    borderRadius: 16,
-    background:
-      "linear-gradient(180deg, color-mix(in srgb, var(--surface-soft) 82%, transparent), var(--surface))",
+    gap: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "var(--line)",
+    borderRadius: 6,
+    background: "var(--surface-soft)",
   },
 
   historyFilterHeader: {
     display: "flex",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
-    gap: 14,
+    gap: 10,
+  },
+
+  historyModeTabs: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 3,
+    padding: 3,
+    border: "1px solid var(--line)",
+    borderRadius: 6,
+    background: "var(--surface)",
+  },
+
+  cyclePickerRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(360px, 0.9fr) minmax(300px, 1.1fr)",
+    alignItems: "end",
+    gap: 10,
+  },
+
+  cycleSelectField: {
+    minWidth: 0,
+  },
+
+  compactSelectionSummary: {
+    display: "flex",
+    minHeight: 34,
+    alignItems: "center",
+    gap: 10,
+    padding: "6px 10px",
+    border: "1px solid var(--line)",
+    borderRadius: 5,
+    background: "var(--surface)",
+    color: "var(--muted)",
+    fontSize: 12,
   },
 
   historyTitle: {
@@ -1132,17 +1146,17 @@ const styles = {
 
   calendarLayout: {
     display: "grid",
-    gridTemplateColumns: "minmax(280px, 0.95fr) minmax(250px, 1fr)",
-    gap: 14,
+    gridTemplateColumns: "300px minmax(320px, 1fr)",
+    gap: 10,
     alignItems: "start",
   },
 
   calendarCard: {
     display: "grid",
-    gap: 12,
-    padding: 13,
+    gap: 7,
+    padding: 8,
     border: "1px solid var(--line)",
-    borderRadius: 15,
+    borderRadius: 5,
     background: "var(--surface)",
   },
 
@@ -1155,14 +1169,14 @@ const styles = {
 
   calendarMonth: {
     color: "var(--ink-strong)",
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: 850,
   },
 
   calendarWeekdays: {
     display: "grid",
     gridTemplateColumns: "repeat(7, 1fr)",
-    gap: 6,
+    gap: 3,
     color: "var(--muted)",
     fontSize: 11,
     fontWeight: 850,
@@ -1172,20 +1186,22 @@ const styles = {
   calendarGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(7, 1fr)",
-    gap: 6,
+    gap: 3,
   },
 
   calendarDay: {
     position: "relative",
     display: "grid",
-    minHeight: 42,
+    minHeight: 30,
     placeItems: "center",
-    border: "1px solid var(--line)",
-    borderRadius: 13,
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "var(--line)",
+    borderRadius: 4,
     background: "var(--surface-soft)",
     color: "var(--ink-strong)",
     cursor: "pointer",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 850,
     transition: "transform 0.14s ease, border-color 0.14s ease, background 0.14s ease",
   },
@@ -1194,7 +1210,7 @@ const styles = {
     borderColor: "var(--company-primary, var(--orange))",
     background: "var(--company-primary, var(--orange))",
     color: "var(--company-on-primary, #111827)",
-    boxShadow: "0 8px 18px color-mix(in srgb, var(--company-primary, #f59e0b) 22%, transparent)",
+    boxShadow: "inset 0 0 0 1px color-mix(in srgb, #fff 35%, transparent)",
   },
 
   calendarDayInCycle: {
@@ -1215,9 +1231,9 @@ const styles = {
   calendarDot: {
     position: "absolute",
     left: "50%",
-    bottom: 6,
-    width: 5,
-    height: 5,
+    bottom: 3,
+    width: 4,
+    height: 4,
     borderRadius: 999,
     transform: "translateX(-50%)",
     background: "currentColor",
@@ -1226,7 +1242,7 @@ const styles = {
   dateSidePanel: {
     display: "grid",
     alignContent: "start",
-    gap: 12,
+    gap: 8,
   },
 
   calendarLegend: {
