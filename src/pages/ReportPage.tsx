@@ -1932,10 +1932,17 @@ const reportPageStyles = `
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--company-primary) 16%, transparent);
   }
 
+  .report-form-group--target {
+    min-width: 0;
+    overflow: hidden;
+  }
+
   .report-target-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 126px;
+    grid-template-columns: minmax(0, 1fr) minmax(118px, 138px);
     gap: 9px;
+    min-width: 0;
+    max-width: 100%;
     align-items: stretch;
   }
 
@@ -1971,7 +1978,29 @@ const reportPageStyles = `
   }
 
   .report-target-value {
+    display: grid;
+    grid-template-rows: auto 34px;
     align-self: stretch;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .report-target-value > span {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .report-target-value input {
+    display: block;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
   }
 
   .report-target-value input:disabled {
@@ -1998,8 +2027,17 @@ const reportPageStyles = `
     font-weight: 700;
   }
 
+  .report-page .field {
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .report-page input:not([type="checkbox"]),
   .report-page select {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
     min-height: 34px;
     padding: 6px 9px;
     border-color: var(--line);
