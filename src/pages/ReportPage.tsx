@@ -1188,12 +1188,43 @@ function FwsSvgTemperatureGrid({
         );
       })}
 
-      <SvgText x={22} y={tempToY(50) + 4} size={10} weight={700} anchor="middle">
-        รมควัน
-      </SvgText>
-      <SvgText x={28} y={tempToY(35) + 4} size={10} weight={700} anchor="middle">
-        อุ่น
-      </SvgText>
+      {(() => {
+        const bx = 20;
+        const by = (tempToY(60) + tempToY(40)) / 2;
+        return (
+          <text
+            x={bx}
+            y={by}
+            transform={`rotate(-90 ${bx} ${by})`}
+            textAnchor="middle"
+            fontFamily="Sarabun"
+            fontSize="10"
+            fontWeight="bold"
+            fill="#000000"
+          >
+            รมควัน
+          </text>
+        );
+      })()}
+
+      {(() => {
+        const bx = 24;
+        const by = (tempToY(40) + tempToY(30)) / 2;
+        return (
+          <text
+            x={bx}
+            y={by}
+            transform={`rotate(-90 ${bx} ${by})`}
+            textAnchor="middle"
+            fontFamily="Sarabun"
+            fontSize="10"
+            fontWeight="bold"
+            fill="#000000"
+          >
+            อุ่น
+          </text>
+        );
+      })()}
 
       <line x1="0" y1={tempToY(60)} x2="28" y2={tempToY(60)} stroke="#000000" strokeWidth="0.8" />
       <line x1="0" y1={tempToY(40)} x2="28" y2={tempToY(40)} stroke="#000000" strokeWidth="0.8" />
@@ -1231,7 +1262,7 @@ function FwsSvgNotes({ y, form }: { y: number; form: ReportFormState }) {
     <g transform={`translate(0 ${y})`}>
       {/* หมายเหตุด้านบน: ใช้เพียง 2 บรรทัด และไม่มีเส้นแบ่งคอลัมน์ */}
       <SvgText x={58} y={0} size={8.1} weight={700}>
-        * ✕ ไม่สุก (ปากกาสีน้ำเงิน) / ✓ สุก (ปากกาสีแดง)   0 ยางสุกแล้วยังไม่ออกเตา (อุ่นใช้ปากกาสีแดง)
+        * ✕ ไม่สุก (ปากกาสีน้ำเงิน) / ✓ สุก (ปากกาสีแดง)   Ø ยางสุกแล้วยังไม่ออกเตา (อุ่นใช้ปากกาสีแดง)
       </SvgText>
 
       <SvgText x={58} y={14} size={8.1} weight={700}>
