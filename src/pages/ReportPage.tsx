@@ -1024,11 +1024,13 @@ function FwsSvgTemperatureGrid({
 }) {
   const left = 58;
   const dayH = 29;
-  const timeH = 54;
-  const tickRowH = 13;
+
+  // ช่องเวลาเดิมสูง 54px และมีแถวว่างเพิ่มอีก 13px
+  // ยุบช่องเวลาเหลือ 38px และนำพื้นที่ที่คืนมาเพิ่มให้พื้นที่กราฟ
+  const timeH = 38;
   const tempHeaderH = 26;
-  const chartTop = dayH + timeH + tickRowH + tempHeaderH;
-  const chartH = 287;
+  const chartTop = dayH + timeH + tempHeaderH;
+  const chartH = 316;
   const chartBottom = chartTop + chartH;
   const chartW = width - left;
   const cellW = chartW / reportSlotCount;
@@ -1065,14 +1067,6 @@ function FwsSvgTemperatureGrid({
       <line x1={left} y1="0" x2={left} y2={height} stroke="#000000" strokeWidth="0.9" />
       <line x1="0" y1={dayH} x2={width} y2={dayH} stroke="#000000" strokeWidth="0.8" />
       <line x1="0" y1={dayH + timeH} x2={width} y2={dayH + timeH} stroke="#000000" strokeWidth="0.8" />
-      <line
-        x1="0"
-        y1={dayH + timeH + tickRowH}
-        x2={width}
-        y2={dayH + timeH + tickRowH}
-        stroke="#000000"
-        strokeWidth="0.8"
-      />
       <line x1="0" y1={chartTop} x2={width} y2={chartTop} stroke="#000000" strokeWidth="0.9" />
       <line x1="0" y1={chartBottom} x2={width} y2={chartBottom} stroke="#000000" strokeWidth="0.8" />
 
@@ -1082,7 +1076,7 @@ function FwsSvgTemperatureGrid({
       <SvgText x={22} y={dayH + timeH / 2 + 4} size={11} weight={700} anchor="middle">
         เวลา
       </SvgText>
-      <SvgText x={28} y={dayH + timeH + tickRowH + tempHeaderH / 2 + 4} size={10.5} weight={700} anchor="middle">
+      <SvgText x={28} y={dayH + timeH + tempHeaderH / 2 + 4} size={10.5} weight={700} anchor="middle">
         อุณหภูมิ
       </SvgText>
       <SvgText x={30} y={chartBottom + 18} size={10.5} weight={700} anchor="middle">
@@ -1125,8 +1119,8 @@ function FwsSvgTemperatureGrid({
 
             <text
               x={x + cellW / 2 + 2}
-              y={dayH + timeH - 5}
-              transform={`rotate(-90 ${x + cellW / 2 + 2} ${dayH + timeH - 5})`}
+              y={dayH + timeH - 4}
+              transform={`rotate(-90 ${x + cellW / 2 + 2} ${dayH + timeH - 4})`}
               textAnchor="start"
               fontFamily="Sarabun"
               fontSize="8"
@@ -1148,8 +1142,8 @@ function FwsSvgTemperatureGrid({
             <text
               key={`time-start-${slot.index}`}
               x={x + cellW / 2 + 2}
-              y={dayH + timeH - 5}
-              transform={`rotate(-90 ${x + cellW / 2 + 2} ${dayH + timeH - 5})`}
+              y={dayH + timeH - 4}
+              transform={`rotate(-90 ${x + cellW / 2 + 2} ${dayH + timeH - 4})`}
               textAnchor="start"
               fontFamily="Sarabun"
               fontSize="8"
