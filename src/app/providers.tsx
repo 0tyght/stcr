@@ -1,5 +1,15 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { runtimeConfig } from "../config/runtime";
 import { apiClient } from "../services/apiClient";
+import { getErrorMessage } from "../services/api/errors";
 import type { Alarm, AlarmFilter, AuditEvent, LimitMap, Oven, OvenUpdateInput } from "../types";
 
 type AppDataContextValue = {
@@ -7,6 +17,9 @@ type AppDataContextValue = {
   alarms: Alarm[];
   auditEvents: AuditEvent[];
   loading: boolean;
+  refreshing: boolean;
+  error: string | null;
+  lastSuccessfulSyncAt: string | null;
   refresh: () => Promise<void>;
   saveLimits: (ovenId: string, limits: LimitMap) => Promise<void>;
   updateOven: (ovenId: string, input: OvenUpdateInput) => Promise<void>;
@@ -22,68 +35,132 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastSuccessfulSyncAt, setLastSuccessfulSyncAt] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+  const realtimeRequestRef = useRef<Promise<void> | null>(null);
 
-  const refresh = useCallback(async () => {
-    const [nextOvens, nextAlarms, nextAuditEvents] = await Promise.all([
-      apiClient.getOvens(),
-      apiClient.getAlarms(),
-      apiClient.getAuditEvents(),
-    ]);
-    setOvens(nextOvens);
-    setAlarms(nextAlarms);
-    setAuditEvents(nextAuditEvents);
-    setLoading(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  const markSuccess = useCallback(() => {
+    if (!mountedRef.current) return;
+    setError(null);
+    setLastSuccessfulSyncAt(new Date().toISOString());
+  }, []);
 
-  useEffect(() => {
-    const timer = window.setInterval(async () => {
-      const nextOvens = await apiClient.advanceRealtime();
-      const nextAlarms = await apiClient.getAlarms();
+  const loadInitialData = useCallback(async (showLoading = false) => {
+    if (mountedRef.current && showLoading) setLoading(true);
+
+    try {
+      const [nextOvens, nextAlarms, nextAuditEvents] = await Promise.all([
+        apiClient.getOvens(),
+        apiClient.getAlarms(),
+        apiClient.getAuditEvents(),
+      ]);
+
+      if (!mountedRef.current) return;
       setOvens(nextOvens);
       setAlarms(nextAlarms);
-    }, 7000);
+      setAuditEvents(nextAuditEvents);
+      markSuccess();
+    } catch (nextError) {
+      if (mountedRef.current) setError(getErrorMessage(nextError));
+    } finally {
+      if (mountedRef.current && showLoading) setLoading(false);
+    }
+  }, [markSuccess]);
+
+  const syncRealtime = useCallback((): Promise<void> => {
+    if (realtimeRequestRef.current) return realtimeRequestRef.current;
+
+    const request = (async () => {
+      try {
+        const [nextOvens, nextAlarms] = await Promise.all([
+          apiClient.getRealtimeOvens(),
+          apiClient.getAlarms(),
+        ]);
+
+        if (!mountedRef.current) return;
+        setOvens(nextOvens);
+        setAlarms(nextAlarms);
+        markSuccess();
+      } catch (nextError) {
+        if (mountedRef.current) setError(getErrorMessage(nextError));
+      } finally {
+        realtimeRequestRef.current = null;
+      }
+    })();
+
+    realtimeRequestRef.current = request;
+    return request;
+  }, [markSuccess]);
+
+  const refresh = useCallback(async () => {
+    if (mountedRef.current) setRefreshing(true);
+    try {
+      await syncRealtime();
+    } finally {
+      if (mountedRef.current) setRefreshing(false);
+    }
+  }, [syncRealtime]);
+
+  useEffect(() => {
+    void loadInitialData(true);
+  }, [loadInitialData]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void syncRealtime();
+    }, runtimeConfig.pollIntervalMs);
 
     return () => window.clearInterval(timer);
-  }, []);
+  }, [syncRealtime]);
 
   const saveLimits = useCallback(
     async (ovenId: string, limits: LimitMap) => {
       const updated = await apiClient.saveLimits(ovenId, limits);
       setOvens((current) => current.map((oven) => (oven.id === ovenId ? updated : oven)));
-      await refresh();
+      await loadInitialData();
     },
-    [refresh],
+    [loadInitialData],
   );
 
   const updateOven = useCallback(
     async (ovenId: string, input: OvenUpdateInput) => {
       const updated = await apiClient.updateOven(ovenId, input);
       setOvens((current) => current.map((oven) => (oven.id === ovenId ? updated : oven)));
-      await refresh();
+      await loadInitialData();
     },
-    [refresh],
+    [loadInitialData],
   );
 
   const addOven = useCallback(async () => {
     const oven = await apiClient.addOven();
-    await refresh();
+    await loadInitialData();
     return oven;
-  }, [refresh]);
+  }, [loadInitialData]);
 
   const loadAlarms = useCallback(async (filter?: AlarmFilter) => {
-    setAlarms(await apiClient.getAlarms(filter));
-  }, []);
+    try {
+      setAlarms(await apiClient.getAlarms(filter));
+      markSuccess();
+    } catch (nextError) {
+      if (mountedRef.current) setError(getErrorMessage(nextError));
+    }
+  }, [markSuccess]);
 
   const acknowledgeAlarm = useCallback(
     async (alarmId: string) => {
       setAlarms(await apiClient.acknowledgeAlarm(alarmId));
-      await refresh();
+      await loadInitialData();
     },
-    [refresh],
+    [loadInitialData],
   );
 
   const value = useMemo<AppDataContextValue>(
@@ -92,6 +169,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       alarms,
       auditEvents,
       loading,
+      refreshing,
+      error,
+      lastSuccessfulSyncAt,
       refresh,
       saveLimits,
       updateOven,
@@ -99,7 +179,21 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       loadAlarms,
       acknowledgeAlarm,
     }),
-    [addOven, acknowledgeAlarm, alarms, auditEvents, loadAlarms, loading, ovens, refresh, saveLimits, updateOven],
+    [
+      addOven,
+      acknowledgeAlarm,
+      alarms,
+      auditEvents,
+      error,
+      lastSuccessfulSyncAt,
+      loadAlarms,
+      loading,
+      ovens,
+      refresh,
+      refreshing,
+      saveLimits,
+      updateOven,
+    ],
   );
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
@@ -107,8 +201,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
 export function useAppData(): AppDataContextValue {
   const value = useContext(AppDataContext);
-  if (!value) {
-    throw new Error("useAppData must be used inside AppDataProvider");
-  }
+  if (!value) throw new Error("useAppData must be used inside AppDataProvider");
   return value;
 }

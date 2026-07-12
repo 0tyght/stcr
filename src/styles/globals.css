@@ -2272,3 +2272,27 @@ tbody tr:hover {
     height: 290px;
   }
 }
+.data-connection-banner {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--red) 45%, var(--line));
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--red) 10%, var(--surface));
+  color: var(--ink-strong);
+  font-size: 12px;
+}
+
+.data-connection-banner > span {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.data-connection-banner .button {
+  min-height: 30px;
+  padding: 5px 9px;
+}

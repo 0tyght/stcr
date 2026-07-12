@@ -57,7 +57,7 @@ const realtimeGaugeOrder: SensorKey[] = [
 
 export function OvenDetailPage() {
   const { ovenId = "" } = useParams();
-  const { ovens, alarms, loading, refresh } = useAppData();
+  const { ovens, alarms, loading, refresh, refreshing } = useAppData();
 
   const oven = ovens.find((item) => item.id === ovenId);
 
@@ -259,13 +259,11 @@ export function OvenDetailPage() {
             <button
               className="button"
               type="button"
-              onClick={async () => {
-                await apiClient.advanceRealtime();
-                await refresh();
-              }}
+              onClick={() => void refresh()}
+              disabled={refreshing}
             >
               <RefreshCw size={17} />
-              รีเฟรช
+              {refreshing ? "กำลังรีเฟรช" : "รีเฟรช"}
             </button>
           </>
         }

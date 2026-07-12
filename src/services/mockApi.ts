@@ -18,6 +18,7 @@ import type {
 } from "../types";
 import { buildLimitAlarms, isStale } from "../utils/limits";
 import { sensorByKey } from "../utils/sensors";
+import type { AppApi } from "./api/contracts";
 
 let ovens: Oven[] = createMockOvens();
 
@@ -195,7 +196,7 @@ function getAllAlarms(filter?: AlarmFilter): Alarm[] {
   return applyAlarmFilter(alarms, filter);
 }
 
-export const mockApi = {
+export const mockApi: AppApi = {
   async getOvens(): Promise<Oven[]> {
     return wait(getVisibleOvens());
   },
@@ -269,7 +270,7 @@ export const mockApi = {
     return wait(oven);
   },
 
-  async advanceRealtime(): Promise<Oven[]> {
+  async getRealtimeOvens(): Promise<Oven[]> {
     const now = new Date();
 
     ovens = ovens.map((oven) => advanceOvenReadings(oven, now));
