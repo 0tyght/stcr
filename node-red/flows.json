@@ -1,0 +1,301 @@
+[
+  {
+    "id": "stcr-simulator-tab",
+    "type": "tab",
+    "label": "STCR Realtime Simulator",
+    "disabled": false,
+    "info": "Realtime oven simulator and REST API for the STCR React application."
+  },
+  {
+    "id": "stcr-simulator-tick",
+    "type": "inject",
+    "z": "stcr-simulator-tab",
+    "name": "Initialize / tick every 5s",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "5",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "0.2",
+    "topic": "stcr/tick",
+    "payload": "",
+    "payloadType": "date",
+    "x": 170,
+    "y": 80,
+    "wires": [
+      [
+        "stcr-simulator-core"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-simulator-core",
+    "type": "function",
+    "z": "stcr-simulator-tab",
+    "name": "Realtime oven simulator",
+    "func": "const SIMULATOR_VERSION = 1;\nconst OVEN_NUMBERS = Array.from({ length: 16 }, (_, index) => index + 11);\nconst STATUSES = [\n  \"closed\", \"closed\", \"closed\", \"closed\",\n  \"open\", \"offline\", \"open\", \"open\",\n  \"closed\", \"open\", \"open\", \"offline\",\n  \"closed\", \"open\", \"open\", \"closed\",\n];\nconst CYCLE_COUNTS = [87, 89, 88, 85, 71, 83, 84, 83, 55, 92, 74, 66, 80, 79, 91, 0];\nconst SIX_DAYS_MS = 6 * 24 * 60 * 60 * 1000;\nconst HISTORY_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;\nconst HISTORY_STEP_MS = 10 * 60 * 1000;\nconst MAX_HISTORY_POINTS = 12000;\n\nfunction round(value, digits = 1) {\n  const scale = 10 ** digits;\n  return Math.round(value * scale) / scale;\n}\n\nfunction clamp(value, min, max) {\n  return Math.min(max, Math.max(min, value));\n}\n\nfunction createLimits() {\n  return {\n    chamberTemp: { sensor: \"chamberTemp\", lower: 30, upper: 60 },\n    humidity: { sensor: \"humidity\", lower: 45, upper: 70 },\n    furnaceTemp: { sensor: \"furnaceTemp\", lower: 140, upper: 450 },\n    blowerTemp: { sensor: \"blowerTemp\", lower: 140, upper: 450 },\n  };\n}\n\nfunction sensorValues(ovenNumber, timestamp, startedAt) {\n  const elapsedHours = Math.max(0, (timestamp - startedAt) / 3600000);\n  const cycleProgress = clamp(elapsedHours / 144, 0, 1);\n  const phase = timestamp / 3600000 + ovenNumber * 0.73;\n  const firingWave = Math.max(0, Math.sin(phase * 1.7));\n  const slowWave = Math.sin(phase * 0.31);\n  const chamberTarget = cycleProgress < 0.08\n    ? 30 + cycleProgress / 0.08 * 18\n    : 48 + Math.sin(phase * 0.18) * 2.2;\n  const humidityTarget = 82 - cycleProgress * 34 + slowWave * 2.4;\n  const furnaceTarget = 155 + firingWave * 95 + Math.sin(phase * 0.43) * 16;\n  const blowerTarget = 58 + firingWave * 24 + Math.sin(phase * 0.57) * 7;\n\n  const chamberTemp = ovenNumber === 20\n    ? chamberTarget + 13\n    : chamberTarget + Math.sin(phase) * 0.7;\n  const furnaceTemp = ovenNumber === 20 ? furnaceTarget + 245 : furnaceTarget;\n  const blowerTemp = ovenNumber === 18 ? Math.max(0, blowerTarget - 66) : blowerTarget;\n\n  return {\n    chamberTemp: round(clamp(chamberTemp, 20, 85)),\n    humidity: round(clamp(humidityTarget, 25, 95)),\n    furnaceTemp: round(clamp(furnaceTemp, 20, 560)),\n    blowerTemp: round(clamp(blowerTemp, 0, 180)),\n  };\n}\n\nfunction createReadings(values, updatedAt) {\n  return {\n    chamberTemp: { key: \"chamberTemp\", value: values.chamberTemp, unit: \"C\", updatedAt },\n    humidity: { key: \"humidity\", value: values.humidity, unit: \"%\", updatedAt },\n    furnaceTemp: { key: \"furnaceTemp\", value: values.furnaceTemp, unit: \"C\", updatedAt },\n    blowerTemp: { key: \"blowerTemp\", value: values.blowerTemp, unit: \"C\", updatedAt },\n  };\n}\n\nfunction createHistoryPoint(oven, timestamp) {\n  const startedAt = Date.parse(oven.startedAt || new Date(timestamp - SIX_DAYS_MS).toISOString());\n  return {\n    timestamp: new Date(timestamp).toISOString(),\n    ...sensorValues(oven.number, timestamp, startedAt),\n  };\n}\n\nfunction createOven(number, index, now) {\n  const status = STATUSES[index];\n  const startedAtMs = now - (10 + (number * 7) % 68) * 3600000;\n  const stoppedAtMs = now - (8 + number % 30) * 3600000;\n  const updatedAtMs = status === \"offline\" ? now - (35 + number) * 60000 : now;\n  const values = sensorValues(number, updatedAtMs, startedAtMs);\n  const updatedAt = new Date(updatedAtMs).toISOString();\n\n  return {\n    id: `oven-${number}`,\n    number,\n    name: `เตา ${number}`,\n    zone: number <= 18 ? \"A\" : \"B\",\n    line: number <= 18 ? \"Line 1\" : \"Line 2\",\n    status,\n    enabled: true,\n    cycleCount: CYCLE_COUNTS[index],\n    ...(status === \"open\" ? { startedAt: new Date(startedAtMs).toISOString() } : {}),\n    ...(status === \"closed\" ? { stoppedAt: new Date(stoppedAtMs).toISOString() } : {}),\n    lastUpdatedAt: updatedAt,\n    readings: createReadings(values, updatedAt),\n    limits: createLimits(),\n  };\n}\n\nfunction buildAlarms(ovens) {\n  const alarms = [];\n\n  ovens.forEach((oven) => {\n    if (oven.status === \"offline\") {\n      alarms.push({\n        id: `${oven.id}-offline`,\n        ovenId: oven.id,\n        ovenName: oven.name,\n        severity: \"offline\",\n        status: \"active\",\n        title: \"ข้อมูลจากเตาขาดการเชื่อมต่อ\",\n        detail: \"Node-RED ไม่ได้รับข้อมูลจากเตาตามรอบเวลาที่กำหนด\",\n        createdAt: oven.lastUpdatedAt,\n      });\n      return;\n    }\n\n    if (oven.status !== \"open\") return;\n\n    Object.keys(oven.readings).forEach((sensor) => {\n      if (sensor === \"humidity\") return;\n      const reading = oven.readings[sensor];\n      const limit = oven.limits[sensor];\n      if (reading.value >= limit.lower && reading.value <= limit.upper) return;\n\n      const isHigh = reading.value > limit.upper;\n      alarms.push({\n        id: `${oven.id}-${sensor}`,\n        ovenId: oven.id,\n        ovenName: oven.name,\n        severity: Math.abs(reading.value - (isHigh ? limit.upper : limit.lower)) > 20 ? \"danger\" : \"warning\",\n        status: \"active\",\n        sensor,\n        title: `${sensor} ${isHigh ? \"สูง\" : \"ต่ำ\"}กว่ามาตรฐาน`,\n        detail: `ค่าปัจจุบัน ${reading.value} เทียบกับ ${isHigh ? \"Upper\" : \"Lower\"} ${isHigh ? limit.upper : limit.lower}`,\n        value: reading.value,\n        limit: isHigh ? limit.upper : limit.lower,\n        createdAt: reading.updatedAt,\n      });\n    });\n  });\n\n  return alarms;\n}\n\nconst now = Date.now();\nlet state = flow.get(\"stcrState\");\n\nif (!state || state.version !== SIMULATOR_VERSION) {\n  const ovens = OVEN_NUMBERS.map((number, index) => createOven(number, index, now));\n  const history = {};\n\n  ovens.forEach((oven) => {\n    const points = [];\n    for (let timestamp = now - HISTORY_RETENTION_MS; timestamp <= now; timestamp += HISTORY_STEP_MS) {\n      points.push(createHistoryPoint(oven, timestamp));\n    }\n    history[oven.id] = points;\n  });\n\n  state = {\n    version: SIMULATOR_VERSION,\n    ovens,\n    history,\n    alarms: buildAlarms(ovens),\n    auditEvents: [],\n  };\n}\n\nstate.ovens = state.ovens.map((oven) => {\n  if (oven.status !== \"open\") return oven;\n  const cycleFinished = now - Date.parse(oven.startedAt) >= SIX_DAYS_MS;\n  const currentOven = cycleFinished\n    ? { ...oven, cycleCount: oven.cycleCount + 1, startedAt: new Date(now).toISOString() }\n    : oven;\n  const updatedAt = new Date(now).toISOString();\n  const values = sensorValues(currentOven.number, now, Date.parse(currentOven.startedAt));\n  const updated = {\n    ...currentOven,\n    lastUpdatedAt: updatedAt,\n    readings: createReadings(values, updatedAt),\n  };\n\n  const points = state.history[oven.id] || [];\n  const lastTimestamp = points.length ? Date.parse(points[points.length - 1].timestamp) : 0;\n  if (now - lastTimestamp >= 60000) {\n    points.push({ timestamp: updatedAt, ...values });\n    state.history[oven.id] = points.slice(-MAX_HISTORY_POINTS);\n  }\n\n  return updated;\n});\n\nconst acknowledgedAlarmIds = new Set(\n  state.alarms.filter((alarm) => alarm.status === \"acknowledged\").map((alarm) => alarm.id),\n);\nstate.alarms = buildAlarms(state.ovens).map((alarm) =>\n  acknowledgedAlarmIds.has(alarm.id) ? { ...alarm, status: \"acknowledged\" } : alarm,\n);\nflow.set(\"stcrState\", state);\nnode.status({ fill: \"green\", shape: \"dot\", text: `${state.ovens.length} ovens · ${new Date(now).toLocaleTimeString()}` });\nreturn null;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 430,
+    "y": 80,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "stcr-http-1",
+    "type": "http in",
+    "z": "stcr-simulator-tab",
+    "name": "Health",
+    "url": "/stcr/api/health",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 170,
+    "y": 160,
+    "wires": [
+      [
+        "stcr-api-router"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-http-2",
+    "type": "http in",
+    "z": "stcr-simulator-tab",
+    "name": "All ovens",
+    "url": "/stcr/api/ovens",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 170,
+    "y": 202,
+    "wires": [
+      [
+        "stcr-api-router"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-http-3",
+    "type": "http in",
+    "z": "stcr-simulator-tab",
+    "name": "Oven detail",
+    "url": "/stcr/api/ovens/:ovenId",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 170,
+    "y": 244,
+    "wires": [
+      [
+        "stcr-api-router"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-http-4",
+    "type": "http in",
+    "z": "stcr-simulator-tab",
+    "name": "History",
+    "url": "/stcr/api/ovens/:ovenId/history",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 170,
+    "y": 286,
+    "wires": [
+      [
+        "stcr-api-router"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-http-5",
+    "type": "http in",
+    "z": "stcr-simulator-tab",
+    "name": "CSV export",
+    "url": "/stcr/api/ovens/:ovenId/export.csv",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 170,
+    "y": 328,
+    "wires": [
+      [
+        "stcr-api-router"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-http-6",
+    "type": "http in",
+    "z": "stcr-simulator-tab",
+    "name": "Alarms",
+    "url": "/stcr/api/alarms",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 170,
+    "y": 370,
+    "wires": [
+      [
+        "stcr-api-router"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-http-7",
+    "type": "http in",
+    "z": "stcr-simulator-tab",
+    "name": "Audit events",
+    "url": "/stcr/api/audit-events",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 170,
+    "y": 412,
+    "wires": [
+      [
+        "stcr-api-router"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-http-8",
+    "type": "http in",
+    "z": "stcr-simulator-tab",
+    "name": "Save limits",
+    "url": "/stcr/api/ovens/:ovenId/limits",
+    "method": "put",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 170,
+    "y": 454,
+    "wires": [
+      [
+        "stcr-api-router"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-http-9",
+    "type": "http in",
+    "z": "stcr-simulator-tab",
+    "name": "Update oven",
+    "url": "/stcr/api/ovens/:ovenId",
+    "method": "patch",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 170,
+    "y": 496,
+    "wires": [
+      [
+        "stcr-api-router"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-http-10",
+    "type": "http in",
+    "z": "stcr-simulator-tab",
+    "name": "Add oven",
+    "url": "/stcr/api/ovens",
+    "method": "post",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 170,
+    "y": 538,
+    "wires": [
+      [
+        "stcr-api-router"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-http-11",
+    "type": "http in",
+    "z": "stcr-simulator-tab",
+    "name": "Acknowledge alarm",
+    "url": "/stcr/api/alarms/:alarmId/acknowledge",
+    "method": "post",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 170,
+    "y": 580,
+    "wires": [
+      [
+        "stcr-api-router"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-http-12",
+    "type": "http in",
+    "z": "stcr-simulator-tab",
+    "name": "CORS preflight",
+    "url": "/stcr/api/*",
+    "method": "options",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 170,
+    "y": 622,
+    "wires": [
+      [
+        "stcr-api-router"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-api-router",
+    "type": "function",
+    "z": "stcr-simulator-tab",
+    "name": "STCR API router",
+    "func": "function jsonResponse(payload, statusCode = 200) {\n  msg.statusCode = statusCode;\n  msg.headers = {\n    \"Content-Type\": \"application/json; charset=utf-8\",\n    \"Access-Control-Allow-Origin\": \"*\",\n    \"Access-Control-Allow-Headers\": \"Content-Type, Authorization\",\n    \"Access-Control-Allow-Methods\": \"GET, POST, PUT, PATCH, OPTIONS\",\n    \"Cache-Control\": \"no-store\",\n  };\n  msg.payload = payload;\n  return msg;\n}\n\nfunction errorResponse(message, statusCode = 400) {\n  return jsonResponse({ error: message }, statusCode);\n}\n\nfunction requestBody() {\n  if (msg.payload && typeof msg.payload === \"object\") return msg.payload;\n  if (typeof msg.payload === \"string\" && msg.payload.trim()) {\n    try {\n      return JSON.parse(msg.payload);\n    } catch (error) {\n      return null;\n    }\n  }\n  return {};\n}\n\nfunction addAudit(state, action, target, detail) {\n  state.auditEvents.unshift({\n    id: `audit-${Date.now()}`,\n    actor: \"node-red\",\n    action,\n    target,\n    detail,\n    createdAt: new Date().toISOString(),\n  });\n  state.auditEvents = state.auditEvents.slice(0, 100);\n}\n\nconst state = flow.get(\"stcrState\");\nif (!state) return errorResponse(\"Simulator is not initialized\", 503);\n\nconst method = (msg.req.method || \"GET\").toUpperCase();\nconst path = msg.req.path || msg.req._parsedUrl.pathname;\nconst query = msg.req.query || {};\n\nif (method === \"OPTIONS\") {\n  msg.statusCode = 204;\n  msg.headers = {\n    \"Access-Control-Allow-Origin\": \"*\",\n    \"Access-Control-Allow-Headers\": \"Content-Type, Authorization\",\n    \"Access-Control-Allow-Methods\": \"GET, POST, PUT, PATCH, OPTIONS\",\n  };\n  msg.payload = \"\";\n  return msg;\n}\n\nif (method === \"GET\" && path === \"/stcr/api/health\") {\n  return jsonResponse({ ok: true, ovens: state.ovens.length, timestamp: new Date().toISOString() });\n}\n\nif (method === \"GET\" && path === \"/stcr/api/ovens\") {\n  return jsonResponse(state.ovens);\n}\n\nif (method === \"GET\" && path === \"/stcr/api/alarms\") {\n  const search = String(query.search || \"\").trim().toLowerCase();\n  const alarms = state.alarms.filter((alarm) => {\n    const severityMatch = !query.severity || query.severity === \"all\" || alarm.severity === query.severity;\n    const statusMatch = !query.status || query.status === \"all\" || alarm.status === query.status;\n    const ovenMatch = !query.ovenId || query.ovenId === \"all\" || alarm.ovenId === query.ovenId;\n    const searchMatch = !search || `${alarm.ovenName} ${alarm.title} ${alarm.detail}`.toLowerCase().includes(search);\n    return severityMatch && statusMatch && ovenMatch && searchMatch;\n  });\n  return jsonResponse(alarms);\n}\n\nif (method === \"GET\" && path === \"/stcr/api/audit-events\") {\n  return jsonResponse(state.auditEvents);\n}\n\nif (method === \"POST\" && path === \"/stcr/api/ovens\") {\n  const nextNumber = Math.max(...state.ovens.map((oven) => oven.number)) + 1;\n  const now = new Date().toISOString();\n  const limits = JSON.parse(JSON.stringify(state.ovens[0].limits));\n  const values = { chamberTemp: 0, humidity: 0, furnaceTemp: 0, blowerTemp: 0 };\n  const readings = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, {\n    key,\n    value,\n    unit: key === \"humidity\" ? \"%\" : \"C\",\n    updatedAt: now,\n  }]));\n  const oven = {\n    id: `oven-${nextNumber}`,\n    number: nextNumber,\n    name: `เตา ${nextNumber}`,\n    zone: \"B\",\n    line: \"Line 2\",\n    status: \"closed\",\n    enabled: true,\n    cycleCount: 0,\n    stoppedAt: now,\n    lastUpdatedAt: now,\n    readings,\n    limits,\n  };\n  state.ovens.push(oven);\n  state.history[oven.id] = [];\n  addAudit(state, \"เพิ่มเตาใหม่\", oven.name, \"เพิ่มเตาผ่าน Node-RED API\");\n  flow.set(\"stcrState\", state);\n  return jsonResponse(oven, 201);\n}\n\nconst acknowledgeMatch = path.match(/^\\/stcr\\/api\\/alarms\\/([^/]+)\\/acknowledge$/);\nif (method === \"POST\" && acknowledgeMatch) {\n  const alarmId = decodeURIComponent(acknowledgeMatch[1]);\n  state.alarms = state.alarms.map((alarm) => alarm.id === alarmId ? { ...alarm, status: \"acknowledged\" } : alarm);\n  addAudit(state, \"รับทราบ Alarm\", alarmId, \"รับทราบผ่านหน้าเว็บ\");\n  flow.set(\"stcrState\", state);\n  return jsonResponse(state.alarms);\n}\n\nconst historyMatch = path.match(/^\\/stcr\\/api\\/ovens\\/([^/]+)\\/history$/);\nif (method === \"GET\" && historyMatch) {\n  const ovenId = decodeURIComponent(historyMatch[1]);\n  const points = state.history[ovenId];\n  if (!points) return errorResponse(`Oven not found: ${ovenId}`, 404);\n  const startAt = query.startAt ? Date.parse(query.startAt) : Number.NEGATIVE_INFINITY;\n  const endAt = query.endAt ? Date.parse(query.endAt) : Number.POSITIVE_INFINITY;\n  return jsonResponse(points.filter((point) => {\n    const timestamp = Date.parse(point.timestamp);\n    return timestamp >= startAt && timestamp <= endAt;\n  }));\n}\n\nconst exportMatch = path.match(/^\\/stcr\\/api\\/ovens\\/([^/]+)\\/export\\.csv$/);\nif (method === \"GET\" && exportMatch) {\n  const ovenId = decodeURIComponent(exportMatch[1]);\n  const points = state.history[ovenId];\n  if (!points) return errorResponse(`Oven not found: ${ovenId}`, 404);\n  const sensors = String(query.sensors || \"chamberTemp,humidity,furnaceTemp,blowerTemp\").split(\",\");\n  const rows = [[\"timestamp\", ...sensors], ...points.map((point) => [point.timestamp, ...sensors.map((sensor) => point[sensor])])];\n  msg.statusCode = 200;\n  msg.headers = {\n    \"Content-Type\": \"text/csv; charset=utf-8\",\n    \"Access-Control-Allow-Origin\": \"*\",\n    \"Cache-Control\": \"no-store\",\n  };\n  msg.payload = rows.map((row) => row.join(\",\")).join(\"\\n\");\n  return msg;\n}\n\nconst limitsMatch = path.match(/^\\/stcr\\/api\\/ovens\\/([^/]+)\\/limits$/);\nif (method === \"PUT\" && limitsMatch) {\n  const ovenId = decodeURIComponent(limitsMatch[1]);\n  const index = state.ovens.findIndex((oven) => oven.id === ovenId);\n  if (index < 0) return errorResponse(`Oven not found: ${ovenId}`, 404);\n  const body = requestBody();\n  if (!body) return errorResponse(\"Invalid JSON body\");\n  const valid = [\"chamberTemp\", \"humidity\", \"furnaceTemp\", \"blowerTemp\"].every((sensor) =>\n    body[sensor] && Number.isFinite(Number(body[sensor].lower)) && Number.isFinite(Number(body[sensor].upper)) && Number(body[sensor].lower) <= Number(body[sensor].upper)\n  );\n  if (!valid) return errorResponse(\"Invalid limits payload\");\n  state.ovens[index] = { ...state.ovens[index], limits: body };\n  addAudit(state, \"เปลี่ยนค่า Limit\", state.ovens[index].name, \"บันทึก Upper/Lower ผ่าน Node-RED API\");\n  flow.set(\"stcrState\", state);\n  return jsonResponse(state.ovens[index]);\n}\n\nconst ovenMatch = path.match(/^\\/stcr\\/api\\/ovens\\/([^/]+)$/);\nif (ovenMatch) {\n  const ovenId = decodeURIComponent(ovenMatch[1]);\n  const index = state.ovens.findIndex((oven) => oven.id === ovenId);\n  if (index < 0) return errorResponse(`Oven not found: ${ovenId}`, 404);\n\n  if (method === \"GET\") return jsonResponse(state.ovens[index]);\n  if (method === \"PATCH\") {\n    const body = requestBody();\n    if (!body) return errorResponse(\"Invalid JSON body\");\n    const current = state.ovens[index];\n    state.ovens[index] = {\n      ...current,\n      name: typeof body.name === \"string\" && body.name.trim() ? body.name.trim() : current.name,\n      zone: typeof body.zone === \"string\" && body.zone.trim() ? body.zone.trim() : current.zone,\n      line: typeof body.line === \"string\" && body.line.trim() ? body.line.trim() : current.line,\n    };\n    addAudit(state, \"แก้ไขข้อมูลเตา\", state.ovens[index].name, \"แก้ชื่อ โซน หรือไลน์ผ่าน Node-RED API\");\n    flow.set(\"stcrState\", state);\n    return jsonResponse(state.ovens[index]);\n  }\n}\n\nreturn errorResponse(`Route not found: ${method} ${path}`, 404);\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 510,
+    "y": 390,
+    "wires": [
+      [
+        "stcr-http-response"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-http-response",
+    "type": "http response",
+    "z": "stcr-simulator-tab",
+    "name": "HTTP response",
+    "statusCode": "",
+    "headers": {},
+    "x": 760,
+    "y": 390,
+    "wires": []
+  },
+  {
+    "id": "stcr-flow-note",
+    "type": "comment",
+    "z": "stcr-simulator-tab",
+    "name": "Import, Deploy, then open http://127.0.0.1:1880/stcr/api/health",
+    "info": "Set VITE_DATA_SOURCE=node-red and VITE_API_BASE_URL=http://127.0.0.1:1880/stcr/api in the React app.",
+    "x": 330,
+    "y": 40,
+    "wires": []
+  }
+]

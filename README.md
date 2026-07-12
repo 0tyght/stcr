@@ -25,12 +25,15 @@ VITE_API_TIMEOUT_MS=10000
 
 จากนั้น restart dev server ทุกครั้งที่แก้ environment variable รายละเอียด endpoint และ payload อยู่ที่ [docs/node-red-api.md](docs/node-red-api.md)
 
+มี Node-RED simulator พร้อม import อยู่ใน [node-red/README.md](node-red/README.md)
+
 ## คำสั่งหลัก
 
 ```powershell
 npm run typecheck
 npm run build
 npm run preview
+npm run node-red:build
 ```
 
 ## โครงสร้างข้อมูล
