@@ -5,15 +5,6 @@
    ========================================================= */
 
 /* =========================================================
-   1) Company Color Corrections
-   ========================================================= */
-
-:root[data-ui-theme="company"][data-company="gr"] {
-  --company-primary: #eed236;
-  --company-primary-soft: #eed236;
-}
-
-/* =========================================================
    2) Sidebar Brand
    เอากรอบรอบโลโก้ออก
    ========================================================= */
@@ -54,21 +45,16 @@
 
 .brand-mark-image {
   display: block;
-  width: 50px;
-  height: 50px;
+  width: var(--company-sidebar-logo-size, 50px);
+  height: var(--company-sidebar-logo-size, 50px);
   object-fit: contain;
   border: none;
   background: transparent;
   box-shadow: none;
 }
 
-:root[data-ui-theme="company"][data-company="gr"] .brand-mark-text {
-  color: #eed236;
-}
-
-:root[data-ui-theme="company"][data-company="ttn"] .brand-mark-image {
-  width: 52px;
-  height: 52px;
+:root[data-ui-theme="company"] .brand-mark-text {
+  color: var(--company-primary);
 }
 
 :root[data-ui-theme="company"] .brand-text strong,
@@ -169,25 +155,16 @@
 
 .login-simple-mark-image {
   display: block;
-  width: 58px;
-  height: 58px;
+  width: var(--company-login-logo-size, 58px);
+  height: var(--company-login-logo-size, 58px);
   object-fit: contain;
   border: none;
   background: transparent;
   box-shadow: none;
 }
 
-:root[data-ui-theme="company"][data-company="gr"] .login-simple-mark {
-  color: #eed236;
-}
-
-:root[data-ui-theme="company"][data-company="ttn"] .login-simple-mark {
-  color: #8e67eb;
-}
-
-:root[data-ui-theme="company"][data-company="ttn"] .login-simple-mark-image {
-  width: 60px;
-  height: 60px;
+:root[data-ui-theme="company"] .login-simple-mark {
+  color: var(--company-primary);
 }
 
 .login-simple-brand .eyebrow {
@@ -298,45 +275,22 @@
    เส้นกั้นใต้หัวการ์ดใช้สีธีมของแต่ละบริษัท
    ========================================================= */
 
-/* GR: หัวการ์ดปกติ / เปิด = เหลืองจาง */
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .oven-card-header,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card-header {
-  background: #fff6bf !important;
-  border-bottom-color: #eed236 !important;
+:root[data-ui-theme="company"] .oven-card .oven-card-header,
+:root[data-ui-theme="company"] .oven-card-header {
+  background: var(--company-card-header) !important;
+  border-bottom-color: var(--company-primary) !important;
 }
 
-/* TTN: หัวการ์ดปกติ / เปิด = ม่วงจาง */
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .oven-card-header,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card-header {
-  background: #efe7ff !important;
-  border-bottom-color: #ab84fe !important;
-}
-
-/* GR: ปิด / ขาดการเชื่อมต่อ = เทา แต่เส้นใต้หัวการ์ดเป็นสีธีม GR */
-:root[data-ui-theme="company"][data-company="gr"] .oven-card.status-closed .oven-card-header,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card-header.status-closed,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card.status-offline .oven-card-header,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card-header.status-offline {
+:root[data-ui-theme="company"] .oven-card.status-closed .oven-card-header,
+:root[data-ui-theme="company"] .oven-card-header.status-closed,
+:root[data-ui-theme="company"] .oven-card.status-offline .oven-card-header,
+:root[data-ui-theme="company"] .oven-card-header.status-offline {
   background: #b1b1b5 !important;
-  border-bottom-color: #eed236 !important;
+  border-bottom-color: var(--company-primary) !important;
 }
 
-/* TTN: ปิด / ขาดการเชื่อมต่อ = เทา แต่เส้นใต้หัวการ์ดเป็นสีธีม TTN */
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card.status-closed .oven-card-header,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card-header.status-closed,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card.status-offline .oven-card-header,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card-header.status-offline {
-  background: #b1b1b5 !important;
-  border-bottom-color: #ab84fe !important;
-}
-
-/* ขอบการ์ดตามธีมบริษัท */
-:root[data-ui-theme="company"][data-company="gr"] .oven-card {
-  border-color: #efe3a2 !important;
-}
-
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card {
-  border-color: #dccdff !important;
+:root[data-ui-theme="company"] .oven-card {
+  border-color: var(--company-card-border) !important;
 }
 
 /* =========================================================
@@ -368,37 +322,19 @@
    ปุ่มรายละเอียดเตาแยกตามธีมบริษัท
    ========================================================= */
 
-/* GR: ใช้สีเดียวกับเมนูด้านข้าง */
-:root[data-ui-theme="company"][data-company="gr"] .oven-card-footer .button,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .button,
-:root[data-ui-theme="company"][data-company="gr"] a.button[href*="/ovens/"] {
-  border-color: #363b40 !important;
-  background: #363b40 !important;
+:root[data-ui-theme="company"] .oven-card-footer .button,
+:root[data-ui-theme="company"] .oven-card .button,
+:root[data-ui-theme="company"] a.button[href*="/ovens/"] {
+  border-color: var(--company-detail-button) !important;
+  background: var(--company-detail-button) !important;
   color: #ffffff !important;
 }
 
-:root[data-ui-theme="company"][data-company="gr"] .oven-card-footer .button:hover,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .button:hover,
-:root[data-ui-theme="company"][data-company="gr"] a.button[href*="/ovens/"]:hover {
-  border-color: #2f3439 !important;
-  background: #2f3439 !important;
-  color: #ffffff !important;
-}
-
-/* TTN: ปุ่มรายละเอียดเตาใช้สี #eec16c */
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card-footer .button,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .button,
-:root[data-ui-theme="company"][data-company="ttn"] a.button[href*="/ovens/"] {
-  border-color: #eec16c !important;
-  background: #eec16c !important;
-  color: #ffffff !important;
-}
-
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card-footer .button:hover,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .button:hover,
-:root[data-ui-theme="company"][data-company="ttn"] a.button[href*="/ovens/"]:hover {
-  border-color: #dfb25d !important;
-  background: #dfb25d !important;
+:root[data-ui-theme="company"] .oven-card-footer .button:hover,
+:root[data-ui-theme="company"] .oven-card .button:hover,
+:root[data-ui-theme="company"] a.button[href*="/ovens/"]:hover {
+  border-color: var(--company-detail-button-hover) !important;
+  background: var(--company-detail-button-hover) !important;
   color: #ffffff !important;
 }
 
@@ -411,20 +347,11 @@
 
 /* ---------- เลขรอบใช้สีตามธีมบริษัท ---------- */
 
-/* GR */
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .cycle-box strong,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .cycle-box .value,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .round-count,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .count-value {
-  color: #eed236 !important;
-}
-
-/* TTN */
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .cycle-box strong,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .cycle-box .value,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .round-count,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .count-value {
-  color: #ab84fe !important;
+:root[data-ui-theme="company"] .oven-card .cycle-box strong,
+:root[data-ui-theme="company"] .oven-card .cycle-box .value,
+:root[data-ui-theme="company"] .oven-card .round-count,
+:root[data-ui-theme="company"] .oven-card .count-value {
+  color: var(--company-primary) !important;
 }
 
 /* ---------- ไอคอนเหนือเลขรอบ + คำว่า "รอบ" ใช้สีเดิม ---------- */
@@ -439,45 +366,24 @@
 
 /* ---------- ไอคอนวันที่/เวลา ใช้สีตามธีมบริษัท ---------- */
 
-/* GR */
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .meta-item svg,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .update-item svg,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .info-item svg,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .card-meta svg,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .latest-update svg,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .oven-updated svg,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .oven-info svg,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .meta-row svg,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .date-row svg,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .time-row svg,
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .updated-at svg {
-  color: #eed236 !important;
-  stroke: currentColor;
-}
-
-/* TTN */
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .meta-item svg,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .update-item svg,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .info-item svg,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .card-meta svg,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .latest-update svg,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .oven-updated svg,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .oven-info svg,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .meta-row svg,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .date-row svg,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .time-row svg,
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .updated-at svg {
-  color: #ab84fe !important;
+:root[data-ui-theme="company"] .oven-card .meta-item svg,
+:root[data-ui-theme="company"] .oven-card .update-item svg,
+:root[data-ui-theme="company"] .oven-card .info-item svg,
+:root[data-ui-theme="company"] .oven-card .card-meta svg,
+:root[data-ui-theme="company"] .oven-card .latest-update svg,
+:root[data-ui-theme="company"] .oven-card .oven-updated svg,
+:root[data-ui-theme="company"] .oven-card .oven-info svg,
+:root[data-ui-theme="company"] .oven-card .meta-row svg,
+:root[data-ui-theme="company"] .oven-card .date-row svg,
+:root[data-ui-theme="company"] .oven-card .time-row svg,
+:root[data-ui-theme="company"] .oven-card .updated-at svg {
+  color: var(--company-primary) !important;
   stroke: currentColor;
 }
 /* ---------- เลขรอบใช้สีตามธีมบริษัท ---------- */
 
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .cycle-box strong {
-  color: #eed236 !important;
-}
-
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .cycle-box strong {
-  color: #ab84fe !important;
+:root[data-ui-theme="company"] .oven-card .cycle-box strong {
+  color: var(--company-primary) !important;
 }
 
 /* ---------- ไอคอนเหนือเลขรอบ + คำว่า "รอบ" ใช้สีเดิม ---------- */
@@ -490,12 +396,7 @@
 
 /* ---------- ไอคอนวันที่/เวลา ใช้สีตามธีมบริษัท ---------- */
 
-:root[data-ui-theme="company"][data-company="gr"] .oven-card .oven-meta strong svg {
-  color: #eed236 !important;
-  stroke: currentColor !important;
-}
-
-:root[data-ui-theme="company"][data-company="ttn"] .oven-card .oven-meta strong svg {
-  color: #ab84fe !important;
+:root[data-ui-theme="company"] .oven-card .oven-meta strong svg {
+  color: var(--company-primary) !important;
   stroke: currentColor !important;
 }

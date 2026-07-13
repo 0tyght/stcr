@@ -4,6 +4,11 @@ import { AppLayout } from "../components/layout/AppLayout";
 import { LoadingState } from "../components/ui/LoadingState";
 import { LoginPage } from "../pages/LoginPage";
 import { AppDataProvider } from "./providers";
+import {
+  ACCOUNT_STORAGE_KEY,
+  AUTH_STORAGE_KEY,
+  THEME_STORAGE_KEY,
+} from "../config/preferences";
 
 const DashboardPage = lazy(() =>
   import("../pages/DashboardPage").then((module) => ({
@@ -37,19 +42,20 @@ const SettingPage = lazy(() =>
 
 export function App() {
   const [authenticated, setAuthenticated] = useState(
-    () => localStorage.getItem("stcr-authenticated") === "true",
+    () => localStorage.getItem(AUTH_STORAGE_KEY) === "true",
   );
 
   function handleLogin(username: string) {
-    localStorage.setItem("stcr-authenticated", "true");
-    localStorage.setItem("stcr-account", username);
+    localStorage.setItem(AUTH_STORAGE_KEY, "true");
+    localStorage.setItem(ACCOUNT_STORAGE_KEY, username);
+    window.location.hash = "/";
     setAuthenticated(true);
   }
 
   function handleLogout() {
-    localStorage.removeItem("stcr-authenticated");
-    localStorage.removeItem("stcr-account");
-    localStorage.removeItem("stcr-theme-mode");
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem(ACCOUNT_STORAGE_KEY);
+    localStorage.removeItem(THEME_STORAGE_KEY);
     setAuthenticated(false);
   }
 

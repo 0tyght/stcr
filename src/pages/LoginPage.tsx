@@ -1,51 +1,38 @@
 import { LogIn, Moon, Palette } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import ttnLogo from "../assets/ttn-logo.png";
-
-type ThemeMode = "company" | "dark";
-type LoginAccount = "gr_dev_admin" | "ttn_dev_admin";
-
-const THEME_STORAGE_KEY = "stcr-theme-mode";
-const ACCOUNT_STORAGE_KEY = "stcr-account";
-
-function getInitialThemeMode(): ThemeMode {
-  const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-  return savedTheme === "dark" ? "dark" : "company";
-}
-
-function getInitialAccount(): LoginAccount {
-  const savedAccount = localStorage.getItem(ACCOUNT_STORAGE_KEY);
-
-  if (savedAccount === "ttn_dev_admin") {
-    return "ttn_dev_admin";
-  }
-
-  return "gr_dev_admin";
-}
-
-function getCompanyFromUsername(username: string): "gr" | "ttn" {
-  return username.toLowerCase().includes("ttn") ? "ttn" : "gr";
-}
+import {
+  accountList,
+  applyCompanyTheme,
+  getCompany,
+  getCompanyIdFromAccount,
+} from "../config/companies";
+import {
+  ACCOUNT_STORAGE_KEY,
+  getStoredAccountId,
+  getStoredThemeMode,
+  THEME_STORAGE_KEY,
+  type ThemeMode,
+} from "../config/preferences";
 
 export function LoginPage({
   onLogin,
 }: {
   onLogin: (username: string) => void;
 }) {
-  const [username, setUsername] = useState<LoginAccount>(() => getInitialAccount());
+  const [username, setUsername] = useState(() => getStoredAccountId());
   const [password, setPassword] = useState("");
-  const [themeMode, setThemeMode] = useState<ThemeMode>(() => getInitialThemeMode());
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => getStoredThemeMode("company"));
 
-  const company = useMemo(() => getCompanyFromUsername(username), [username]);
-  const companyLabel = company === "ttn" ? "TTN Rubber" : "Grand Rubber";
+  const companyId = useMemo(() => getCompanyIdFromAccount(username), [username]);
+  const company = useMemo(() => getCompany(companyId), [companyId]);
 
   useEffect(() => {
-    document.documentElement.dataset.company = company;
+    applyCompanyTheme(companyId);
     document.documentElement.dataset.uiTheme = themeMode;
 
     localStorage.setItem(THEME_STORAGE_KEY, themeMode);
     localStorage.setItem(ACCOUNT_STORAGE_KEY, username);
-  }, [company, themeMode, username]);
+  }, [companyId, themeMode, username]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -80,15 +67,19 @@ export function LoginPage({
       <form className="login-panel login-simple-panel" onSubmit={handleSubmit}>
         <div className="login-simple-brand">
           <div className="login-simple-mark-wrap">
-            {company === "ttn" ? (
-              <img src={ttnLogo} alt="TTN Logo" className="login-simple-mark-image" />
+            {company.brand.kind === "image" && company.brand.logo ? (
+              <img
+                src={company.brand.logo}
+                alt={company.brand.logoAlt}
+                className="login-simple-mark-image"
+              />
             ) : (
-              <div className="login-simple-mark login-simple-mark-gr">GR</div>
+              <div className="login-simple-mark">{company.brand.text}</div>
             )}
           </div>
 
           <div>
-            <p className="eyebrow">{companyLabel}</p>
+            <p className="eyebrow">{company.name}</p>
             <h1>เข้าสู่ระบบ</h1>
             <span>Smoking Temperature Control</span>
           </div>
@@ -98,10 +89,13 @@ export function LoginPage({
           <span>ผู้ใช้</span>
           <select
             value={username}
-            onChange={(event) => setUsername(event.target.value as LoginAccount)}
+            onChange={(event) => setUsername(event.target.value)}
           >
-            <option value="gr_dev_admin">gr_dev_admin</option>
-            <option value="ttn_dev_admin">ttn_dev_admin</option>
+            {accountList.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.label}
+              </option>
+            ))}
           </select>
         </label>
 

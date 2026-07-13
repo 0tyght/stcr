@@ -18,6 +18,8 @@ import type {
 } from "../types";
 import { buildLimitAlarms, isStale } from "../utils/limits";
 import { sensorByKey } from "../utils/sensors";
+import { DEFAULT_ACCOUNT_ID, getCurrentCompany } from "../config/companies";
+import { ACCOUNT_STORAGE_KEY, getStoredAccountId } from "../config/preferences";
 import type { AppApi } from "./api/contracts";
 
 let ovens: Oven[] = createMockOvens();
@@ -25,7 +27,7 @@ let ovens: Oven[] = createMockOvens();
 let auditEvents: AuditEvent[] = [
   {
     id: "audit-1",
-    actor: "gr_dev_admin",
+    actor: "system",
     action: "เปลี่ยนค่า Limit",
     target: "เตา 18",
     createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
@@ -33,7 +35,7 @@ let auditEvents: AuditEvent[] = [
   },
   {
     id: "audit-2",
-    actor: "gr_dev_admin",
+    actor: "system",
     action: "แก้ไขสถานะเตา",
     target: "เตา 22",
     createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
@@ -83,28 +85,32 @@ function wait<T>(value: T, ms = 120): Promise<T> {
 
 function getCurrentAccount(): string {
   if (typeof window === "undefined") {
-    return "gr_dev_admin";
+    return DEFAULT_ACCOUNT_ID;
   }
 
-  return localStorage.getItem("stcr-account") || "gr_dev_admin";
-}
-
-function isTtnAccount(): boolean {
-  return getCurrentAccount().toLowerCase().startsWith("ttn");
+  return localStorage.getItem(ACCOUNT_STORAGE_KEY) || getStoredAccountId();
 }
 
 function getVisibleOvens(): Oven[] {
-  if (isTtnAccount()) {
-    return ovens.slice(0, 10).map((oven, index) => ({
-      ...oven,
-      number: index + 1,
-      name: `เตา ${index + 1}`,
-      zone: "TTN",
-      line: "Smoking Line",
-    }));
-  }
+  const profile = getCurrentCompany().mockData;
+  const visible = ovens.slice(
+    profile.sourceStartIndex,
+    profile.count == null ? undefined : profile.sourceStartIndex + profile.count,
+  );
 
-  return ovens;
+  return visible.map((oven, index) => {
+    const displayNumber = profile.displayNumberStart == null
+      ? oven.number
+      : profile.displayNumberStart + index;
+
+    return {
+      ...oven,
+      number: displayNumber,
+      name: `เตา ${displayNumber}`,
+      zone: profile.zone ?? oven.zone,
+      line: profile.line ?? oven.line,
+    };
+  });
 }
 function getVisibleOvenIds(): Set<string> {
   return new Set(getVisibleOvens().map((oven) => oven.id));

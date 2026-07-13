@@ -45,6 +45,7 @@ export function TimeSeriesChart({
   limitSensors,
   theme,
   showDataZoom,
+  timeRange,
 }: {
   points: TimeSeriesPoint[];
   sensors: SensorKey[];
@@ -57,6 +58,7 @@ export function TimeSeriesChart({
   limitSensors?: SensorKey[];
   theme?: ChartTheme;
   showDataZoom?: boolean;
+  timeRange?: { start: Date; end: Date };
 }) {
   const chartRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<ECharts | null>(null);
@@ -192,6 +194,8 @@ export function TimeSeriesChart({
 
       xAxis: {
         type: "time",
+        min: timeRange?.start.getTime(),
+        max: timeRange?.end.getTime(),
         axisLabel: {
           color: palette.muted,
           formatter: (value: number) => formatShortDateTime(new Date(value)),
@@ -331,6 +335,7 @@ export function TimeSeriesChart({
     realtime,
     rightAxisSensors,
     sensors,
+    timeRange,
   ]);
 
   const updateOverlayLines = useCallback(() => {
@@ -698,6 +703,10 @@ function getAxisBounds(
   limits: LimitMap,
   limitSensors: SensorKey[],
 ): { min: number; max: number } {
+  if (sensors.length === 1 && sensors[0] === "humidity") {
+    return { min: 40, max: 90 };
+  }
+
   if (!sensors.length && !limitSensors.length) {
     return { min: 0, max: 100 };
   }

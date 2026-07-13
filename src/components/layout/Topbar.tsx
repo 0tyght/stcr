@@ -1,12 +1,17 @@
 import { Clock3, LogOut, Palette, Search, User } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-
-const ACCOUNT_STORAGE_KEY = "stcr-account";
-const THEME_STORAGE_KEY = "stcr-theme-mode";
-
-type ThemeMode = "dark" | "company";
-type CompanyCode = "gr" | "ttn";
+import {
+  applyCompanyTheme,
+  getCompanyIdFromAccount,
+} from "../../config/companies";
+import {
+  ACCOUNT_STORAGE_KEY,
+  getStoredAccountId,
+  getStoredThemeMode,
+  THEME_STORAGE_KEY,
+  type ThemeMode,
+} from "../../config/preferences";
 
 type Crumb = {
   label: string;
@@ -16,10 +21,6 @@ type Crumb = {
 type TopbarProps = {
   onLogout: () => void;
 };
-
-function getCompanyFromAccount(account: string): CompanyCode {
-  return account.toLowerCase().startsWith("ttn") ? "ttn" : "gr";
-}
 
 function getOvenNumberFromPath(pathname: string): string | null {
   const match = pathname.match(/^\/ovens\/oven-(\d+)/);
@@ -61,15 +62,14 @@ export function Topbar({ onLogout }: TopbarProps) {
 
   const [now, setNow] = useState(() => new Date());
   const [account, setAccount] = useState(
-    () => localStorage.getItem(ACCOUNT_STORAGE_KEY) || "gr_dev_admin",
+    () => getStoredAccountId(),
   );
 
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
-    const saved = localStorage.getItem(THEME_STORAGE_KEY);
-    return saved === "company" ? "company" : "dark";
+    return getStoredThemeMode();
   });
 
-  const company = useMemo<CompanyCode>(() => getCompanyFromAccount(account), [account]);
+  const companyId = useMemo(() => getCompanyIdFromAccount(account), [account]);
   const breadcrumbs = useMemo(() => buildBreadcrumbs(location.pathname), [location.pathname]);
 
   useEffect(() => {
@@ -81,16 +81,16 @@ export function Topbar({ onLogout }: TopbarProps) {
   }, []);
 
   useEffect(() => {
-    const savedAccount = localStorage.getItem(ACCOUNT_STORAGE_KEY) || "gr_dev_admin";
+    const savedAccount = getStoredAccountId();
     setAccount(savedAccount);
   }, [location.pathname]);
 
   useEffect(() => {
     document.documentElement.dataset.uiTheme = themeMode;
-    document.documentElement.dataset.company = company;
+    applyCompanyTheme(companyId);
 
     localStorage.setItem(THEME_STORAGE_KEY, themeMode);
-  }, [company, themeMode]);
+  }, [companyId, themeMode]);
 
   function toggleTheme() {
     setThemeMode((current) => (current === "dark" ? "company" : "dark"));

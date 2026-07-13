@@ -1,22 +1,17 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./app/App";
+import {
+  applyCompanyTheme,
+  getCompanyIdFromAccount,
+} from "./config/companies";
+import { getStoredAccountId, getStoredThemeMode } from "./config/preferences";
 import "./styles/globals.css";
 import "./styles/theme.css";
 import "./styles/auth.css";
 
-function getInitialThemeMode(): "dark" | "company" {
-  const savedTheme = localStorage.getItem("stcr-theme-mode");
-  return savedTheme === "company" ? "company" : "dark";
-}
-
-function getInitialCompany(): "gr" | "ttn" {
-  const savedAccount = localStorage.getItem("stcr-account") || "gr_dev_admin";
-  return savedAccount.toLowerCase().includes("ttn") ? "ttn" : "gr";
-}
-
-document.documentElement.dataset.uiTheme = getInitialThemeMode();
-document.documentElement.dataset.company = getInitialCompany();
+document.documentElement.dataset.uiTheme = getStoredThemeMode();
+applyCompanyTheme(getCompanyIdFromAccount(getStoredAccountId()));
 
 const root = document.getElementById("root");
 

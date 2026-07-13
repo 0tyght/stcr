@@ -27,8 +27,8 @@ export function getHistoricalCycleRange(
   );
   const cycleOffset = Math.max(0, latestCompletedCycle - cycleNumber);
   const baseEndValue =
-    oven.status === "open" && oven.startedAt
-      ? oven.startedAt
+    oven.status === "open" && oven.reportStartedAt
+      ? oven.reportStartedAt
       : oven.stoppedAt ?? oven.lastUpdatedAt ?? new Date().toISOString();
   const baseEnd = new Date(baseEndValue);
   const end = new Date(baseEnd.getTime() - cycleOffset * (REPORT_CYCLE_MS + CYCLE_GAP_MS));

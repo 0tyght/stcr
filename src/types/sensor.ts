@@ -43,5 +43,6 @@ export type HistoryQuery = {
   startAt?: string;
   endAt?: string;
   cycleNumber?: number;
+  includeIgnition?: boolean;
   sensors: SensorKey[];
 };

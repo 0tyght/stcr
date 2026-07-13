@@ -33,6 +33,7 @@ function historyQueryParams(query: HistoryQuery): URLSearchParams {
   if (query.startAt) params.set("startAt", query.startAt);
   if (query.endAt) params.set("endAt", query.endAt);
   if (query.cycleNumber != null) params.set("cycleNumber", String(query.cycleNumber));
+  if (query.includeIgnition) params.set("includeIgnition", "true");
 
   return params;
 }

@@ -1,4 +1,5 @@
 import { runtimeConfig } from "../../config/runtime";
+import { getCurrentCompany } from "../../config/companies";
 import { ApiError } from "./errors";
 
 type RequestOptions = Omit<RequestInit, "body"> & {
@@ -8,8 +9,12 @@ type RequestOptions = Omit<RequestInit, "body"> & {
 
 function createUrl(path: string, query?: URLSearchParams): string {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const url = `${runtimeConfig.apiBaseUrl}${normalizedPath}`;
-  return query?.size ? `${url}?${query.toString()}` : url;
+  const company = getCurrentCompany();
+  const baseUrl = (company.data.apiBaseUrl || runtimeConfig.apiBaseUrl).replace(/\/+$/, "");
+  const url = `${baseUrl}${normalizedPath}`;
+  const params = new URLSearchParams(query);
+  params.set("companyId", company.id);
+  return `${url}?${params.toString()}`;
 }
 
 async function request(path: string, options: RequestOptions = {}, query?: URLSearchParams) {

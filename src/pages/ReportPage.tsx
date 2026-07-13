@@ -11,12 +11,10 @@ import {
 } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
-import grLogo from "../assets/gr-logo.png";
-import ttnLogo from "../assets/ttn-logo.png";
-
 import { useAppData } from "../app/providers";
 import { EmptyState } from "../components/ui/EmptyState";
 import { PageHeader } from "../components/ui/PageHeader";
+import { getCurrentCompany, type CompanyConfig } from "../config/companies";
 import { apiClient } from "../services/apiClient";
 import {
   createLandscapePdfBlobFromSvg,
@@ -47,7 +45,6 @@ type SavePickerWindow = Window & {
   }) => Promise<SaveFileHandleLike>;
 };
 
-type ReportCompany = "gr" | "ttn";
 type RubberType = "latex" | "yellow" | "black" | "angka" | "";
 type SmokingPeriodStatus = "under" | "over" | "notReached" | "";
 type TemperatureControlStatus = "underControl" | "outOfControl" | "";
@@ -107,13 +104,6 @@ const temperatureControlOptions: Array<{
   { value: "underControl", label: "อยู่ในค่าควบคุม", description: "Under Control" },
   { value: "outOfControl", label: "ไม่อยู่ในค่าควบคุม", description: "Out of Control" },
 ];
-
-function getReportCompany(): ReportCompany {
-  if (typeof window === "undefined") return "gr";
-
-  const account = (window.localStorage.getItem("stcr-account") ?? "").toLowerCase();
-  return account.startsWith("ttn") ? "ttn" : "gr";
-}
 
 type ReportSlot = {
   index: number;
@@ -196,7 +186,7 @@ export function ReportPage() {
   const { ovens } = useAppData();
   const [searchParams] = useSearchParams();
 
-  const company = useMemo<ReportCompany>(() => getReportCompany(), []);
+  const company = useMemo(() => getCurrentCompany(), []);
 
   const ovenId = searchParams.get("ovenId") ?? "";
   const mode: ReportMode = searchParams.get("mode") === "history" ? "history" : "current";
@@ -216,6 +206,7 @@ export function ReportPage() {
 
   const [points, setPoints] = useState<TimeSeriesPoint[]>([]);
   const [loadingReport, setLoadingReport] = useState(false);
+  const [reportError, setReportError] = useState("");
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [downloadMessage, setDownloadMessage] = useState("");
   const [autoDownloaded, setAutoDownloaded] = useState(false);
@@ -226,9 +217,12 @@ export function ReportPage() {
   const cycleOptions = useMemo(() => {
     if (!oven) return [];
 
-    const latest = Math.max(oven.cycleCount || 1, 1);
-    return Array.from({ length: latest }, (_, index) => latest - index);
-  }, [oven]);
+    const latest = mode === "current"
+      ? Math.max(oven.cycleCount || 1, 1)
+      : getDefaultHistoricalCycle(oven);
+    const availableCycleCount = mode === "current" ? 1 : Math.min(6, latest);
+    return Array.from({ length: availableCycleCount }, (_, index) => latest - index);
+  }, [mode, oven]);
 
   useEffect(() => {
     if (!oven) return;
@@ -263,7 +257,14 @@ export function ReportPage() {
   const loadReport = useCallback(async () => {
     if (!oven || !cycleRange || selectedCycle == null) return;
 
+    if (mode === "current" && !oven.reportStartedAt) {
+      setPoints([]);
+      setReportError("รอบปัจจุบันยังอยู่ในช่วงจุดไฟและยังไม่เริ่มบันทึกรายงาน");
+      return;
+    }
+
     setLoadingReport(true);
+    setReportError("");
 
     try {
       const nextPoints = await apiClient.getHistory({
@@ -276,10 +277,16 @@ export function ReportPage() {
       });
 
       setPoints(nextPoints);
+      if (!nextPoints.length) {
+        setReportError("ไม่พบข้อมูลที่บันทึกไว้สำหรับรอบอบนี้");
+      }
+    } catch (error) {
+      setPoints([]);
+      setReportError(error instanceof Error ? error.message : "โหลดข้อมูลรายงานไม่สำเร็จ");
     } finally {
       setLoadingReport(false);
     }
-  }, [cycleRange, oven, selectedCycle]);
+  }, [cycleRange, mode, oven, selectedCycle]);
 
   useEffect(() => {
     void loadReport();
@@ -469,13 +476,34 @@ export function ReportPage() {
     );
   }
 
+  if (mode === "current" && !oven.reportStartedAt) {
+    return (
+      <main className={`report-page report-page--${company.id}`}>
+        <style>{reportPageStyles}</style>
+        <PageHeader
+          title="รายงานรอบปัจจุบัน"
+          description={`${oven.name} · รอบ ${oven.cycleCount}`}
+          actions={
+            <Link className="button" to={`/ovens/${oven.id}`}>
+              กลับหน้ารายละเอียดเตา
+            </Link>
+          }
+        />
+        <EmptyState
+          title="ยังไม่เริ่มบันทึกรอบรายงาน"
+          description="เตากำลังอยู่ในช่วงจุดไฟหรืออุ่นระบบ กราฟเรียลไทม์ยังดูได้ตามปกติ และรายงานจะพร้อมเมื่ออุณหภูมิห้องอบถึงช่วงที่กำหนด"
+        />
+      </main>
+    );
+  }
+
   const rangeCycles =
     rangeFromCycle != null && rangeToCycle != null
       ? getCycleRangeList(rangeFromCycle, rangeToCycle, oven)
       : [];
 
   return (
-    <main className={`report-page report-page--${company}`}>
+    <main className={`report-page report-page--${company.id}`}>
       <style>{reportPageStyles}</style>
 
       <PageHeader
@@ -686,6 +714,12 @@ export function ReportPage() {
         )}
       </section>
 
+      {reportError ? (
+        <section className="panel" role="status">
+          <EmptyState title="ยังไม่มีข้อมูลรายงาน" description={reportError} />
+        </section>
+      ) : null}
+
       <ReportFormControls form={reportForm} onChange={setReportForm} />
 
       <section className="report-page-shell">
@@ -891,7 +925,7 @@ function FwsSvgReport({
   cycle: number;
   cycleRange: { start: Date; end: Date };
   slots: ReportSlot[];
-  company: ReportCompany;
+  company: CompanyConfig;
   form: ReportFormState;
 }) {
   const upper = oven.limits.chamberTemp.upper;
@@ -970,13 +1004,13 @@ function FwsSvgHeader({
 }: {
   width: number;
   height: number;
-  company: ReportCompany;
+  company: CompanyConfig;
 }) {
   const logoW = 174;
   const docW = 205;
   const titleW = width - logoW - docW;
   const docX = logoW + titleW;
-  const logoHref = company === "ttn" ? ttnLogo : grLogo;
+  const logoBox = company.report.logoBox;
 
   return (
     <g>
@@ -987,11 +1021,11 @@ function FwsSvgHeader({
       <line x1={docX + 92} y1={height / 2} x2={docX + 92} y2={height} stroke="#000000" />
 
       <image
-        href={logoHref}
-        x={company === "ttn" ? 52 : 42}
-        y={company === "ttn" ? 7 : 6}
-        width={company === "ttn" ? 70 : 90}
-        height={company === "ttn" ? 62 : 62}
+        href={company.report.logo}
+        x={logoBox.x}
+        y={logoBox.y}
+        width={logoBox.width}
+        height={logoBox.height}
         preserveAspectRatio="xMidYMid meet"
       />
 

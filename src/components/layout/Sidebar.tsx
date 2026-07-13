@@ -2,31 +2,24 @@ import { PackageOpen } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { appRoutes } from "../../app/routes";
 import { useAppData } from "../../app/providers";
-import ttnLogo from "../../assets/ttn-logo.png";
-
-function getSidebarBrand() {
-  const account = localStorage.getItem("stcr-account") || "gr_dev_admin";
-  const isTtn = account.toLowerCase().includes("ttn");
-
-  return {
-    isTtn,
-    mark: isTtn ? "TTN" : "GR",
-    company: isTtn ? "TTN" : "GR",
-  };
-}
+import { getCurrentCompany } from "../../config/companies";
 
 export function Sidebar() {
   const { ovens } = useAppData();
-  const brand = getSidebarBrand();
+  const company = getCurrentCompany();
 
   return (
     <aside className="sidebar">
       <div className="brand-row">
         <NavLink to="/" className="brand-mark" aria-label="กลับ Dashboard">
-          {brand.isTtn ? (
-            <img src={ttnLogo} alt="TTN Logo" className="brand-mark-image" />
+          {company.brand.kind === "image" && company.brand.logo ? (
+            <img
+              src={company.brand.logo}
+              alt={company.brand.logoAlt}
+              className="brand-mark-image"
+            />
           ) : (
-            <span className="brand-mark-text">GR</span>
+            <span className="brand-mark-text">{company.brand.text}</span>
           )}
         </NavLink>
 
@@ -70,7 +63,7 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
-        <strong>{brand.company}</strong>
+        <strong>{company.shortName}</strong>
         <span>Smoking Temperature Control</span>
       </div>
     </aside>

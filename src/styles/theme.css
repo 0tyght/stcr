@@ -57,72 +57,19 @@
   transform: translateX(16px);
 }
 
-/* =========================
-   GR Theme Variables
-   ========================= */
-
-:root[data-ui-theme="company"][data-company="gr"] {
+/* Company identity values are injected from src/config/companies.ts. */
+:root[data-ui-theme="company"] {
   color-scheme: light;
-
-  --company-primary: #ecd92f;
-  --company-primary-soft: #fff9bf;
-  --company-primary-strong: #d9c81f;
-
-  --company-accent: #5b6068;
-  --company-accent-hover: #4b5058;
-  --company-on-accent: #ffffff;
-
-  --company-sidebar: #3c3e42;
-  --company-sidebar-head: #3c3e42;
-  --company-sidebar-text: #ffffff;
-  --company-sidebar-muted: rgba(255, 255, 255, 0.78);
-
-  --bg: #dfdfd9;
-  --surface: #ffffff;
-  --surface-soft: #f8fafc;
-  --surface-strong: #edf0f4;
-
-  --ink: #394150;
-  --ink-strong: #1f2937;
-  --muted: #6b7280;
-  --muted-soft: #9ca3af;
-
-  --line: #d8dde5;
-  --line-strong: #c7ced7;
-}
-
-/* =========================
-   TTN Theme Variables
-   ========================= */
-
-:root[data-ui-theme="company"][data-company="ttn"] {
-  color-scheme: light;
-
-  --company-primary: #ab84fe;
-  --company-primary-soft: #efe7ff;
-  --company-primary-strong: #8e67eb;
-
-  --company-accent: #f0c35c;
-  --company-accent-hover: #deac34;
-  --company-on-accent: #ffffff;
-
-  --company-sidebar: #ab84fe;
-  --company-sidebar-head: #ab84fe;
-  --company-sidebar-text: #ffffff;
-  --company-sidebar-muted: rgba(255, 255, 255, 0.84);
-
-  --bg: #f3f8fb;
-  --surface: #ffffff;
-  --surface-soft: #fbf9ff;
-  --surface-strong: #f3edff;
-
-  --ink: #3f4550;
-  --ink-strong: #30343b;
-  --muted: #7b8190;
-  --muted-soft: #a5a8b2;
-
-  --line: #e1d8fa;
-  --line-strong: #cdbef6;
+  --bg: var(--company-bg);
+  --surface: var(--company-surface);
+  --surface-soft: var(--company-surface-soft);
+  --surface-strong: var(--company-surface-strong);
+  --ink: var(--company-ink);
+  --ink-strong: var(--company-ink-strong);
+  --muted: var(--company-muted);
+  --muted-soft: var(--company-muted-soft);
+  --line: var(--company-line);
+  --line-strong: var(--company-line-strong);
 }
 
 /* =========================
@@ -722,10 +669,6 @@
 }
 
 :root[data-ui-theme="company"] .login-brand {
-  color: var(--company-primary);
-}
-
-:root[data-ui-theme="company"][data-company="ttn"] .login-brand {
   color: var(--company-primary);
 }
 

@@ -11,6 +11,8 @@ export type Oven = {
   status: OvenStatus;
   enabled: boolean;
   cycleCount: number;
+  firedAt?: string;
+  reportStartedAt?: string;
   startedAt?: string;
   stoppedAt?: string;
   lastUpdatedAt: string;
