@@ -1,16 +1,47 @@
 [
   {
-    "id": "stcr-simulator-tab",
+    "id": "stcr-field-tab",
     "type": "tab",
-    "label": "STCR Realtime Simulator",
+    "label": "01 จำลองข้อมูลอุปกรณ์หน้างาน",
     "disabled": false,
-    "info": "Realtime oven simulator and REST API for the STCR React application."
+    "info": "จำลองเซนเซอร์ของแต่ละเตาและส่งข้อมูลดิบทุก 5 วินาที"
+  },
+  {
+    "id": "stcr-gr-pipeline-tab",
+    "type": "tab",
+    "label": "02 ประมวลผลข้อมูล GR",
+    "disabled": false,
+    "info": "ตรวจสอบ ปรับเทียบ กรอง และรวมข้อมูลเซนเซอร์ของ Grand Rubber"
+  },
+  {
+    "id": "stcr-ttn-pipeline-tab",
+    "type": "tab",
+    "label": "03 ประมวลผลข้อมูล TTN",
+    "disabled": false,
+    "info": "ตรวจสอบ ปรับเทียบ กรอง และรวมข้อมูลเซนเซอร์ของ TTN Rubber แยกจาก GR"
+  },
+  {
+    "id": "stcr-platform-tab",
+    "type": "tab",
+    "label": "04 ฐานข้อมูลและ API",
+    "disabled": false,
+    "info": "บันทึกข้อมูลลง MariaDB และให้บริการ HTTP API สำหรับทั้งสองบริษัท"
+  },
+  {
+    "id": "stcr-field-note",
+    "type": "comment",
+    "z": "stcr-field-tab",
+    "name": "ข้อมูลดิบ IoT: เซนเซอร์แต่ละตัวส่งข้อมูลทุก 5 วินาที",
+    "info": "ตัวจำลองส่ง deviceId, sensorId, ลำดับข้อมูล, เวลาจากต้นทาง และ Topic ในรูปแบบที่รองรับ MQTT",
+    "x": 360,
+    "y": 40,
+    "wires": []
   },
   {
     "id": "stcr-simulator-tick",
     "type": "inject",
-    "z": "stcr-simulator-tab",
-    "name": "Initialize / tick every 5s",
+    "z": "stcr-field-tab",
+    "name": "อ่านค่าจาก PLC / Gateway ทุก 5 วินาที",
     "props": [
       {
         "p": "payload"
@@ -28,7 +59,7 @@
     "payload": "",
     "payloadType": "date",
     "x": 170,
-    "y": 80,
+    "y": 280,
     "wires": [
       [
         "stcr-simulator-core"
@@ -38,17 +69,848 @@
   {
     "id": "stcr-simulator-core",
     "type": "function",
-    "z": "stcr-simulator-tab",
-    "name": "Realtime oven simulator",
-    "func": "const SIMULATOR_VERSION = 1;\nconst OVEN_NUMBERS = Array.from({ length: 16 }, (_, index) => index + 11);\nconst STATUSES = [\n  \"closed\", \"closed\", \"closed\", \"closed\",\n  \"open\", \"offline\", \"open\", \"open\",\n  \"closed\", \"open\", \"open\", \"offline\",\n  \"closed\", \"open\", \"open\", \"closed\",\n];\nconst CYCLE_COUNTS = [87, 89, 88, 85, 71, 83, 84, 83, 55, 92, 74, 66, 80, 79, 91, 0];\nconst SIX_DAYS_MS = 6 * 24 * 60 * 60 * 1000;\nconst HISTORY_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;\nconst HISTORY_STEP_MS = 10 * 60 * 1000;\nconst MAX_HISTORY_POINTS = 12000;\n\nfunction round(value, digits = 1) {\n  const scale = 10 ** digits;\n  return Math.round(value * scale) / scale;\n}\n\nfunction clamp(value, min, max) {\n  return Math.min(max, Math.max(min, value));\n}\n\nfunction createLimits() {\n  return {\n    chamberTemp: { sensor: \"chamberTemp\", lower: 30, upper: 60 },\n    humidity: { sensor: \"humidity\", lower: 45, upper: 70 },\n    furnaceTemp: { sensor: \"furnaceTemp\", lower: 140, upper: 450 },\n    blowerTemp: { sensor: \"blowerTemp\", lower: 140, upper: 450 },\n  };\n}\n\nfunction sensorValues(ovenNumber, timestamp, startedAt) {\n  const elapsedHours = Math.max(0, (timestamp - startedAt) / 3600000);\n  const cycleProgress = clamp(elapsedHours / 144, 0, 1);\n  const phase = timestamp / 3600000 + ovenNumber * 0.73;\n  const firingWave = Math.max(0, Math.sin(phase * 1.7));\n  const slowWave = Math.sin(phase * 0.31);\n  const chamberTarget = cycleProgress < 0.08\n    ? 30 + cycleProgress / 0.08 * 18\n    : 48 + Math.sin(phase * 0.18) * 2.2;\n  const humidityTarget = 82 - cycleProgress * 34 + slowWave * 2.4;\n  const furnaceTarget = 155 + firingWave * 95 + Math.sin(phase * 0.43) * 16;\n  const blowerTarget = 58 + firingWave * 24 + Math.sin(phase * 0.57) * 7;\n\n  const chamberTemp = ovenNumber === 20\n    ? chamberTarget + 13\n    : chamberTarget + Math.sin(phase) * 0.7;\n  const furnaceTemp = ovenNumber === 20 ? furnaceTarget + 245 : furnaceTarget;\n  const blowerTemp = ovenNumber === 18 ? Math.max(0, blowerTarget - 66) : blowerTarget;\n\n  return {\n    chamberTemp: round(clamp(chamberTemp, 20, 85)),\n    humidity: round(clamp(humidityTarget, 25, 95)),\n    furnaceTemp: round(clamp(furnaceTemp, 20, 560)),\n    blowerTemp: round(clamp(blowerTemp, 0, 180)),\n  };\n}\n\nfunction createReadings(values, updatedAt) {\n  return {\n    chamberTemp: { key: \"chamberTemp\", value: values.chamberTemp, unit: \"C\", updatedAt },\n    humidity: { key: \"humidity\", value: values.humidity, unit: \"%\", updatedAt },\n    furnaceTemp: { key: \"furnaceTemp\", value: values.furnaceTemp, unit: \"C\", updatedAt },\n    blowerTemp: { key: \"blowerTemp\", value: values.blowerTemp, unit: \"C\", updatedAt },\n  };\n}\n\nfunction createHistoryPoint(oven, timestamp) {\n  const startedAt = Date.parse(oven.startedAt || new Date(timestamp - SIX_DAYS_MS).toISOString());\n  return {\n    timestamp: new Date(timestamp).toISOString(),\n    ...sensorValues(oven.number, timestamp, startedAt),\n  };\n}\n\nfunction createOven(number, index, now) {\n  const status = STATUSES[index];\n  const startedAtMs = now - (10 + (number * 7) % 68) * 3600000;\n  const stoppedAtMs = now - (8 + number % 30) * 3600000;\n  const updatedAtMs = status === \"offline\" ? now - (35 + number) * 60000 : now;\n  const values = sensorValues(number, updatedAtMs, startedAtMs);\n  const updatedAt = new Date(updatedAtMs).toISOString();\n\n  return {\n    id: `oven-${number}`,\n    number,\n    name: `เตา ${number}`,\n    zone: number <= 18 ? \"A\" : \"B\",\n    line: number <= 18 ? \"Line 1\" : \"Line 2\",\n    status,\n    enabled: true,\n    cycleCount: CYCLE_COUNTS[index],\n    ...(status === \"open\" ? { startedAt: new Date(startedAtMs).toISOString() } : {}),\n    ...(status === \"closed\" ? { stoppedAt: new Date(stoppedAtMs).toISOString() } : {}),\n    lastUpdatedAt: updatedAt,\n    readings: createReadings(values, updatedAt),\n    limits: createLimits(),\n  };\n}\n\nfunction buildAlarms(ovens) {\n  const alarms = [];\n\n  ovens.forEach((oven) => {\n    if (oven.status === \"offline\") {\n      alarms.push({\n        id: `${oven.id}-offline`,\n        ovenId: oven.id,\n        ovenName: oven.name,\n        severity: \"offline\",\n        status: \"active\",\n        title: \"ข้อมูลจากเตาขาดการเชื่อมต่อ\",\n        detail: \"Node-RED ไม่ได้รับข้อมูลจากเตาตามรอบเวลาที่กำหนด\",\n        createdAt: oven.lastUpdatedAt,\n      });\n      return;\n    }\n\n    if (oven.status !== \"open\") return;\n\n    Object.keys(oven.readings).forEach((sensor) => {\n      if (sensor === \"humidity\") return;\n      const reading = oven.readings[sensor];\n      const limit = oven.limits[sensor];\n      if (reading.value >= limit.lower && reading.value <= limit.upper) return;\n\n      const isHigh = reading.value > limit.upper;\n      alarms.push({\n        id: `${oven.id}-${sensor}`,\n        ovenId: oven.id,\n        ovenName: oven.name,\n        severity: Math.abs(reading.value - (isHigh ? limit.upper : limit.lower)) > 20 ? \"danger\" : \"warning\",\n        status: \"active\",\n        sensor,\n        title: `${sensor} ${isHigh ? \"สูง\" : \"ต่ำ\"}กว่ามาตรฐาน`,\n        detail: `ค่าปัจจุบัน ${reading.value} เทียบกับ ${isHigh ? \"Upper\" : \"Lower\"} ${isHigh ? limit.upper : limit.lower}`,\n        value: reading.value,\n        limit: isHigh ? limit.upper : limit.lower,\n        createdAt: reading.updatedAt,\n      });\n    });\n  });\n\n  return alarms;\n}\n\nconst now = Date.now();\nlet state = flow.get(\"stcrState\");\n\nif (!state || state.version !== SIMULATOR_VERSION) {\n  const ovens = OVEN_NUMBERS.map((number, index) => createOven(number, index, now));\n  const history = {};\n\n  ovens.forEach((oven) => {\n    const points = [];\n    for (let timestamp = now - HISTORY_RETENTION_MS; timestamp <= now; timestamp += HISTORY_STEP_MS) {\n      points.push(createHistoryPoint(oven, timestamp));\n    }\n    history[oven.id] = points;\n  });\n\n  state = {\n    version: SIMULATOR_VERSION,\n    ovens,\n    history,\n    alarms: buildAlarms(ovens),\n    auditEvents: [],\n  };\n}\n\nstate.ovens = state.ovens.map((oven) => {\n  if (oven.status !== \"open\") return oven;\n  const cycleFinished = now - Date.parse(oven.startedAt) >= SIX_DAYS_MS;\n  const currentOven = cycleFinished\n    ? { ...oven, cycleCount: oven.cycleCount + 1, startedAt: new Date(now).toISOString() }\n    : oven;\n  const updatedAt = new Date(now).toISOString();\n  const values = sensorValues(currentOven.number, now, Date.parse(currentOven.startedAt));\n  const updated = {\n    ...currentOven,\n    lastUpdatedAt: updatedAt,\n    readings: createReadings(values, updatedAt),\n  };\n\n  const points = state.history[oven.id] || [];\n  const lastTimestamp = points.length ? Date.parse(points[points.length - 1].timestamp) : 0;\n  if (now - lastTimestamp >= 60000) {\n    points.push({ timestamp: updatedAt, ...values });\n    state.history[oven.id] = points.slice(-MAX_HISTORY_POINTS);\n  }\n\n  return updated;\n});\n\nconst acknowledgedAlarmIds = new Set(\n  state.alarms.filter((alarm) => alarm.status === \"acknowledged\").map((alarm) => alarm.id),\n);\nstate.alarms = buildAlarms(state.ovens).map((alarm) =>\n  acknowledgedAlarmIds.has(alarm.id) ? { ...alarm, status: \"acknowledged\" } : alarm,\n);\nflow.set(\"stcrState\", state);\nnode.status({ fill: \"green\", shape: \"dot\", text: `${state.ovens.length} ovens · ${new Date(now).toLocaleTimeString()}` });\nreturn null;\n",
+    "z": "stcr-field-tab",
+    "name": "จำลองการทำงานของเตาและเซนเซอร์",
+    "func": "const SIMULATION_MODEL_CYCLE_MS = 6 * 24 * 60 * 60 * 1000;\nconst SIMULATION_MODEL_PROFILES = {\n  gr: { chamber: 57.5, furnace: 500, blower: 365, humidityStart: 80, humidityEnd: 57, phase: 0.2 },\n  ttn: { chamber: 56.5, furnace: 490, blower: 355, humidityStart: 80, humidityEnd: 58, phase: 1.1 },\n};\n\nfunction simulationClamp(value, min, max) {\n  return Math.min(max, Math.max(min, value));\n}\n\nfunction simulationRound(value, digits = 1) {\n  const scale = 10 ** digits;\n  return Math.round(value * scale) / scale;\n}\n\nfunction simulationSmoothstep(value) {\n  const x = simulationClamp(value, 0, 1);\n  return x * x * (3 - 2 * x);\n}\n\nfunction simulationNoise(seed) {\n  const value = Math.sin(seed * 12.9898) * 43758.5453;\n  return (value - Math.floor(value)) * 2 - 1;\n}\n\nfunction simulationWoodLoadingPeriod(companyId, ovenNumber, loadingIndex = 0) {\n  const companySeed = companyId === \"ttn\" ? 117 : 23;\n  const randomValue = (simulationNoise(\n    companySeed + ovenNumber * 19.1 + loadingIndex * 37.7,\n  ) + 1) / 2;\n  return 3 + randomValue * 3;\n}\n\nfunction simulationWoodLoadingState(companyId, ovenNumber, elapsedHours) {\n  if (elapsedHours <= 0) {\n    return {\n      loadingIndex: 0,\n      loadingStartedAt: 0,\n      intervalHours: simulationWoodLoadingPeriod(companyId, ovenNumber, 0),\n    };\n  }\n\n  let loadingIndex = 0;\n  let loadingStartedAt = 0;\n  let intervalHours = simulationWoodLoadingPeriod(companyId, ovenNumber, loadingIndex);\n\n  while (loadingStartedAt + intervalHours <= elapsedHours) {\n    loadingStartedAt += intervalHours;\n    loadingIndex += 1;\n    intervalHours = simulationWoodLoadingPeriod(companyId, ovenNumber, loadingIndex);\n  }\n\n  return { loadingIndex, loadingStartedAt, intervalHours };\n}\n\nfunction simulationCombustionPulse(companyId, ovenNumber, elapsedHours) {\n  if (elapsedHours <= 0) return 0;\n\n  const loading = simulationWoodLoadingState(companyId, ovenNumber, elapsedHours);\n  const cycleAge = elapsedHours - loading.loadingStartedAt;\n  const periodHours = loading.intervalHours;\n  const ignitionDelay = 0.4;\n  const riseHours = Math.min(2, periodHours * 0.45);\n  const peakAt = ignitionDelay + riseHours;\n\n  if (cycleAge <= ignitionDelay) return 0;\n  if (cycleAge < peakAt) {\n    return simulationSmoothstep((cycleAge - ignitionDelay) / riseHours);\n  }\n\n  const decayHours = Math.max(0.5, periodHours - peakAt);\n  return 1 - simulationSmoothstep((cycleAge - peakAt) / decayHours);\n}\n\nfunction simulationSensorValues(companyId, ovenNumber, timestamp, firedAt) {\n  const profile = SIMULATION_MODEL_PROFILES[companyId] || SIMULATION_MODEL_PROFILES.gr;\n  const elapsedMs = Math.max(0, timestamp - firedAt);\n  const elapsedHours = elapsedMs / 3600000;\n  const cycleProgress = simulationClamp(elapsedMs / SIMULATION_MODEL_CYCLE_MS, 0, 1);\n  const ignition = simulationSmoothstep(elapsedHours / 2.5);\n  const chamberWarmup = simulationSmoothstep(elapsedHours / 18);\n  const phase = elapsedHours + ovenNumber * 0.83 + profile.phase;\n  const furnacePulse = simulationCombustionPulse(companyId, ovenNumber, elapsedHours);\n  const blowerPulse = simulationCombustionPulse(companyId, ovenNumber, elapsedHours - 0.2);\n  const chamberPulse = simulationCombustionPulse(companyId, ovenNumber, elapsedHours - 1.4);\n  const smallNoise = simulationNoise(timestamp / 5000 + ovenNumber * 17) * 0.45;\n  const furnaceTemp = ignition * (\n    profile.furnace - 25 + furnacePulse * 60 + Math.sin(phase * 0.11) * 4 + smallNoise * 2\n  );\n  const blowerTemp = ignition * (\n    profile.blower - 18 + blowerPulse * 36 + Math.sin(phase * 0.14) * 3 + smallNoise\n  );\n  const chamberTemp = 29 + chamberWarmup * (\n    profile.chamber - 29 + Math.sin(phase * 0.045) * 0.45 + (chamberPulse - 0.5) * 0.45\n  );\n  const humidityBase = profile.humidityStart\n    - (profile.humidityStart - profile.humidityEnd) * Math.pow(cycleProgress, 2);\n  const chamberDryingEffect = chamberWarmup * Math.max(0, chamberTemp - 55) * 0.05;\n  const humidity = humidityBase - chamberDryingEffect\n    + Math.sin(phase * 0.035) * 0.25 - smallNoise * 0.08;\n\n  return {\n    chamberTemp: simulationRound(simulationClamp(chamberTemp, 25, 63)),\n    humidity: simulationRound(simulationClamp(humidity, 42, 86)),\n    furnaceTemp: simulationRound(simulationClamp(furnaceTemp, 0, 565)),\n    blowerTemp: simulationRound(simulationClamp(blowerTemp, 0, 420)),\n  };\n}\n\nconst SIMULATOR_VERSION = 8;\nconst SIX_DAYS_MS = 6 * 24 * 60 * 60 * 1000;\nconst CYCLE_GAP_MS = 12 * 60 * 60 * 1000;\nconst ARCHIVED_CYCLE_COUNT = 6;\nconst IGNITION_GRACE_MS = 3 * 60 * 60 * 1000;\nconst REPORT_READY_HOLD_MS = 30 * 60 * 1000;\nconst HISTORY_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;\nconst HISTORY_STEP_MS = 10 * 60 * 1000;\nconst LIVE_POINT_INTERVAL_MS = 5000;\nconst MAX_HISTORY_POINTS = 18000;\n\nconst COMPANY_SOURCES = {\n  gr: {\n    companyId: \"gr\",\n    numbers: Array.from({ length: 16 }, (_, index) => index + 11),\n    statuses: [\n      \"closed\", \"closed\", \"closed\", \"closed\", \"open\", \"offline\", \"open\", \"open\",\n      \"closed\", \"open\", \"open\", \"offline\", \"closed\", \"open\", \"open\", \"closed\",\n    ],\n    cycleCounts: [87, 89, 88, 85, 71, 83, 84, 83, 55, 92, 74, 66, 80, 79, 91, 0],\n    zone: (number) => (number <= 18 ? \"A\" : \"B\"),\n    line: (number) => (number <= 18 ? \"Line 1\" : \"Line 2\"),\n  },\n  ttn: {\n    companyId: \"ttn\",\n    numbers: Array.from({ length: 10 }, (_, index) => index + 1),\n    statuses: [\"open\", \"open\", \"closed\", \"open\", \"closed\", \"open\", \"offline\", \"open\", \"closed\", \"open\"],\n    cycleCounts: [42, 38, 51, 46, 33, 55, 29, 48, 36, 44],\n    zone: () => \"TTN\",\n    line: (number) => (number <= 5 ? \"Smoking Line A\" : \"Smoking Line B\"),\n  },\n};\n\nfunction createLimits() {\n  return {\n    chamberTemp: { sensor: \"chamberTemp\", lower: 35, upper: 60 },\n    humidity: { sensor: \"humidity\", lower: 45, upper: 85 },\n    furnaceTemp: { sensor: \"furnaceTemp\", lower: 450, upper: 550 },\n    blowerTemp: { sensor: \"blowerTemp\", lower: 330, upper: 400 },\n  };\n}\n\nfunction createReadings(values, updatedAt) {\n  return {\n    chamberTemp: { key: \"chamberTemp\", value: values.chamberTemp, unit: \"C\", updatedAt },\n    humidity: { key: \"humidity\", value: values.humidity, unit: \"%\", updatedAt },\n    furnaceTemp: { key: \"furnaceTemp\", value: values.furnaceTemp, unit: \"C\", updatedAt },\n    blowerTemp: { key: \"blowerTemp\", value: values.blowerTemp, unit: \"C\", updatedAt },\n  };\n}\n\nfunction createHistoryPoint(source, oven, timestamp) {\n  const firedAt = Date.parse(oven.firedAt || oven.startedAt || new Date(timestamp - SIX_DAYS_MS).toISOString());\n  return { timestamp: new Date(timestamp).toISOString(), ...simulationSensorValues(source.companyId, oven.number, timestamp, firedAt) };\n}\n\nfunction createArchivedCycleMetadata(oven) {\n  if (oven.cycleCount <= 0 || oven.status === \"offline\") return [];\n\n  const latestCompletedCycle = oven.status === \"open\" ? oven.cycleCount - 1 : oven.cycleCount;\n  if (latestCompletedCycle <= 0) return [];\n\n  const baseEnd = Date.parse(\n    oven.status === \"open\"\n      ? oven.reportStartedAt || oven.firedAt\n      : oven.stoppedAt || oven.lastUpdatedAt,\n  );\n\n  return Array.from(\n    { length: Math.min(ARCHIVED_CYCLE_COUNT, latestCompletedCycle) },\n    (_, offset) => {\n      const cycleNumber = latestCompletedCycle - offset;\n\n      if (oven.status === \"closed\" && offset === 0 && oven.reportStartedAt && oven.stoppedAt) {\n        return {\n          cycleNumber,\n          firedAt: oven.firedAt,\n          reportStartedAt: oven.reportStartedAt,\n          stoppedAt: oven.stoppedAt,\n        };\n      }\n\n      const stoppedAtMs = baseEnd - offset * (SIX_DAYS_MS + CYCLE_GAP_MS);\n      const durationHours = 96 + ((oven.number + cycleNumber) % 8) * 6;\n      const reportStartedAtMs = stoppedAtMs - durationHours * 3600000;\n      const firedAtMs = reportStartedAtMs - (8 + (oven.number + cycleNumber) % 5) * 3600000;\n\n      return {\n        cycleNumber,\n        firedAt: new Date(firedAtMs).toISOString(),\n        reportStartedAt: new Date(reportStartedAtMs).toISOString(),\n        stoppedAt: new Date(stoppedAtMs).toISOString(),\n      };\n    },\n  );\n}\n\nfunction findReportStartedAt(source, number, firedAtMs) {\n  const lower = createLimits().chamberTemp.lower;\n  const stepMs = 5 * 60 * 1000;\n  let readySince = null;\n\n  for (let timestamp = firedAtMs; timestamp <= firedAtMs + 24 * 60 * 60 * 1000; timestamp += stepMs) {\n    const chamberTemp = simulationSensorValues(source.companyId, number, timestamp, firedAtMs).chamberTemp;\n    if (chamberTemp >= lower) {\n      readySince ??= timestamp;\n      if (timestamp - readySince >= REPORT_READY_HOLD_MS) return readySince;\n    } else {\n      readySince = null;\n    }\n  }\n\n  return firedAtMs + 24 * 60 * 60 * 1000;\n}\n\nfunction createOven(source, number, index, now) {\n  const status = source.statuses[index];\n  const elapsedCycleHours = index === 0 ? 1 : 1 + (number * 11) % 116;\n  const firedAtMs = now - elapsedCycleHours * 3600000;\n  const reportStartedAtMs = findReportStartedAt(source, number, firedAtMs);\n  const stoppedAtMs = now - (8 + number % 30) * 3600000;\n  const completedDurationMs = (96 + (number % 8) * 6) * 3600000;\n  const completedReportStartedAtMs = stoppedAtMs - completedDurationMs;\n  const completedFiredAtMs = completedReportStartedAtMs - (8 + number % 5) * 3600000;\n  const updatedAtMs = status === \"offline\" ? now - (35 + number) * 60000 : now;\n  const values = status === \"open\"\n    ? simulationSensorValues(source.companyId, number, updatedAtMs, firedAtMs)\n    : { chamberTemp: 30, humidity: 68, furnaceTemp: 0, blowerTemp: 0 };\n  const updatedAt = new Date(updatedAtMs).toISOString();\n\n  return {\n    id: `oven-${number}`,\n    number,\n    name: `เตา ${number}`,\n    zone: source.zone(number),\n    line: source.line(number),\n    status,\n    enabled: true,\n    cycleCount: source.cycleCounts[index],\n    ...(status === \"open\" ? { firedAt: new Date(firedAtMs).toISOString() } : {}),\n    ...(status === \"open\" && reportStartedAtMs <= now\n      ? {\n          reportStartedAt: new Date(reportStartedAtMs).toISOString(),\n          startedAt: new Date(reportStartedAtMs).toISOString(),\n        }\n      : {}),\n    ...(status === \"closed\" && source.cycleCounts[index] > 0\n      ? {\n          firedAt: new Date(completedFiredAtMs).toISOString(),\n          reportStartedAt: new Date(completedReportStartedAtMs).toISOString(),\n          startedAt: new Date(completedReportStartedAtMs).toISOString(),\n          stoppedAt: new Date(stoppedAtMs).toISOString(),\n        }\n      : status === \"closed\"\n        ? { stoppedAt: new Date(stoppedAtMs).toISOString() }\n        : {}),\n    lastUpdatedAt: updatedAt,\n    readings: createReadings(values, updatedAt),\n    limits: createLimits(),\n  };\n}\n\nfunction isInIgnitionGrace(oven, now) {\n  return oven.status === \"open\" && oven.startedAt && now - Date.parse(oven.startedAt) < IGNITION_GRACE_MS;\n}\n\nfunction isSensorReadyForAlarm(oven, sensor, now) {\n  if (!oven.startedAt) return false;\n  const elapsedMs = now - Date.parse(oven.startedAt);\n  const warmupMs = sensor === \"chamberTemp\" ? 18 * 60 * 60 * 1000 : IGNITION_GRACE_MS;\n  return elapsedMs >= warmupMs;\n}\n\nfunction buildAlarms(companyState, now) {\n  const alarms = [];\n\n  companyState.ovens.forEach((oven) => {\n    if (oven.status === \"offline\") {\n      alarms.push({\n        id: `${oven.id}-offline`, ovenId: oven.id, ovenName: oven.name, severity: \"offline\", status: \"active\",\n        title: \"ขาดการเชื่อมต่อ\", detail: \"ไม่ได้รับข้อมูลจากเตาตามรอบเวลาที่กำหนด\", createdAt: oven.lastUpdatedAt,\n      });\n      return;\n    }\n\n    // During ignition all temperature sensors rise from zero by design.\n    if (oven.status !== \"open\" || isInIgnitionGrace(oven, now)) return;\n\n    [\"chamberTemp\", \"furnaceTemp\", \"blowerTemp\"].forEach((sensor) => {\n      if (!isSensorReadyForAlarm(oven, sensor, now)) return;\n      const reading = oven.readings[sensor];\n      const limit = oven.limits[sensor];\n      if (reading.value >= limit.lower && reading.value <= limit.upper) return;\n      const isHigh = reading.value > limit.upper;\n      alarms.push({\n        id: `${oven.id}-${sensor}`, ovenId: oven.id, ovenName: oven.name,\n        severity: Math.abs(reading.value - (isHigh ? limit.upper : limit.lower)) > 25 ? \"danger\" : \"warning\",\n        status: \"active\", sensor,\n        title: `${sensor} ${isHigh ? \"สูง\" : \"ต่ำ\"}กว่ามาตรฐาน`,\n        detail: `ค่าปัจจุบัน ${reading.value} เทียบกับ ${isHigh ? \"Upper\" : \"Lower\"} ${isHigh ? limit.upper : limit.lower}`,\n        value: reading.value, limit: isHigh ? limit.upper : limit.lower, createdAt: reading.updatedAt,\n      });\n    });\n  });\n\n  return alarms;\n}\n\nfunction createCompanyState(source, now) {\n  const ovens = source.numbers.map((number, index) => createOven(source, number, index, now));\n  const history = {};\n\n  ovens.forEach((oven) => {\n    const points = [];\n    const seedStart = oven.reportStartedAt\n      ? Math.max(Date.parse(oven.reportStartedAt), now - HISTORY_RETENTION_MS)\n      : now - HISTORY_RETENTION_MS;\n    const seedEnd = oven.status === \"closed\" && oven.stoppedAt ? Date.parse(oven.stoppedAt) : now;\n    for (let timestamp = seedStart; timestamp <= seedEnd; timestamp += HISTORY_STEP_MS) {\n      points.push(createHistoryPoint(source, oven, timestamp));\n    }\n    history[oven.id] = points;\n  });\n\n  const archivedCycles = Object.fromEntries(\n    ovens.map((oven) => [oven.id, createArchivedCycleMetadata(oven)]),\n  );\n\n  const companyState = {\n    companyId: source.companyId,\n    ovens,\n    history,\n    archivedCycles,\n    alarms: [],\n    auditEvents: [],\n  };\n  companyState.alarms = buildAlarms(companyState, now);\n  return companyState;\n}\n\nfunction updateCompanyState(source, companyState, now) {\n  companyState.ovens = companyState.ovens.map((oven) => {\n    if (oven.status !== \"open\") return oven;\n    const cycleFinished = oven.reportStartedAt && now - Date.parse(oven.reportStartedAt) >= SIX_DAYS_MS;\n    const currentOven = cycleFinished\n      ? {\n          ...oven,\n          cycleCount: oven.cycleCount + 1,\n          firedAt: new Date(now).toISOString(),\n          reportStartedAt: undefined,\n          startedAt: undefined,\n        }\n      : oven;\n    if (cycleFinished) companyState.history[oven.id] = [];\n\n    const updatedAt = new Date(now).toISOString();\n    const firedAt = Date.parse(currentOven.firedAt);\n    const values = simulationSensorValues(source.companyId, currentOven.number, now, firedAt);\n    if (!currentOven.reportStartedAt) {\n      const candidate = findReportStartedAt(source, currentOven.number, firedAt);\n      if (candidate <= now) {\n        currentOven.reportStartedAt = new Date(candidate).toISOString();\n        currentOven.startedAt = currentOven.reportStartedAt;\n      }\n    }\n    const points = companyState.history[oven.id] || [];\n    const lastTimestamp = points.length ? Date.parse(points[points.length - 1].timestamp) : 0;\n    if (currentOven.reportStartedAt && now - lastTimestamp >= LIVE_POINT_INTERVAL_MS) {\n      points.push({ timestamp: updatedAt, ...values });\n      companyState.history[oven.id] = points.slice(-MAX_HISTORY_POINTS);\n    }\n\n    return { ...currentOven, lastUpdatedAt: updatedAt, readings: createReadings(values, updatedAt) };\n  });\n\n  const previousById = new Map(companyState.alarms.map((alarm) => [alarm.id, alarm]));\n  const activeAlarms = buildAlarms(companyState, now).map((alarm) => {\n    const previous = previousById.get(alarm.id);\n    return previous?.status === \"acknowledged\"\n      ? { ...alarm, status: \"acknowledged\", createdAt: previous.createdAt }\n      : alarm;\n  });\n  const activeIds = new Set(activeAlarms.map((alarm) => alarm.id));\n  const newlyResolved = companyState.alarms\n    .filter((alarm) => alarm.status !== \"resolved\" && !activeIds.has(alarm.id))\n    .map((alarm) => ({ ...alarm, status: \"resolved\", resolvedAt: new Date(now).toISOString() }));\n  const retainedResolved = companyState.alarms.filter(\n    (alarm) => alarm.status === \"resolved\" && !activeIds.has(alarm.id),\n  );\n  companyState.alarms = [...activeAlarms, ...newlyResolved, ...retainedResolved]\n    .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))\n    .slice(0, 200);\n}\n\nconst now = Date.now();\nlet state = global.get(\"stcrState\");\n\nif (!state || state.version !== SIMULATOR_VERSION || !state.companies) {\n  state = {\n    version: SIMULATOR_VERSION,\n    companies: Object.fromEntries(\n      Object.entries(COMPANY_SOURCES).map(([companyId, source]) => [companyId, createCompanyState(source, now)]),\n    ),\n  };\n}\n\nObject.entries(COMPANY_SOURCES).forEach(([companyId, source]) => {\n  updateCompanyState(source, state.companies[companyId], now);\n});\n\nglobal.set(\"stcrState\", state);\nconst ovenCount = Object.values(state.companies).reduce((total, company) => total + company.ovens.length, 0);\nstate.telemetrySequence = Math.max((state.telemetrySequence || 0) + 1, now);\nconst batchId = `${now}-${state.telemetrySequence}`;\nconst sensorKeys = [\"chamberTemp\", \"humidity\", \"furnaceTemp\", \"blowerTemp\"];\nconst units = { chamberTemp: \"C\", humidity: \"%\", furnaceTemp: \"C\", blowerTemp: \"C\" };\nconst outputs = sensorKeys.map(() => []);\nconst connectedOvens = Object.values(state.companies)\n  .flatMap((company) => company.ovens.map((oven) => ({ companyId: company.companyId, oven })))\n  .filter(({ oven }) => oven.enabled && oven.status !== \"offline\");\nconst expectedTelemetryByCompany = Object.fromEntries(\n  Object.keys(state.companies).map((companyId) => [\n    companyId,\n    connectedOvens.filter((item) => item.companyId === companyId).length * sensorKeys.length,\n  ]),\n);\n\nconnectedOvens.forEach(({ companyId, oven }) => {\n  sensorKeys.forEach((sensorKey, outputIndex) => {\n    const reading = oven.readings[sensorKey];\n    outputs[outputIndex].push({\n      topic: `stcr/${companyId}/${oven.id}/telemetry/${sensorKey}`,\n      payload: {\n        schemaVersion: 1,\n        batchId,\n        expectedTelemetryCount: expectedTelemetryByCompany[companyId],\n        companyId,\n        deviceId: `${companyId}-${oven.id}-gateway`,\n        ovenId: oven.id,\n        sensorId: `${companyId}-${oven.id}-${sensorKey}`,\n        sensorKey,\n        sequence: state.telemetrySequence,\n        value: reading.value,\n        unit: units[sensorKey],\n        sourceTimestamp: new Date(now).toISOString(),\n        receivedTimestamp: new Date(now).toISOString(),\n      },\n    });\n  });\n});\n\nglobal.set(\"stcrState\", state);\nnode.status({ fill: \"green\", shape: \"dot\", text: `${ovenCount} ovens / seq ${state.telemetrySequence}` });\nreturn outputs;\n",
+    "outputs": 4,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 450,
+    "y": 280,
+    "wires": [
+      [
+        "stcr-field-chamber-company-router"
+      ],
+      [
+        "stcr-field-humidity-company-router"
+      ],
+      [
+        "stcr-field-furnace-company-router"
+      ],
+      [
+        "stcr-field-blower-company-router"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-field-chamber-company-router",
+    "type": "switch",
+    "z": "stcr-field-tab",
+    "name": "อุณหภูมิห้องอบ: แยกตามบริษัท",
+    "property": "payload.companyId",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "gr",
+        "vt": "str"
+      },
+      {
+        "t": "eq",
+        "v": "ttn",
+        "vt": "str"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 760,
+    "y": 100,
+    "wires": [
+      [
+        "stcr-field-gr-chamber-out"
+      ],
+      [
+        "stcr-field-ttn-chamber-out"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-field-gr-chamber-out",
+    "type": "link out",
+    "z": "stcr-field-tab",
+    "name": "GR: ส่งอุณหภูมิห้องอบ",
+    "mode": "link",
+    "links": [
+      "stcr-gr-chamber-in"
+    ],
+    "x": 1055,
+    "y": 100,
+    "wires": []
+  },
+  {
+    "id": "stcr-field-ttn-chamber-out",
+    "type": "link out",
+    "z": "stcr-field-tab",
+    "name": "TTN: ส่งอุณหภูมิห้องอบ",
+    "mode": "link",
+    "links": [
+      "stcr-ttn-chamber-in"
+    ],
+    "x": 1055,
+    "y": 134,
+    "wires": []
+  },
+  {
+    "id": "stcr-field-humidity-company-router",
+    "type": "switch",
+    "z": "stcr-field-tab",
+    "name": "ความชื้น: แยกตามบริษัท",
+    "property": "payload.companyId",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "gr",
+        "vt": "str"
+      },
+      {
+        "t": "eq",
+        "v": "ttn",
+        "vt": "str"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 760,
+    "y": 220,
+    "wires": [
+      [
+        "stcr-field-gr-humidity-out"
+      ],
+      [
+        "stcr-field-ttn-humidity-out"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-field-gr-humidity-out",
+    "type": "link out",
+    "z": "stcr-field-tab",
+    "name": "GR: ส่งความชื้น",
+    "mode": "link",
+    "links": [
+      "stcr-gr-humidity-in"
+    ],
+    "x": 1055,
+    "y": 220,
+    "wires": []
+  },
+  {
+    "id": "stcr-field-ttn-humidity-out",
+    "type": "link out",
+    "z": "stcr-field-tab",
+    "name": "TTN: ส่งความชื้น",
+    "mode": "link",
+    "links": [
+      "stcr-ttn-humidity-in"
+    ],
+    "x": 1055,
+    "y": 254,
+    "wires": []
+  },
+  {
+    "id": "stcr-field-furnace-company-router",
+    "type": "switch",
+    "z": "stcr-field-tab",
+    "name": "อุณหภูมิเตาเผา: แยกตามบริษัท",
+    "property": "payload.companyId",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "gr",
+        "vt": "str"
+      },
+      {
+        "t": "eq",
+        "v": "ttn",
+        "vt": "str"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 760,
+    "y": 340,
+    "wires": [
+      [
+        "stcr-field-gr-furnace-out"
+      ],
+      [
+        "stcr-field-ttn-furnace-out"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-field-gr-furnace-out",
+    "type": "link out",
+    "z": "stcr-field-tab",
+    "name": "GR: ส่งอุณหภูมิเตาเผา",
+    "mode": "link",
+    "links": [
+      "stcr-gr-furnace-in"
+    ],
+    "x": 1055,
+    "y": 340,
+    "wires": []
+  },
+  {
+    "id": "stcr-field-ttn-furnace-out",
+    "type": "link out",
+    "z": "stcr-field-tab",
+    "name": "TTN: ส่งอุณหภูมิเตาเผา",
+    "mode": "link",
+    "links": [
+      "stcr-ttn-furnace-in"
+    ],
+    "x": 1055,
+    "y": 374,
+    "wires": []
+  },
+  {
+    "id": "stcr-field-blower-company-router",
+    "type": "switch",
+    "z": "stcr-field-tab",
+    "name": "อุณหภูมิ Blower: แยกตามบริษัท",
+    "property": "payload.companyId",
+    "propertyType": "msg",
+    "rules": [
+      {
+        "t": "eq",
+        "v": "gr",
+        "vt": "str"
+      },
+      {
+        "t": "eq",
+        "v": "ttn",
+        "vt": "str"
+      }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 760,
+    "y": 460,
+    "wires": [
+      [
+        "stcr-field-gr-blower-out"
+      ],
+      [
+        "stcr-field-ttn-blower-out"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-field-gr-blower-out",
+    "type": "link out",
+    "z": "stcr-field-tab",
+    "name": "GR: ส่งอุณหภูมิ Blower",
+    "mode": "link",
+    "links": [
+      "stcr-gr-blower-in"
+    ],
+    "x": 1055,
+    "y": 460,
+    "wires": []
+  },
+  {
+    "id": "stcr-field-ttn-blower-out",
+    "type": "link out",
+    "z": "stcr-field-tab",
+    "name": "TTN: ส่งอุณหภูมิ Blower",
+    "mode": "link",
+    "links": [
+      "stcr-ttn-blower-in"
+    ],
+    "x": 1055,
+    "y": 494,
+    "wires": []
+  },
+  {
+    "id": "stcr-gr-note",
+    "type": "comment",
+    "z": "stcr-gr-pipeline-tab",
+    "name": "Grand Rubber: แยกช่องรับและประมวลผลเซนเซอร์",
+    "info": "แต่ละช่องรองรับเซนเซอร์จริงหลายตัว โดยแยกด้วย companyId, ovenId, deviceId และ sensorId",
+    "x": 320,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "stcr-gr-chamber-in",
+    "type": "link in",
+    "z": "stcr-gr-pipeline-tab",
+    "name": "รับข้อมูลอุณหภูมิห้องอบ",
+    "links": [
+      "stcr-field-gr-chamber-out"
+    ],
+    "x": 95,
+    "y": 100,
+    "wires": [
+      [
+        "stcr-gr-chamber-gateway"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-gr-chamber-gateway",
+    "type": "function",
+    "z": "stcr-gr-pipeline-tab",
+    "name": "อุณหภูมิห้องอบ: ตรวจสอบคุณภาพข้อมูล",
+    "func": "const physicalRanges = {\n  chamberTemp: { min: -20, max: 120, unit: \"C\" },\n  humidity: { min: 0, max: 100, unit: \"%\" },\n  furnaceTemp: { min: -20, max: 900, unit: \"C\" },\n  blowerTemp: { min: -20, max: 600, unit: \"C\" },\n};\n\nconst telemetry = msg.payload;\nif (!telemetry || typeof telemetry !== \"object\") {\n  node.warn(\"Dropped telemetry without payload\");\n  return null;\n}\n\nconst rule = physicalRanges[telemetry.sensorKey];\nconst value = Number(telemetry.value);\nconst sourceTime = Date.parse(telemetry.sourceTimestamp);\nconst now = Date.now();\n\nif (!rule || !Number.isFinite(value) || !Number.isFinite(sourceTime)) {\n  node.warn(`Dropped malformed telemetry: ${msg.topic || \"unknown topic\"}`);\n  return null;\n}\n\nlet quality = \"good\";\nconst qualityReasons = [];\n\nif (telemetry.unit !== rule.unit) {\n  quality = \"suspect\";\n  qualityReasons.push(`unit:${telemetry.unit}`);\n}\nif (value < rule.min || value > rule.max) {\n  quality = \"suspect\";\n  qualityReasons.push(\"physical-range\");\n}\nif (now - sourceTime > 30000) {\n  quality = \"suspect\";\n  qualityReasons.push(\"stale\");\n}\nif (sourceTime - now > 5000) {\n  quality = \"suspect\";\n  qualityReasons.push(\"future-timestamp\");\n}\n\nmsg.payload = {\n  ...telemetry,\n  topic: msg.topic,\n  value,\n  quality,\n  qualityReasons,\n  gatewayTimestamp: new Date(now).toISOString(),\n};\nmsg.telemetry = true;\nnode.status({\n  fill: quality === \"good\" ? \"green\" : \"yellow\",\n  shape: quality === \"good\" ? \"dot\" : \"ring\",\n  text: `${telemetry.sensorKey} seq ${telemetry.sequence}`,\n});\nreturn msg;\n",
     "outputs": 1,
     "timeout": 0,
     "noerr": 0,
     "initialize": "",
     "finalize": "",
     "libs": [],
-    "x": 430,
-    "y": 80,
+    "x": 330,
+    "y": 100,
+    "wires": [
+      [
+        "stcr-gr-chamber-processor"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-gr-chamber-processor",
+    "type": "function",
+    "z": "stcr-gr-pipeline-tab",
+    "name": "อุณหภูมิห้องอบ: ปรับเทียบและกรองค่า",
+    "func": "const calibration = {\n  gr: {\n    chamberTemp: { gain: 1, offset: 0 },\n    humidity: { gain: 1, offset: 0 },\n    furnaceTemp: { gain: 1, offset: 0 },\n    blowerTemp: { gain: 1, offset: 0 },\n  },\n  ttn: {\n    chamberTemp: { gain: 1, offset: 0 },\n    humidity: { gain: 1, offset: 0 },\n    furnaceTemp: { gain: 1, offset: 0 },\n    blowerTemp: { gain: 1, offset: 0 },\n  },\n};\n\nconst processingRules = {\n  chamberTemp: { alpha: 0.18, spikeDelta: 4 },\n  humidity: { alpha: 0.16, spikeDelta: 7 },\n  furnaceTemp: { alpha: 0.30, spikeDelta: 85 },\n  blowerTemp: { alpha: 0.25, spikeDelta: 60 },\n};\n\nfunction median(values) {\n  const sorted = [...values].sort((a, b) => a - b);\n  const middle = Math.floor(sorted.length / 2);\n  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;\n}\n\nfunction round(value, digits = 2) {\n  const scale = 10 ** digits;\n  return Math.round(value * scale) / scale;\n}\n\nconst telemetry = msg.payload;\nif (!msg.telemetry || !telemetry?.sensorKey) return null;\n\nconst companyCalibration = calibration[telemetry.companyId] || calibration.gr;\nconst sensorCalibration = companyCalibration[telemetry.sensorKey] || { gain: 1, offset: 0 };\nconst rule = processingRules[telemetry.sensorKey];\nif (!rule) return null;\n\nconst rawValue = Number(telemetry.value);\nconst calibratedValue = rawValue * sensorCalibration.gain + sensorCalibration.offset;\nconst stateKey = `filter:${telemetry.companyId}:${telemetry.ovenId}:${telemetry.sensorKey}`;\nconst previous = context.get(stateKey) || { window: [], ema: null };\nconst sampleWindow = [...previous.window, calibratedValue].slice(-5);\nconst windowMedian = median(sampleWindow);\nconst spikeRejected = sampleWindow.length >= 3\n  && Math.abs(calibratedValue - windowMedian) > rule.spikeDelta;\nconst acceptedValue = spikeRejected ? windowMedian : calibratedValue;\nconst filteredValue = previous.ema == null\n  ? acceptedValue\n  : rule.alpha * acceptedValue + (1 - rule.alpha) * previous.ema;\n\ncontext.set(stateKey, { window: sampleWindow, ema: filteredValue });\n\nconst qualityReasons = [...(telemetry.qualityReasons || [])];\nif (spikeRejected) qualityReasons.push(\"spike-rejected\");\n\nmsg.payload = {\n  ...telemetry,\n  rawValue: round(rawValue),\n  calibratedValue: round(calibratedValue),\n  value: round(filteredValue),\n  quality: spikeRejected && telemetry.quality === \"good\" ? \"suspect\" : telemetry.quality,\n  qualityReasons,\n  processing: {\n    method: \"calibration+median5+ema\",\n    medianWindow: 5,\n    emaAlpha: rule.alpha,\n    spikeRejected,\n  },\n  processedTimestamp: new Date().toISOString(),\n};\n\nnode.status({\n  fill: spikeRejected ? \"yellow\" : \"green\",\n  shape: spikeRejected ? \"ring\" : \"dot\",\n  text: `${telemetry.sensorKey} ${round(filteredValue, 1)}`,\n});\n\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 660,
+    "y": 100,
+    "wires": [
+      [
+        "stcr-gr-aggregator"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-gr-humidity-in",
+    "type": "link in",
+    "z": "stcr-gr-pipeline-tab",
+    "name": "รับข้อมูลความชื้น",
+    "links": [
+      "stcr-field-gr-humidity-out"
+    ],
+    "x": 95,
+    "y": 220,
+    "wires": [
+      [
+        "stcr-gr-humidity-gateway"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-gr-humidity-gateway",
+    "type": "function",
+    "z": "stcr-gr-pipeline-tab",
+    "name": "ความชื้น: ตรวจสอบคุณภาพข้อมูล",
+    "func": "const physicalRanges = {\n  chamberTemp: { min: -20, max: 120, unit: \"C\" },\n  humidity: { min: 0, max: 100, unit: \"%\" },\n  furnaceTemp: { min: -20, max: 900, unit: \"C\" },\n  blowerTemp: { min: -20, max: 600, unit: \"C\" },\n};\n\nconst telemetry = msg.payload;\nif (!telemetry || typeof telemetry !== \"object\") {\n  node.warn(\"Dropped telemetry without payload\");\n  return null;\n}\n\nconst rule = physicalRanges[telemetry.sensorKey];\nconst value = Number(telemetry.value);\nconst sourceTime = Date.parse(telemetry.sourceTimestamp);\nconst now = Date.now();\n\nif (!rule || !Number.isFinite(value) || !Number.isFinite(sourceTime)) {\n  node.warn(`Dropped malformed telemetry: ${msg.topic || \"unknown topic\"}`);\n  return null;\n}\n\nlet quality = \"good\";\nconst qualityReasons = [];\n\nif (telemetry.unit !== rule.unit) {\n  quality = \"suspect\";\n  qualityReasons.push(`unit:${telemetry.unit}`);\n}\nif (value < rule.min || value > rule.max) {\n  quality = \"suspect\";\n  qualityReasons.push(\"physical-range\");\n}\nif (now - sourceTime > 30000) {\n  quality = \"suspect\";\n  qualityReasons.push(\"stale\");\n}\nif (sourceTime - now > 5000) {\n  quality = \"suspect\";\n  qualityReasons.push(\"future-timestamp\");\n}\n\nmsg.payload = {\n  ...telemetry,\n  topic: msg.topic,\n  value,\n  quality,\n  qualityReasons,\n  gatewayTimestamp: new Date(now).toISOString(),\n};\nmsg.telemetry = true;\nnode.status({\n  fill: quality === \"good\" ? \"green\" : \"yellow\",\n  shape: quality === \"good\" ? \"dot\" : \"ring\",\n  text: `${telemetry.sensorKey} seq ${telemetry.sequence}`,\n});\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 330,
+    "y": 220,
+    "wires": [
+      [
+        "stcr-gr-humidity-processor"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-gr-humidity-processor",
+    "type": "function",
+    "z": "stcr-gr-pipeline-tab",
+    "name": "ความชื้น: ปรับเทียบและกรองค่า",
+    "func": "const calibration = {\n  gr: {\n    chamberTemp: { gain: 1, offset: 0 },\n    humidity: { gain: 1, offset: 0 },\n    furnaceTemp: { gain: 1, offset: 0 },\n    blowerTemp: { gain: 1, offset: 0 },\n  },\n  ttn: {\n    chamberTemp: { gain: 1, offset: 0 },\n    humidity: { gain: 1, offset: 0 },\n    furnaceTemp: { gain: 1, offset: 0 },\n    blowerTemp: { gain: 1, offset: 0 },\n  },\n};\n\nconst processingRules = {\n  chamberTemp: { alpha: 0.18, spikeDelta: 4 },\n  humidity: { alpha: 0.16, spikeDelta: 7 },\n  furnaceTemp: { alpha: 0.30, spikeDelta: 85 },\n  blowerTemp: { alpha: 0.25, spikeDelta: 60 },\n};\n\nfunction median(values) {\n  const sorted = [...values].sort((a, b) => a - b);\n  const middle = Math.floor(sorted.length / 2);\n  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;\n}\n\nfunction round(value, digits = 2) {\n  const scale = 10 ** digits;\n  return Math.round(value * scale) / scale;\n}\n\nconst telemetry = msg.payload;\nif (!msg.telemetry || !telemetry?.sensorKey) return null;\n\nconst companyCalibration = calibration[telemetry.companyId] || calibration.gr;\nconst sensorCalibration = companyCalibration[telemetry.sensorKey] || { gain: 1, offset: 0 };\nconst rule = processingRules[telemetry.sensorKey];\nif (!rule) return null;\n\nconst rawValue = Number(telemetry.value);\nconst calibratedValue = rawValue * sensorCalibration.gain + sensorCalibration.offset;\nconst stateKey = `filter:${telemetry.companyId}:${telemetry.ovenId}:${telemetry.sensorKey}`;\nconst previous = context.get(stateKey) || { window: [], ema: null };\nconst sampleWindow = [...previous.window, calibratedValue].slice(-5);\nconst windowMedian = median(sampleWindow);\nconst spikeRejected = sampleWindow.length >= 3\n  && Math.abs(calibratedValue - windowMedian) > rule.spikeDelta;\nconst acceptedValue = spikeRejected ? windowMedian : calibratedValue;\nconst filteredValue = previous.ema == null\n  ? acceptedValue\n  : rule.alpha * acceptedValue + (1 - rule.alpha) * previous.ema;\n\ncontext.set(stateKey, { window: sampleWindow, ema: filteredValue });\n\nconst qualityReasons = [...(telemetry.qualityReasons || [])];\nif (spikeRejected) qualityReasons.push(\"spike-rejected\");\n\nmsg.payload = {\n  ...telemetry,\n  rawValue: round(rawValue),\n  calibratedValue: round(calibratedValue),\n  value: round(filteredValue),\n  quality: spikeRejected && telemetry.quality === \"good\" ? \"suspect\" : telemetry.quality,\n  qualityReasons,\n  processing: {\n    method: \"calibration+median5+ema\",\n    medianWindow: 5,\n    emaAlpha: rule.alpha,\n    spikeRejected,\n  },\n  processedTimestamp: new Date().toISOString(),\n};\n\nnode.status({\n  fill: spikeRejected ? \"yellow\" : \"green\",\n  shape: spikeRejected ? \"ring\" : \"dot\",\n  text: `${telemetry.sensorKey} ${round(filteredValue, 1)}`,\n});\n\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 660,
+    "y": 220,
+    "wires": [
+      [
+        "stcr-gr-aggregator"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-gr-furnace-in",
+    "type": "link in",
+    "z": "stcr-gr-pipeline-tab",
+    "name": "รับข้อมูลอุณหภูมิเตาเผา",
+    "links": [
+      "stcr-field-gr-furnace-out"
+    ],
+    "x": 95,
+    "y": 340,
+    "wires": [
+      [
+        "stcr-gr-furnace-gateway"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-gr-furnace-gateway",
+    "type": "function",
+    "z": "stcr-gr-pipeline-tab",
+    "name": "อุณหภูมิเตาเผา: ตรวจสอบคุณภาพข้อมูล",
+    "func": "const physicalRanges = {\n  chamberTemp: { min: -20, max: 120, unit: \"C\" },\n  humidity: { min: 0, max: 100, unit: \"%\" },\n  furnaceTemp: { min: -20, max: 900, unit: \"C\" },\n  blowerTemp: { min: -20, max: 600, unit: \"C\" },\n};\n\nconst telemetry = msg.payload;\nif (!telemetry || typeof telemetry !== \"object\") {\n  node.warn(\"Dropped telemetry without payload\");\n  return null;\n}\n\nconst rule = physicalRanges[telemetry.sensorKey];\nconst value = Number(telemetry.value);\nconst sourceTime = Date.parse(telemetry.sourceTimestamp);\nconst now = Date.now();\n\nif (!rule || !Number.isFinite(value) || !Number.isFinite(sourceTime)) {\n  node.warn(`Dropped malformed telemetry: ${msg.topic || \"unknown topic\"}`);\n  return null;\n}\n\nlet quality = \"good\";\nconst qualityReasons = [];\n\nif (telemetry.unit !== rule.unit) {\n  quality = \"suspect\";\n  qualityReasons.push(`unit:${telemetry.unit}`);\n}\nif (value < rule.min || value > rule.max) {\n  quality = \"suspect\";\n  qualityReasons.push(\"physical-range\");\n}\nif (now - sourceTime > 30000) {\n  quality = \"suspect\";\n  qualityReasons.push(\"stale\");\n}\nif (sourceTime - now > 5000) {\n  quality = \"suspect\";\n  qualityReasons.push(\"future-timestamp\");\n}\n\nmsg.payload = {\n  ...telemetry,\n  topic: msg.topic,\n  value,\n  quality,\n  qualityReasons,\n  gatewayTimestamp: new Date(now).toISOString(),\n};\nmsg.telemetry = true;\nnode.status({\n  fill: quality === \"good\" ? \"green\" : \"yellow\",\n  shape: quality === \"good\" ? \"dot\" : \"ring\",\n  text: `${telemetry.sensorKey} seq ${telemetry.sequence}`,\n});\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 330,
+    "y": 340,
+    "wires": [
+      [
+        "stcr-gr-furnace-processor"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-gr-furnace-processor",
+    "type": "function",
+    "z": "stcr-gr-pipeline-tab",
+    "name": "อุณหภูมิเตาเผา: ปรับเทียบและกรองค่า",
+    "func": "const calibration = {\n  gr: {\n    chamberTemp: { gain: 1, offset: 0 },\n    humidity: { gain: 1, offset: 0 },\n    furnaceTemp: { gain: 1, offset: 0 },\n    blowerTemp: { gain: 1, offset: 0 },\n  },\n  ttn: {\n    chamberTemp: { gain: 1, offset: 0 },\n    humidity: { gain: 1, offset: 0 },\n    furnaceTemp: { gain: 1, offset: 0 },\n    blowerTemp: { gain: 1, offset: 0 },\n  },\n};\n\nconst processingRules = {\n  chamberTemp: { alpha: 0.18, spikeDelta: 4 },\n  humidity: { alpha: 0.16, spikeDelta: 7 },\n  furnaceTemp: { alpha: 0.30, spikeDelta: 85 },\n  blowerTemp: { alpha: 0.25, spikeDelta: 60 },\n};\n\nfunction median(values) {\n  const sorted = [...values].sort((a, b) => a - b);\n  const middle = Math.floor(sorted.length / 2);\n  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;\n}\n\nfunction round(value, digits = 2) {\n  const scale = 10 ** digits;\n  return Math.round(value * scale) / scale;\n}\n\nconst telemetry = msg.payload;\nif (!msg.telemetry || !telemetry?.sensorKey) return null;\n\nconst companyCalibration = calibration[telemetry.companyId] || calibration.gr;\nconst sensorCalibration = companyCalibration[telemetry.sensorKey] || { gain: 1, offset: 0 };\nconst rule = processingRules[telemetry.sensorKey];\nif (!rule) return null;\n\nconst rawValue = Number(telemetry.value);\nconst calibratedValue = rawValue * sensorCalibration.gain + sensorCalibration.offset;\nconst stateKey = `filter:${telemetry.companyId}:${telemetry.ovenId}:${telemetry.sensorKey}`;\nconst previous = context.get(stateKey) || { window: [], ema: null };\nconst sampleWindow = [...previous.window, calibratedValue].slice(-5);\nconst windowMedian = median(sampleWindow);\nconst spikeRejected = sampleWindow.length >= 3\n  && Math.abs(calibratedValue - windowMedian) > rule.spikeDelta;\nconst acceptedValue = spikeRejected ? windowMedian : calibratedValue;\nconst filteredValue = previous.ema == null\n  ? acceptedValue\n  : rule.alpha * acceptedValue + (1 - rule.alpha) * previous.ema;\n\ncontext.set(stateKey, { window: sampleWindow, ema: filteredValue });\n\nconst qualityReasons = [...(telemetry.qualityReasons || [])];\nif (spikeRejected) qualityReasons.push(\"spike-rejected\");\n\nmsg.payload = {\n  ...telemetry,\n  rawValue: round(rawValue),\n  calibratedValue: round(calibratedValue),\n  value: round(filteredValue),\n  quality: spikeRejected && telemetry.quality === \"good\" ? \"suspect\" : telemetry.quality,\n  qualityReasons,\n  processing: {\n    method: \"calibration+median5+ema\",\n    medianWindow: 5,\n    emaAlpha: rule.alpha,\n    spikeRejected,\n  },\n  processedTimestamp: new Date().toISOString(),\n};\n\nnode.status({\n  fill: spikeRejected ? \"yellow\" : \"green\",\n  shape: spikeRejected ? \"ring\" : \"dot\",\n  text: `${telemetry.sensorKey} ${round(filteredValue, 1)}`,\n});\n\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 660,
+    "y": 340,
+    "wires": [
+      [
+        "stcr-gr-aggregator"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-gr-blower-in",
+    "type": "link in",
+    "z": "stcr-gr-pipeline-tab",
+    "name": "รับข้อมูลอุณหภูมิ Blower",
+    "links": [
+      "stcr-field-gr-blower-out"
+    ],
+    "x": 95,
+    "y": 460,
+    "wires": [
+      [
+        "stcr-gr-blower-gateway"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-gr-blower-gateway",
+    "type": "function",
+    "z": "stcr-gr-pipeline-tab",
+    "name": "อุณหภูมิ Blower: ตรวจสอบคุณภาพข้อมูล",
+    "func": "const physicalRanges = {\n  chamberTemp: { min: -20, max: 120, unit: \"C\" },\n  humidity: { min: 0, max: 100, unit: \"%\" },\n  furnaceTemp: { min: -20, max: 900, unit: \"C\" },\n  blowerTemp: { min: -20, max: 600, unit: \"C\" },\n};\n\nconst telemetry = msg.payload;\nif (!telemetry || typeof telemetry !== \"object\") {\n  node.warn(\"Dropped telemetry without payload\");\n  return null;\n}\n\nconst rule = physicalRanges[telemetry.sensorKey];\nconst value = Number(telemetry.value);\nconst sourceTime = Date.parse(telemetry.sourceTimestamp);\nconst now = Date.now();\n\nif (!rule || !Number.isFinite(value) || !Number.isFinite(sourceTime)) {\n  node.warn(`Dropped malformed telemetry: ${msg.topic || \"unknown topic\"}`);\n  return null;\n}\n\nlet quality = \"good\";\nconst qualityReasons = [];\n\nif (telemetry.unit !== rule.unit) {\n  quality = \"suspect\";\n  qualityReasons.push(`unit:${telemetry.unit}`);\n}\nif (value < rule.min || value > rule.max) {\n  quality = \"suspect\";\n  qualityReasons.push(\"physical-range\");\n}\nif (now - sourceTime > 30000) {\n  quality = \"suspect\";\n  qualityReasons.push(\"stale\");\n}\nif (sourceTime - now > 5000) {\n  quality = \"suspect\";\n  qualityReasons.push(\"future-timestamp\");\n}\n\nmsg.payload = {\n  ...telemetry,\n  topic: msg.topic,\n  value,\n  quality,\n  qualityReasons,\n  gatewayTimestamp: new Date(now).toISOString(),\n};\nmsg.telemetry = true;\nnode.status({\n  fill: quality === \"good\" ? \"green\" : \"yellow\",\n  shape: quality === \"good\" ? \"dot\" : \"ring\",\n  text: `${telemetry.sensorKey} seq ${telemetry.sequence}`,\n});\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 330,
+    "y": 460,
+    "wires": [
+      [
+        "stcr-gr-blower-processor"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-gr-blower-processor",
+    "type": "function",
+    "z": "stcr-gr-pipeline-tab",
+    "name": "อุณหภูมิ Blower: ปรับเทียบและกรองค่า",
+    "func": "const calibration = {\n  gr: {\n    chamberTemp: { gain: 1, offset: 0 },\n    humidity: { gain: 1, offset: 0 },\n    furnaceTemp: { gain: 1, offset: 0 },\n    blowerTemp: { gain: 1, offset: 0 },\n  },\n  ttn: {\n    chamberTemp: { gain: 1, offset: 0 },\n    humidity: { gain: 1, offset: 0 },\n    furnaceTemp: { gain: 1, offset: 0 },\n    blowerTemp: { gain: 1, offset: 0 },\n  },\n};\n\nconst processingRules = {\n  chamberTemp: { alpha: 0.18, spikeDelta: 4 },\n  humidity: { alpha: 0.16, spikeDelta: 7 },\n  furnaceTemp: { alpha: 0.30, spikeDelta: 85 },\n  blowerTemp: { alpha: 0.25, spikeDelta: 60 },\n};\n\nfunction median(values) {\n  const sorted = [...values].sort((a, b) => a - b);\n  const middle = Math.floor(sorted.length / 2);\n  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;\n}\n\nfunction round(value, digits = 2) {\n  const scale = 10 ** digits;\n  return Math.round(value * scale) / scale;\n}\n\nconst telemetry = msg.payload;\nif (!msg.telemetry || !telemetry?.sensorKey) return null;\n\nconst companyCalibration = calibration[telemetry.companyId] || calibration.gr;\nconst sensorCalibration = companyCalibration[telemetry.sensorKey] || { gain: 1, offset: 0 };\nconst rule = processingRules[telemetry.sensorKey];\nif (!rule) return null;\n\nconst rawValue = Number(telemetry.value);\nconst calibratedValue = rawValue * sensorCalibration.gain + sensorCalibration.offset;\nconst stateKey = `filter:${telemetry.companyId}:${telemetry.ovenId}:${telemetry.sensorKey}`;\nconst previous = context.get(stateKey) || { window: [], ema: null };\nconst sampleWindow = [...previous.window, calibratedValue].slice(-5);\nconst windowMedian = median(sampleWindow);\nconst spikeRejected = sampleWindow.length >= 3\n  && Math.abs(calibratedValue - windowMedian) > rule.spikeDelta;\nconst acceptedValue = spikeRejected ? windowMedian : calibratedValue;\nconst filteredValue = previous.ema == null\n  ? acceptedValue\n  : rule.alpha * acceptedValue + (1 - rule.alpha) * previous.ema;\n\ncontext.set(stateKey, { window: sampleWindow, ema: filteredValue });\n\nconst qualityReasons = [...(telemetry.qualityReasons || [])];\nif (spikeRejected) qualityReasons.push(\"spike-rejected\");\n\nmsg.payload = {\n  ...telemetry,\n  rawValue: round(rawValue),\n  calibratedValue: round(calibratedValue),\n  value: round(filteredValue),\n  quality: spikeRejected && telemetry.quality === \"good\" ? \"suspect\" : telemetry.quality,\n  qualityReasons,\n  processing: {\n    method: \"calibration+median5+ema\",\n    medianWindow: 5,\n    emaAlpha: rule.alpha,\n    spikeRejected,\n  },\n  processedTimestamp: new Date().toISOString(),\n};\n\nnode.status({\n  fill: spikeRejected ? \"yellow\" : \"green\",\n  shape: spikeRejected ? \"ring\" : \"dot\",\n  text: `${telemetry.sensorKey} ${round(filteredValue, 1)}`,\n});\n\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 660,
+    "y": 460,
+    "wires": [
+      [
+        "stcr-gr-aggregator"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-gr-aggregator",
+    "type": "function",
+    "z": "stcr-gr-pipeline-tab",
+    "name": "Grand Rubber: รวมข้อมูลเซนเซอร์แต่ละเตา",
+    "func": "const BATCH_TIMEOUT_MS = 6500;\nconst REQUIRED_SENSOR_KEYS = [\"chamberTemp\", \"humidity\", \"furnaceTemp\", \"blowerTemp\"];\n\nfunction flushBatch(batchKey, timedOut) {\n  const batch = context.get(batchKey);\n  if (!batch) return null;\n  context.set(batchKey, undefined);\n\n  const state = global.get(\"stcrState\");\n  if (!state?.companies) return null;\n  const companyId = batch.companyId;\n  const companyState = state.companies[companyId];\n  if (!companyState) return null;\n\n  const updatedOvenIds = [];\n  companyState.ovens = companyState.ovens.map((oven) => {\n    const sensorSet = batch.sensors[`${companyId}:${oven.id}`];\n    const complete = REQUIRED_SENSOR_KEYS.every((sensorKey) => sensorSet?.[sensorKey]);\n    if (!complete) return oven;\n\n    const readings = { ...oven.readings };\n    REQUIRED_SENSOR_KEYS.forEach((sensorKey) => {\n      const sample = sensorSet[sensorKey];\n      readings[sensorKey] = {\n        ...readings[sensorKey],\n        value: sample.value,\n        updatedAt: sample.sourceTimestamp,\n      };\n    });\n    updatedOvenIds.push(oven.id);\n    return { ...oven, readings };\n  });\n\n  state.companies[companyId] = companyState;\n  global.set(\"stcrState\", state);\n\n  let good = 0;\n  let suspect = 0;\n  Object.values(batch.sensors).forEach((sensorSet) => {\n    Object.values(sensorSet).forEach((sample) => {\n      if (sample.quality === \"good\") good += 1;\n      else suspect += 1;\n    });\n  });\n  const missing = Math.max(0, batch.expected - batch.received);\n\n  node.status({\n    fill: missing ? \"yellow\" : \"green\",\n    shape: missing ? \"ring\" : \"dot\",\n    text: missing\n      ? `${updatedOvenIds.length} ovens / ${missing} missing`\n      : `batch ${good} good / ${suspect} suspect`,\n  });\n\n  return {\n    topic: \"stcr/persist\",\n    payload: {\n      version: state.version,\n      capturedAt: new Date().toISOString(),\n      telemetryBatchId: batch.batchId,\n      telemetryQuality: { good, suspect, missing, timedOut },\n      telemetrySamples: batch.sensors,\n      updatedOvenIds,\n      companies: { [companyId]: companyState },\n    },\n  };\n}\n\nconst telemetry = msg.payload;\nif (!msg.telemetry || !telemetry?.batchId) return null;\n\nconst batchKey = `telemetryBatch:${telemetry.batchId}`;\nlet batch = context.get(batchKey);\nif (!batch) {\n  batch = {\n    batchId: telemetry.batchId,\n    companyId: telemetry.companyId,\n    received: 0,\n    expected: telemetry.expectedTelemetryCount,\n    sensors: {},\n    startedAt: Date.now(),\n  };\n\n  setTimeout(() => {\n    const output = flushBatch(batchKey, true);\n    if (output) node.send(output);\n  }, BATCH_TIMEOUT_MS);\n}\n\nconst pointKey = `${telemetry.companyId}:${telemetry.ovenId}`;\nbatch.sensors[pointKey] ||= {};\nconst existing = batch.sensors[pointKey][telemetry.sensorKey];\n\nif (!existing || telemetry.sequence >= existing.sequence) {\n  if (!existing) batch.received += 1;\n  batch.sensors[pointKey][telemetry.sensorKey] = telemetry;\n}\n\ncontext.set(batchKey, batch);\n\nif (batch.received >= batch.expected) {\n  return flushBatch(batchKey, false);\n}\n\nnode.status({ fill: \"blue\", shape: \"dot\", text: `${batch.received}/${batch.expected}` });\nreturn null;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 1010,
+    "y": 280,
+    "wires": [
+      [
+        "stcr-gr-persist-out"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-gr-persist-out",
+    "type": "link out",
+    "z": "stcr-gr-pipeline-tab",
+    "name": "ส่งข้อมูลที่ประมวลผลแล้วไปยังระบบหลัก",
+    "mode": "link",
+    "links": [
+      "stcr-platform-persist-in"
+    ],
+    "x": 1255,
+    "y": 280,
+    "wires": []
+  },
+  {
+    "id": "stcr-ttn-note",
+    "type": "comment",
+    "z": "stcr-ttn-pipeline-tab",
+    "name": "TTN Rubber: แยกช่องรับและประมวลผลเซนเซอร์",
+    "info": "แต่ละช่องรองรับเซนเซอร์จริงหลายตัว โดยแยกด้วย companyId, ovenId, deviceId และ sensorId",
+    "x": 320,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "stcr-ttn-chamber-in",
+    "type": "link in",
+    "z": "stcr-ttn-pipeline-tab",
+    "name": "รับข้อมูลอุณหภูมิห้องอบ",
+    "links": [
+      "stcr-field-ttn-chamber-out"
+    ],
+    "x": 95,
+    "y": 100,
+    "wires": [
+      [
+        "stcr-ttn-chamber-gateway"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-ttn-chamber-gateway",
+    "type": "function",
+    "z": "stcr-ttn-pipeline-tab",
+    "name": "อุณหภูมิห้องอบ: ตรวจสอบคุณภาพข้อมูล",
+    "func": "const physicalRanges = {\n  chamberTemp: { min: -20, max: 120, unit: \"C\" },\n  humidity: { min: 0, max: 100, unit: \"%\" },\n  furnaceTemp: { min: -20, max: 900, unit: \"C\" },\n  blowerTemp: { min: -20, max: 600, unit: \"C\" },\n};\n\nconst telemetry = msg.payload;\nif (!telemetry || typeof telemetry !== \"object\") {\n  node.warn(\"Dropped telemetry without payload\");\n  return null;\n}\n\nconst rule = physicalRanges[telemetry.sensorKey];\nconst value = Number(telemetry.value);\nconst sourceTime = Date.parse(telemetry.sourceTimestamp);\nconst now = Date.now();\n\nif (!rule || !Number.isFinite(value) || !Number.isFinite(sourceTime)) {\n  node.warn(`Dropped malformed telemetry: ${msg.topic || \"unknown topic\"}`);\n  return null;\n}\n\nlet quality = \"good\";\nconst qualityReasons = [];\n\nif (telemetry.unit !== rule.unit) {\n  quality = \"suspect\";\n  qualityReasons.push(`unit:${telemetry.unit}`);\n}\nif (value < rule.min || value > rule.max) {\n  quality = \"suspect\";\n  qualityReasons.push(\"physical-range\");\n}\nif (now - sourceTime > 30000) {\n  quality = \"suspect\";\n  qualityReasons.push(\"stale\");\n}\nif (sourceTime - now > 5000) {\n  quality = \"suspect\";\n  qualityReasons.push(\"future-timestamp\");\n}\n\nmsg.payload = {\n  ...telemetry,\n  topic: msg.topic,\n  value,\n  quality,\n  qualityReasons,\n  gatewayTimestamp: new Date(now).toISOString(),\n};\nmsg.telemetry = true;\nnode.status({\n  fill: quality === \"good\" ? \"green\" : \"yellow\",\n  shape: quality === \"good\" ? \"dot\" : \"ring\",\n  text: `${telemetry.sensorKey} seq ${telemetry.sequence}`,\n});\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 330,
+    "y": 100,
+    "wires": [
+      [
+        "stcr-ttn-chamber-processor"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-ttn-chamber-processor",
+    "type": "function",
+    "z": "stcr-ttn-pipeline-tab",
+    "name": "อุณหภูมิห้องอบ: ปรับเทียบและกรองค่า",
+    "func": "const calibration = {\n  gr: {\n    chamberTemp: { gain: 1, offset: 0 },\n    humidity: { gain: 1, offset: 0 },\n    furnaceTemp: { gain: 1, offset: 0 },\n    blowerTemp: { gain: 1, offset: 0 },\n  },\n  ttn: {\n    chamberTemp: { gain: 1, offset: 0 },\n    humidity: { gain: 1, offset: 0 },\n    furnaceTemp: { gain: 1, offset: 0 },\n    blowerTemp: { gain: 1, offset: 0 },\n  },\n};\n\nconst processingRules = {\n  chamberTemp: { alpha: 0.18, spikeDelta: 4 },\n  humidity: { alpha: 0.16, spikeDelta: 7 },\n  furnaceTemp: { alpha: 0.30, spikeDelta: 85 },\n  blowerTemp: { alpha: 0.25, spikeDelta: 60 },\n};\n\nfunction median(values) {\n  const sorted = [...values].sort((a, b) => a - b);\n  const middle = Math.floor(sorted.length / 2);\n  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;\n}\n\nfunction round(value, digits = 2) {\n  const scale = 10 ** digits;\n  return Math.round(value * scale) / scale;\n}\n\nconst telemetry = msg.payload;\nif (!msg.telemetry || !telemetry?.sensorKey) return null;\n\nconst companyCalibration = calibration[telemetry.companyId] || calibration.gr;\nconst sensorCalibration = companyCalibration[telemetry.sensorKey] || { gain: 1, offset: 0 };\nconst rule = processingRules[telemetry.sensorKey];\nif (!rule) return null;\n\nconst rawValue = Number(telemetry.value);\nconst calibratedValue = rawValue * sensorCalibration.gain + sensorCalibration.offset;\nconst stateKey = `filter:${telemetry.companyId}:${telemetry.ovenId}:${telemetry.sensorKey}`;\nconst previous = context.get(stateKey) || { window: [], ema: null };\nconst sampleWindow = [...previous.window, calibratedValue].slice(-5);\nconst windowMedian = median(sampleWindow);\nconst spikeRejected = sampleWindow.length >= 3\n  && Math.abs(calibratedValue - windowMedian) > rule.spikeDelta;\nconst acceptedValue = spikeRejected ? windowMedian : calibratedValue;\nconst filteredValue = previous.ema == null\n  ? acceptedValue\n  : rule.alpha * acceptedValue + (1 - rule.alpha) * previous.ema;\n\ncontext.set(stateKey, { window: sampleWindow, ema: filteredValue });\n\nconst qualityReasons = [...(telemetry.qualityReasons || [])];\nif (spikeRejected) qualityReasons.push(\"spike-rejected\");\n\nmsg.payload = {\n  ...telemetry,\n  rawValue: round(rawValue),\n  calibratedValue: round(calibratedValue),\n  value: round(filteredValue),\n  quality: spikeRejected && telemetry.quality === \"good\" ? \"suspect\" : telemetry.quality,\n  qualityReasons,\n  processing: {\n    method: \"calibration+median5+ema\",\n    medianWindow: 5,\n    emaAlpha: rule.alpha,\n    spikeRejected,\n  },\n  processedTimestamp: new Date().toISOString(),\n};\n\nnode.status({\n  fill: spikeRejected ? \"yellow\" : \"green\",\n  shape: spikeRejected ? \"ring\" : \"dot\",\n  text: `${telemetry.sensorKey} ${round(filteredValue, 1)}`,\n});\n\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 660,
+    "y": 100,
+    "wires": [
+      [
+        "stcr-ttn-aggregator"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-ttn-humidity-in",
+    "type": "link in",
+    "z": "stcr-ttn-pipeline-tab",
+    "name": "รับข้อมูลความชื้น",
+    "links": [
+      "stcr-field-ttn-humidity-out"
+    ],
+    "x": 95,
+    "y": 220,
+    "wires": [
+      [
+        "stcr-ttn-humidity-gateway"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-ttn-humidity-gateway",
+    "type": "function",
+    "z": "stcr-ttn-pipeline-tab",
+    "name": "ความชื้น: ตรวจสอบคุณภาพข้อมูล",
+    "func": "const physicalRanges = {\n  chamberTemp: { min: -20, max: 120, unit: \"C\" },\n  humidity: { min: 0, max: 100, unit: \"%\" },\n  furnaceTemp: { min: -20, max: 900, unit: \"C\" },\n  blowerTemp: { min: -20, max: 600, unit: \"C\" },\n};\n\nconst telemetry = msg.payload;\nif (!telemetry || typeof telemetry !== \"object\") {\n  node.warn(\"Dropped telemetry without payload\");\n  return null;\n}\n\nconst rule = physicalRanges[telemetry.sensorKey];\nconst value = Number(telemetry.value);\nconst sourceTime = Date.parse(telemetry.sourceTimestamp);\nconst now = Date.now();\n\nif (!rule || !Number.isFinite(value) || !Number.isFinite(sourceTime)) {\n  node.warn(`Dropped malformed telemetry: ${msg.topic || \"unknown topic\"}`);\n  return null;\n}\n\nlet quality = \"good\";\nconst qualityReasons = [];\n\nif (telemetry.unit !== rule.unit) {\n  quality = \"suspect\";\n  qualityReasons.push(`unit:${telemetry.unit}`);\n}\nif (value < rule.min || value > rule.max) {\n  quality = \"suspect\";\n  qualityReasons.push(\"physical-range\");\n}\nif (now - sourceTime > 30000) {\n  quality = \"suspect\";\n  qualityReasons.push(\"stale\");\n}\nif (sourceTime - now > 5000) {\n  quality = \"suspect\";\n  qualityReasons.push(\"future-timestamp\");\n}\n\nmsg.payload = {\n  ...telemetry,\n  topic: msg.topic,\n  value,\n  quality,\n  qualityReasons,\n  gatewayTimestamp: new Date(now).toISOString(),\n};\nmsg.telemetry = true;\nnode.status({\n  fill: quality === \"good\" ? \"green\" : \"yellow\",\n  shape: quality === \"good\" ? \"dot\" : \"ring\",\n  text: `${telemetry.sensorKey} seq ${telemetry.sequence}`,\n});\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 330,
+    "y": 220,
+    "wires": [
+      [
+        "stcr-ttn-humidity-processor"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-ttn-humidity-processor",
+    "type": "function",
+    "z": "stcr-ttn-pipeline-tab",
+    "name": "ความชื้น: ปรับเทียบและกรองค่า",
+    "func": "const calibration = {\n  gr: {\n    chamberTemp: { gain: 1, offset: 0 },\n    humidity: { gain: 1, offset: 0 },\n    furnaceTemp: { gain: 1, offset: 0 },\n    blowerTemp: { gain: 1, offset: 0 },\n  },\n  ttn: {\n    chamberTemp: { gain: 1, offset: 0 },\n    humidity: { gain: 1, offset: 0 },\n    furnaceTemp: { gain: 1, offset: 0 },\n    blowerTemp: { gain: 1, offset: 0 },\n  },\n};\n\nconst processingRules = {\n  chamberTemp: { alpha: 0.18, spikeDelta: 4 },\n  humidity: { alpha: 0.16, spikeDelta: 7 },\n  furnaceTemp: { alpha: 0.30, spikeDelta: 85 },\n  blowerTemp: { alpha: 0.25, spikeDelta: 60 },\n};\n\nfunction median(values) {\n  const sorted = [...values].sort((a, b) => a - b);\n  const middle = Math.floor(sorted.length / 2);\n  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;\n}\n\nfunction round(value, digits = 2) {\n  const scale = 10 ** digits;\n  return Math.round(value * scale) / scale;\n}\n\nconst telemetry = msg.payload;\nif (!msg.telemetry || !telemetry?.sensorKey) return null;\n\nconst companyCalibration = calibration[telemetry.companyId] || calibration.gr;\nconst sensorCalibration = companyCalibration[telemetry.sensorKey] || { gain: 1, offset: 0 };\nconst rule = processingRules[telemetry.sensorKey];\nif (!rule) return null;\n\nconst rawValue = Number(telemetry.value);\nconst calibratedValue = rawValue * sensorCalibration.gain + sensorCalibration.offset;\nconst stateKey = `filter:${telemetry.companyId}:${telemetry.ovenId}:${telemetry.sensorKey}`;\nconst previous = context.get(stateKey) || { window: [], ema: null };\nconst sampleWindow = [...previous.window, calibratedValue].slice(-5);\nconst windowMedian = median(sampleWindow);\nconst spikeRejected = sampleWindow.length >= 3\n  && Math.abs(calibratedValue - windowMedian) > rule.spikeDelta;\nconst acceptedValue = spikeRejected ? windowMedian : calibratedValue;\nconst filteredValue = previous.ema == null\n  ? acceptedValue\n  : rule.alpha * acceptedValue + (1 - rule.alpha) * previous.ema;\n\ncontext.set(stateKey, { window: sampleWindow, ema: filteredValue });\n\nconst qualityReasons = [...(telemetry.qualityReasons || [])];\nif (spikeRejected) qualityReasons.push(\"spike-rejected\");\n\nmsg.payload = {\n  ...telemetry,\n  rawValue: round(rawValue),\n  calibratedValue: round(calibratedValue),\n  value: round(filteredValue),\n  quality: spikeRejected && telemetry.quality === \"good\" ? \"suspect\" : telemetry.quality,\n  qualityReasons,\n  processing: {\n    method: \"calibration+median5+ema\",\n    medianWindow: 5,\n    emaAlpha: rule.alpha,\n    spikeRejected,\n  },\n  processedTimestamp: new Date().toISOString(),\n};\n\nnode.status({\n  fill: spikeRejected ? \"yellow\" : \"green\",\n  shape: spikeRejected ? \"ring\" : \"dot\",\n  text: `${telemetry.sensorKey} ${round(filteredValue, 1)}`,\n});\n\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 660,
+    "y": 220,
+    "wires": [
+      [
+        "stcr-ttn-aggregator"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-ttn-furnace-in",
+    "type": "link in",
+    "z": "stcr-ttn-pipeline-tab",
+    "name": "รับข้อมูลอุณหภูมิเตาเผา",
+    "links": [
+      "stcr-field-ttn-furnace-out"
+    ],
+    "x": 95,
+    "y": 340,
+    "wires": [
+      [
+        "stcr-ttn-furnace-gateway"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-ttn-furnace-gateway",
+    "type": "function",
+    "z": "stcr-ttn-pipeline-tab",
+    "name": "อุณหภูมิเตาเผา: ตรวจสอบคุณภาพข้อมูล",
+    "func": "const physicalRanges = {\n  chamberTemp: { min: -20, max: 120, unit: \"C\" },\n  humidity: { min: 0, max: 100, unit: \"%\" },\n  furnaceTemp: { min: -20, max: 900, unit: \"C\" },\n  blowerTemp: { min: -20, max: 600, unit: \"C\" },\n};\n\nconst telemetry = msg.payload;\nif (!telemetry || typeof telemetry !== \"object\") {\n  node.warn(\"Dropped telemetry without payload\");\n  return null;\n}\n\nconst rule = physicalRanges[telemetry.sensorKey];\nconst value = Number(telemetry.value);\nconst sourceTime = Date.parse(telemetry.sourceTimestamp);\nconst now = Date.now();\n\nif (!rule || !Number.isFinite(value) || !Number.isFinite(sourceTime)) {\n  node.warn(`Dropped malformed telemetry: ${msg.topic || \"unknown topic\"}`);\n  return null;\n}\n\nlet quality = \"good\";\nconst qualityReasons = [];\n\nif (telemetry.unit !== rule.unit) {\n  quality = \"suspect\";\n  qualityReasons.push(`unit:${telemetry.unit}`);\n}\nif (value < rule.min || value > rule.max) {\n  quality = \"suspect\";\n  qualityReasons.push(\"physical-range\");\n}\nif (now - sourceTime > 30000) {\n  quality = \"suspect\";\n  qualityReasons.push(\"stale\");\n}\nif (sourceTime - now > 5000) {\n  quality = \"suspect\";\n  qualityReasons.push(\"future-timestamp\");\n}\n\nmsg.payload = {\n  ...telemetry,\n  topic: msg.topic,\n  value,\n  quality,\n  qualityReasons,\n  gatewayTimestamp: new Date(now).toISOString(),\n};\nmsg.telemetry = true;\nnode.status({\n  fill: quality === \"good\" ? \"green\" : \"yellow\",\n  shape: quality === \"good\" ? \"dot\" : \"ring\",\n  text: `${telemetry.sensorKey} seq ${telemetry.sequence}`,\n});\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 330,
+    "y": 340,
+    "wires": [
+      [
+        "stcr-ttn-furnace-processor"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-ttn-furnace-processor",
+    "type": "function",
+    "z": "stcr-ttn-pipeline-tab",
+    "name": "อุณหภูมิเตาเผา: ปรับเทียบและกรองค่า",
+    "func": "const calibration = {\n  gr: {\n    chamberTemp: { gain: 1, offset: 0 },\n    humidity: { gain: 1, offset: 0 },\n    furnaceTemp: { gain: 1, offset: 0 },\n    blowerTemp: { gain: 1, offset: 0 },\n  },\n  ttn: {\n    chamberTemp: { gain: 1, offset: 0 },\n    humidity: { gain: 1, offset: 0 },\n    furnaceTemp: { gain: 1, offset: 0 },\n    blowerTemp: { gain: 1, offset: 0 },\n  },\n};\n\nconst processingRules = {\n  chamberTemp: { alpha: 0.18, spikeDelta: 4 },\n  humidity: { alpha: 0.16, spikeDelta: 7 },\n  furnaceTemp: { alpha: 0.30, spikeDelta: 85 },\n  blowerTemp: { alpha: 0.25, spikeDelta: 60 },\n};\n\nfunction median(values) {\n  const sorted = [...values].sort((a, b) => a - b);\n  const middle = Math.floor(sorted.length / 2);\n  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;\n}\n\nfunction round(value, digits = 2) {\n  const scale = 10 ** digits;\n  return Math.round(value * scale) / scale;\n}\n\nconst telemetry = msg.payload;\nif (!msg.telemetry || !telemetry?.sensorKey) return null;\n\nconst companyCalibration = calibration[telemetry.companyId] || calibration.gr;\nconst sensorCalibration = companyCalibration[telemetry.sensorKey] || { gain: 1, offset: 0 };\nconst rule = processingRules[telemetry.sensorKey];\nif (!rule) return null;\n\nconst rawValue = Number(telemetry.value);\nconst calibratedValue = rawValue * sensorCalibration.gain + sensorCalibration.offset;\nconst stateKey = `filter:${telemetry.companyId}:${telemetry.ovenId}:${telemetry.sensorKey}`;\nconst previous = context.get(stateKey) || { window: [], ema: null };\nconst sampleWindow = [...previous.window, calibratedValue].slice(-5);\nconst windowMedian = median(sampleWindow);\nconst spikeRejected = sampleWindow.length >= 3\n  && Math.abs(calibratedValue - windowMedian) > rule.spikeDelta;\nconst acceptedValue = spikeRejected ? windowMedian : calibratedValue;\nconst filteredValue = previous.ema == null\n  ? acceptedValue\n  : rule.alpha * acceptedValue + (1 - rule.alpha) * previous.ema;\n\ncontext.set(stateKey, { window: sampleWindow, ema: filteredValue });\n\nconst qualityReasons = [...(telemetry.qualityReasons || [])];\nif (spikeRejected) qualityReasons.push(\"spike-rejected\");\n\nmsg.payload = {\n  ...telemetry,\n  rawValue: round(rawValue),\n  calibratedValue: round(calibratedValue),\n  value: round(filteredValue),\n  quality: spikeRejected && telemetry.quality === \"good\" ? \"suspect\" : telemetry.quality,\n  qualityReasons,\n  processing: {\n    method: \"calibration+median5+ema\",\n    medianWindow: 5,\n    emaAlpha: rule.alpha,\n    spikeRejected,\n  },\n  processedTimestamp: new Date().toISOString(),\n};\n\nnode.status({\n  fill: spikeRejected ? \"yellow\" : \"green\",\n  shape: spikeRejected ? \"ring\" : \"dot\",\n  text: `${telemetry.sensorKey} ${round(filteredValue, 1)}`,\n});\n\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 660,
+    "y": 340,
+    "wires": [
+      [
+        "stcr-ttn-aggregator"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-ttn-blower-in",
+    "type": "link in",
+    "z": "stcr-ttn-pipeline-tab",
+    "name": "รับข้อมูลอุณหภูมิ Blower",
+    "links": [
+      "stcr-field-ttn-blower-out"
+    ],
+    "x": 95,
+    "y": 460,
+    "wires": [
+      [
+        "stcr-ttn-blower-gateway"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-ttn-blower-gateway",
+    "type": "function",
+    "z": "stcr-ttn-pipeline-tab",
+    "name": "อุณหภูมิ Blower: ตรวจสอบคุณภาพข้อมูล",
+    "func": "const physicalRanges = {\n  chamberTemp: { min: -20, max: 120, unit: \"C\" },\n  humidity: { min: 0, max: 100, unit: \"%\" },\n  furnaceTemp: { min: -20, max: 900, unit: \"C\" },\n  blowerTemp: { min: -20, max: 600, unit: \"C\" },\n};\n\nconst telemetry = msg.payload;\nif (!telemetry || typeof telemetry !== \"object\") {\n  node.warn(\"Dropped telemetry without payload\");\n  return null;\n}\n\nconst rule = physicalRanges[telemetry.sensorKey];\nconst value = Number(telemetry.value);\nconst sourceTime = Date.parse(telemetry.sourceTimestamp);\nconst now = Date.now();\n\nif (!rule || !Number.isFinite(value) || !Number.isFinite(sourceTime)) {\n  node.warn(`Dropped malformed telemetry: ${msg.topic || \"unknown topic\"}`);\n  return null;\n}\n\nlet quality = \"good\";\nconst qualityReasons = [];\n\nif (telemetry.unit !== rule.unit) {\n  quality = \"suspect\";\n  qualityReasons.push(`unit:${telemetry.unit}`);\n}\nif (value < rule.min || value > rule.max) {\n  quality = \"suspect\";\n  qualityReasons.push(\"physical-range\");\n}\nif (now - sourceTime > 30000) {\n  quality = \"suspect\";\n  qualityReasons.push(\"stale\");\n}\nif (sourceTime - now > 5000) {\n  quality = \"suspect\";\n  qualityReasons.push(\"future-timestamp\");\n}\n\nmsg.payload = {\n  ...telemetry,\n  topic: msg.topic,\n  value,\n  quality,\n  qualityReasons,\n  gatewayTimestamp: new Date(now).toISOString(),\n};\nmsg.telemetry = true;\nnode.status({\n  fill: quality === \"good\" ? \"green\" : \"yellow\",\n  shape: quality === \"good\" ? \"dot\" : \"ring\",\n  text: `${telemetry.sensorKey} seq ${telemetry.sequence}`,\n});\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 330,
+    "y": 460,
+    "wires": [
+      [
+        "stcr-ttn-blower-processor"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-ttn-blower-processor",
+    "type": "function",
+    "z": "stcr-ttn-pipeline-tab",
+    "name": "อุณหภูมิ Blower: ปรับเทียบและกรองค่า",
+    "func": "const calibration = {\n  gr: {\n    chamberTemp: { gain: 1, offset: 0 },\n    humidity: { gain: 1, offset: 0 },\n    furnaceTemp: { gain: 1, offset: 0 },\n    blowerTemp: { gain: 1, offset: 0 },\n  },\n  ttn: {\n    chamberTemp: { gain: 1, offset: 0 },\n    humidity: { gain: 1, offset: 0 },\n    furnaceTemp: { gain: 1, offset: 0 },\n    blowerTemp: { gain: 1, offset: 0 },\n  },\n};\n\nconst processingRules = {\n  chamberTemp: { alpha: 0.18, spikeDelta: 4 },\n  humidity: { alpha: 0.16, spikeDelta: 7 },\n  furnaceTemp: { alpha: 0.30, spikeDelta: 85 },\n  blowerTemp: { alpha: 0.25, spikeDelta: 60 },\n};\n\nfunction median(values) {\n  const sorted = [...values].sort((a, b) => a - b);\n  const middle = Math.floor(sorted.length / 2);\n  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;\n}\n\nfunction round(value, digits = 2) {\n  const scale = 10 ** digits;\n  return Math.round(value * scale) / scale;\n}\n\nconst telemetry = msg.payload;\nif (!msg.telemetry || !telemetry?.sensorKey) return null;\n\nconst companyCalibration = calibration[telemetry.companyId] || calibration.gr;\nconst sensorCalibration = companyCalibration[telemetry.sensorKey] || { gain: 1, offset: 0 };\nconst rule = processingRules[telemetry.sensorKey];\nif (!rule) return null;\n\nconst rawValue = Number(telemetry.value);\nconst calibratedValue = rawValue * sensorCalibration.gain + sensorCalibration.offset;\nconst stateKey = `filter:${telemetry.companyId}:${telemetry.ovenId}:${telemetry.sensorKey}`;\nconst previous = context.get(stateKey) || { window: [], ema: null };\nconst sampleWindow = [...previous.window, calibratedValue].slice(-5);\nconst windowMedian = median(sampleWindow);\nconst spikeRejected = sampleWindow.length >= 3\n  && Math.abs(calibratedValue - windowMedian) > rule.spikeDelta;\nconst acceptedValue = spikeRejected ? windowMedian : calibratedValue;\nconst filteredValue = previous.ema == null\n  ? acceptedValue\n  : rule.alpha * acceptedValue + (1 - rule.alpha) * previous.ema;\n\ncontext.set(stateKey, { window: sampleWindow, ema: filteredValue });\n\nconst qualityReasons = [...(telemetry.qualityReasons || [])];\nif (spikeRejected) qualityReasons.push(\"spike-rejected\");\n\nmsg.payload = {\n  ...telemetry,\n  rawValue: round(rawValue),\n  calibratedValue: round(calibratedValue),\n  value: round(filteredValue),\n  quality: spikeRejected && telemetry.quality === \"good\" ? \"suspect\" : telemetry.quality,\n  qualityReasons,\n  processing: {\n    method: \"calibration+median5+ema\",\n    medianWindow: 5,\n    emaAlpha: rule.alpha,\n    spikeRejected,\n  },\n  processedTimestamp: new Date().toISOString(),\n};\n\nnode.status({\n  fill: spikeRejected ? \"yellow\" : \"green\",\n  shape: spikeRejected ? \"ring\" : \"dot\",\n  text: `${telemetry.sensorKey} ${round(filteredValue, 1)}`,\n});\n\nreturn msg;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 660,
+    "y": 460,
+    "wires": [
+      [
+        "stcr-ttn-aggregator"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-ttn-aggregator",
+    "type": "function",
+    "z": "stcr-ttn-pipeline-tab",
+    "name": "TTN Rubber: รวมข้อมูลเซนเซอร์แต่ละเตา",
+    "func": "const BATCH_TIMEOUT_MS = 6500;\nconst REQUIRED_SENSOR_KEYS = [\"chamberTemp\", \"humidity\", \"furnaceTemp\", \"blowerTemp\"];\n\nfunction flushBatch(batchKey, timedOut) {\n  const batch = context.get(batchKey);\n  if (!batch) return null;\n  context.set(batchKey, undefined);\n\n  const state = global.get(\"stcrState\");\n  if (!state?.companies) return null;\n  const companyId = batch.companyId;\n  const companyState = state.companies[companyId];\n  if (!companyState) return null;\n\n  const updatedOvenIds = [];\n  companyState.ovens = companyState.ovens.map((oven) => {\n    const sensorSet = batch.sensors[`${companyId}:${oven.id}`];\n    const complete = REQUIRED_SENSOR_KEYS.every((sensorKey) => sensorSet?.[sensorKey]);\n    if (!complete) return oven;\n\n    const readings = { ...oven.readings };\n    REQUIRED_SENSOR_KEYS.forEach((sensorKey) => {\n      const sample = sensorSet[sensorKey];\n      readings[sensorKey] = {\n        ...readings[sensorKey],\n        value: sample.value,\n        updatedAt: sample.sourceTimestamp,\n      };\n    });\n    updatedOvenIds.push(oven.id);\n    return { ...oven, readings };\n  });\n\n  state.companies[companyId] = companyState;\n  global.set(\"stcrState\", state);\n\n  let good = 0;\n  let suspect = 0;\n  Object.values(batch.sensors).forEach((sensorSet) => {\n    Object.values(sensorSet).forEach((sample) => {\n      if (sample.quality === \"good\") good += 1;\n      else suspect += 1;\n    });\n  });\n  const missing = Math.max(0, batch.expected - batch.received);\n\n  node.status({\n    fill: missing ? \"yellow\" : \"green\",\n    shape: missing ? \"ring\" : \"dot\",\n    text: missing\n      ? `${updatedOvenIds.length} ovens / ${missing} missing`\n      : `batch ${good} good / ${suspect} suspect`,\n  });\n\n  return {\n    topic: \"stcr/persist\",\n    payload: {\n      version: state.version,\n      capturedAt: new Date().toISOString(),\n      telemetryBatchId: batch.batchId,\n      telemetryQuality: { good, suspect, missing, timedOut },\n      telemetrySamples: batch.sensors,\n      updatedOvenIds,\n      companies: { [companyId]: companyState },\n    },\n  };\n}\n\nconst telemetry = msg.payload;\nif (!msg.telemetry || !telemetry?.batchId) return null;\n\nconst batchKey = `telemetryBatch:${telemetry.batchId}`;\nlet batch = context.get(batchKey);\nif (!batch) {\n  batch = {\n    batchId: telemetry.batchId,\n    companyId: telemetry.companyId,\n    received: 0,\n    expected: telemetry.expectedTelemetryCount,\n    sensors: {},\n    startedAt: Date.now(),\n  };\n\n  setTimeout(() => {\n    const output = flushBatch(batchKey, true);\n    if (output) node.send(output);\n  }, BATCH_TIMEOUT_MS);\n}\n\nconst pointKey = `${telemetry.companyId}:${telemetry.ovenId}`;\nbatch.sensors[pointKey] ||= {};\nconst existing = batch.sensors[pointKey][telemetry.sensorKey];\n\nif (!existing || telemetry.sequence >= existing.sequence) {\n  if (!existing) batch.received += 1;\n  batch.sensors[pointKey][telemetry.sensorKey] = telemetry;\n}\n\ncontext.set(batchKey, batch);\n\nif (batch.received >= batch.expected) {\n  return flushBatch(batchKey, false);\n}\n\nnode.status({ fill: \"blue\", shape: \"dot\", text: `${batch.received}/${batch.expected}` });\nreturn null;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 1010,
+    "y": 280,
+    "wires": [
+      [
+        "stcr-ttn-persist-out"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-ttn-persist-out",
+    "type": "link out",
+    "z": "stcr-ttn-pipeline-tab",
+    "name": "ส่งข้อมูลที่ประมวลผลแล้วไปยังระบบหลัก",
+    "mode": "link",
+    "links": [
+      "stcr-platform-persist-in"
+    ],
+    "x": 1255,
+    "y": 280,
+    "wires": []
+  },
+  {
+    "id": "stcr-platform-note",
+    "type": "comment",
+    "z": "stcr-platform-tab",
+    "name": "บันทึกข้อมูลดิบ ข้อมูลที่กรองแล้ว และค่าเฉลี่ยกราฟทุก 10 นาที",
+    "info": "telemetry_events เก็บค่าดิบ, sensor_readings เก็บค่าที่กรองแล้ว และ API ข้อมูลย้อนหลังส่งค่าเฉลี่ยตามช่วงเวลา",
+    "x": 400,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "stcr-platform-persist-in",
+    "type": "link in",
+    "z": "stcr-platform-tab",
+    "name": "รับข้อมูลที่ประมวลผลแล้วจาก GR / TTN",
+    "links": [
+      "stcr-gr-persist-out",
+      "stcr-ttn-persist-out"
+    ],
+    "x": 95,
+    "y": 100,
+    "wires": [
+      [
+        "stcr-db-persistence"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-db-persistence",
+    "type": "function",
+    "z": "stcr-platform-tab",
+    "name": "บันทึกข้อมูลดิบและข้อมูลที่กรองแล้วลง MariaDB",
+    "func": "const SIMULATION_MODEL_CYCLE_MS = 6 * 24 * 60 * 60 * 1000;\nconst SIMULATION_MODEL_PROFILES = {\n  gr: { chamber: 57.5, furnace: 500, blower: 365, humidityStart: 80, humidityEnd: 57, phase: 0.2 },\n  ttn: { chamber: 56.5, furnace: 490, blower: 355, humidityStart: 80, humidityEnd: 58, phase: 1.1 },\n};\n\nfunction simulationClamp(value, min, max) {\n  return Math.min(max, Math.max(min, value));\n}\n\nfunction simulationRound(value, digits = 1) {\n  const scale = 10 ** digits;\n  return Math.round(value * scale) / scale;\n}\n\nfunction simulationSmoothstep(value) {\n  const x = simulationClamp(value, 0, 1);\n  return x * x * (3 - 2 * x);\n}\n\nfunction simulationNoise(seed) {\n  const value = Math.sin(seed * 12.9898) * 43758.5453;\n  return (value - Math.floor(value)) * 2 - 1;\n}\n\nfunction simulationWoodLoadingPeriod(companyId, ovenNumber, loadingIndex = 0) {\n  const companySeed = companyId === \"ttn\" ? 117 : 23;\n  const randomValue = (simulationNoise(\n    companySeed + ovenNumber * 19.1 + loadingIndex * 37.7,\n  ) + 1) / 2;\n  return 3 + randomValue * 3;\n}\n\nfunction simulationWoodLoadingState(companyId, ovenNumber, elapsedHours) {\n  if (elapsedHours <= 0) {\n    return {\n      loadingIndex: 0,\n      loadingStartedAt: 0,\n      intervalHours: simulationWoodLoadingPeriod(companyId, ovenNumber, 0),\n    };\n  }\n\n  let loadingIndex = 0;\n  let loadingStartedAt = 0;\n  let intervalHours = simulationWoodLoadingPeriod(companyId, ovenNumber, loadingIndex);\n\n  while (loadingStartedAt + intervalHours <= elapsedHours) {\n    loadingStartedAt += intervalHours;\n    loadingIndex += 1;\n    intervalHours = simulationWoodLoadingPeriod(companyId, ovenNumber, loadingIndex);\n  }\n\n  return { loadingIndex, loadingStartedAt, intervalHours };\n}\n\nfunction simulationCombustionPulse(companyId, ovenNumber, elapsedHours) {\n  if (elapsedHours <= 0) return 0;\n\n  const loading = simulationWoodLoadingState(companyId, ovenNumber, elapsedHours);\n  const cycleAge = elapsedHours - loading.loadingStartedAt;\n  const periodHours = loading.intervalHours;\n  const ignitionDelay = 0.4;\n  const riseHours = Math.min(2, periodHours * 0.45);\n  const peakAt = ignitionDelay + riseHours;\n\n  if (cycleAge <= ignitionDelay) return 0;\n  if (cycleAge < peakAt) {\n    return simulationSmoothstep((cycleAge - ignitionDelay) / riseHours);\n  }\n\n  const decayHours = Math.max(0.5, periodHours - peakAt);\n  return 1 - simulationSmoothstep((cycleAge - peakAt) / decayHours);\n}\n\nfunction simulationSensorValues(companyId, ovenNumber, timestamp, firedAt) {\n  const profile = SIMULATION_MODEL_PROFILES[companyId] || SIMULATION_MODEL_PROFILES.gr;\n  const elapsedMs = Math.max(0, timestamp - firedAt);\n  const elapsedHours = elapsedMs / 3600000;\n  const cycleProgress = simulationClamp(elapsedMs / SIMULATION_MODEL_CYCLE_MS, 0, 1);\n  const ignition = simulationSmoothstep(elapsedHours / 2.5);\n  const chamberWarmup = simulationSmoothstep(elapsedHours / 18);\n  const phase = elapsedHours + ovenNumber * 0.83 + profile.phase;\n  const furnacePulse = simulationCombustionPulse(companyId, ovenNumber, elapsedHours);\n  const blowerPulse = simulationCombustionPulse(companyId, ovenNumber, elapsedHours - 0.2);\n  const chamberPulse = simulationCombustionPulse(companyId, ovenNumber, elapsedHours - 1.4);\n  const smallNoise = simulationNoise(timestamp / 5000 + ovenNumber * 17) * 0.45;\n  const furnaceTemp = ignition * (\n    profile.furnace - 25 + furnacePulse * 60 + Math.sin(phase * 0.11) * 4 + smallNoise * 2\n  );\n  const blowerTemp = ignition * (\n    profile.blower - 18 + blowerPulse * 36 + Math.sin(phase * 0.14) * 3 + smallNoise\n  );\n  const chamberTemp = 29 + chamberWarmup * (\n    profile.chamber - 29 + Math.sin(phase * 0.045) * 0.45 + (chamberPulse - 0.5) * 0.45\n  );\n  const humidityBase = profile.humidityStart\n    - (profile.humidityStart - profile.humidityEnd) * Math.pow(cycleProgress, 2);\n  const chamberDryingEffect = chamberWarmup * Math.max(0, chamberTemp - 55) * 0.05;\n  const humidity = humidityBase - chamberDryingEffect\n    + Math.sin(phase * 0.035) * 0.25 - smallNoise * 0.08;\n\n  return {\n    chamberTemp: simulationRound(simulationClamp(chamberTemp, 25, 63)),\n    humidity: simulationRound(simulationClamp(humidity, 42, 86)),\n    furnaceTemp: simulationRound(simulationClamp(furnaceTemp, 0, 565)),\n    blowerTemp: simulationRound(simulationClamp(blowerTemp, 0, 420)),\n  };\n}\n\nconst config = {\n  host: env.get(\"STCR_DB_HOST\") || \"127.0.0.1\",\n  port: Number(env.get(\"STCR_DB_PORT\") || 3306),\n  user: env.get(\"STCR_DB_USER\") || \"stcr_app\",\n  password: env.get(\"STCR_DB_PASSWORD\") || \"\",\n  database: env.get(\"STCR_DB_NAME\") || \"stcr\",\n  waitForConnections: true,\n  connectionLimit: 4,\n  timezone: \"Z\",\n};\n\nconst ARCHIVE_STEP_MS = 10 * 60 * 1000;\nasync function persistArchivedCycle(connection, companyId, oven, limits, cycle, completedBackfills) {\n  await connection.execute(\n    `INSERT INTO oven_cycles (\n      company_id, oven_id, cycle_number, state, fired_at, report_started_at,\n      stopped_at, ready_temperature, ready_hold_seconds\n    ) VALUES (?, ?, ?, 'completed', ?, ?, ?, ?, ?)\n    ON DUPLICATE KEY UPDATE\n      state='completed', fired_at=VALUES(fired_at), report_started_at=VALUES(report_started_at),\n      stopped_at=VALUES(stopped_at), updated_at=CURRENT_TIMESTAMP(3)`,\n    [\n      companyId, oven.id, cycle.cycleNumber, cycle.firedAt, cycle.reportStartedAt,\n      cycle.stoppedAt, limits.chamberTemp.lower, 1800,\n    ],\n  );\n\n  const [cycleRows] = await connection.execute(\n    `SELECT id FROM oven_cycles WHERE company_id=? AND oven_id=? AND cycle_number=? LIMIT 1`,\n    [companyId, oven.id, cycle.cycleNumber],\n  );\n  const cycleId = cycleRows[0]?.id;\n  if (!cycleId) return;\n\n  const backfillKey = `dbArchive:${companyId}:${oven.id}:${cycle.cycleNumber}:${cycle.firedAt}`;\n  if (context.get(backfillKey)) return;\n\n  const [existingRows] = await connection.execute(\n    `SELECT COUNT(*) AS pointCount FROM sensor_readings WHERE cycle_id=? AND included_in_report=TRUE`,\n    [cycleId],\n  );\n  if (Number(existingRows[0]?.pointCount || 0) >= 50) {\n    completedBackfills.push(backfillKey);\n    return;\n  }\n\n  await connection.execute(\n    `UPDATE sensor_readings\n     SET included_in_report=FALSE,\n         cycle_phase=CASE WHEN recorded_at<? THEN 'ignition' ELSE 'cooldown' END\n     WHERE cycle_id=? AND (recorded_at<? OR recorded_at>?)`,\n    [cycle.reportStartedAt, cycleId, cycle.reportStartedAt, cycle.stoppedAt],\n  );\n\n  const firedAtMs = Date.parse(cycle.firedAt);\n  const startMs = Date.parse(cycle.reportStartedAt);\n  const endMs = Date.parse(cycle.stoppedAt);\n\n  for (let chunkStart = startMs; chunkStart <= endMs; chunkStart += ARCHIVE_STEP_MS * 400) {\n    const chunk = [];\n    const chunkEnd = Math.min(endMs, chunkStart + ARCHIVE_STEP_MS * 399);\n    for (let timestamp = chunkStart; timestamp <= chunkEnd; timestamp += ARCHIVE_STEP_MS) {\n      chunk.push({\n        timestamp: new Date(timestamp).toISOString(),\n        ...simulationSensorValues(companyId, oven.number, timestamp, firedAtMs),\n      });\n    }\n    if (!chunk.length) continue;\n\n    const placeholders = chunk.map(() => \"(?, ?, ?, ?, ?, ?, ?, ?, 'recording', TRUE, 'good', ?)\").join(\",\");\n    const values = chunk.flatMap((point) => [\n      companyId, oven.id, cycleId, point.timestamp,\n      point.chamberTemp, point.humidity, point.furnaceTemp, point.blowerTemp,\n      point.timestamp,\n    ]);\n    await connection.execute(\n      `INSERT IGNORE INTO sensor_readings (\n        company_id, oven_id, cycle_id, recorded_at, chamber_temp, humidity,\n        furnace_temp, blower_temp, cycle_phase, included_in_report, quality, source_timestamp\n      ) VALUES ${placeholders}`,\n      values,\n    );\n  }\n\n  completedBackfills.push(backfillKey);\n}\n\nlet pool = context.get(\"stcrDbPool\");\nif (!pool) {\n  pool = mysql.createPool(config);\n  context.set(\"stcrDbPool\", pool);\n}\n\nconst snapshot = msg.payload;\nif (!snapshot || !snapshot.companies) return null;\nconst updatedOvenIds = new Set(snapshot.updatedOvenIds || []);\nconst persistenceScope = Object.keys(snapshot.companies).sort().join(\",\");\nconst persistenceLockKey = `stcrDbPersisting:${persistenceScope}`;\nif (context.get(persistenceLockKey)) return null;\ncontext.set(persistenceLockKey, true);\n\nlet connection;\nconst completedBackfills = [];\n\ntry {\n  connection = await pool.getConnection();\n  await connection.query(\"SET time_zone = '+00:00'\");\n  await connection.beginTransaction();\n\n  for (const [companyId, companyState] of Object.entries(snapshot.companies)) {\n    const companyName = companyId === \"gr\" ? \"Grand Rubber\" : companyId === \"ttn\" ? \"TTN Rubber\" : companyId;\n    await connection.execute(\n      `INSERT INTO companies (id, name, data_source_key)\n       VALUES (?, ?, ?)\n       ON DUPLICATE KEY UPDATE name=VALUES(name), data_source_key=VALUES(data_source_key)`,\n      [companyId, companyName, `${companyId}-node-red`],\n    );\n\n    for (const oven of companyState.ovens) {\n      const limits = oven.limits;\n      await connection.execute(\n        `INSERT INTO ovens (\n          id, company_id, oven_number, name, zone_name, line_name, status, enabled,\n          chamber_lower, chamber_upper, furnace_lower, furnace_upper,\n          blower_lower, blower_upper, humidity_lower, humidity_upper, last_seen_at\n        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n        ON DUPLICATE KEY UPDATE\n          oven_number=VALUES(oven_number), name=VALUES(name), zone_name=VALUES(zone_name),\n          line_name=VALUES(line_name), status=VALUES(status), enabled=VALUES(enabled),\n          chamber_lower=VALUES(chamber_lower), chamber_upper=VALUES(chamber_upper),\n          furnace_lower=VALUES(furnace_lower), furnace_upper=VALUES(furnace_upper),\n          blower_lower=VALUES(blower_lower), blower_upper=VALUES(blower_upper),\n          humidity_lower=VALUES(humidity_lower), humidity_upper=VALUES(humidity_upper),\n          last_seen_at=VALUES(last_seen_at)`,\n        [\n          oven.id, companyId, oven.number, oven.name, oven.zone, oven.line, oven.status, oven.enabled,\n          limits.chamberTemp.lower, limits.chamberTemp.upper,\n          limits.furnaceTemp.lower, limits.furnaceTemp.upper,\n          limits.blowerTemp.lower, limits.blowerTemp.upper,\n          limits.humidity.lower, limits.humidity.upper, oven.lastUpdatedAt,\n        ],\n      );\n\n      let cycleId = null;\n      if (oven.status === \"open\" && oven.firedAt && oven.cycleCount > 0) {\n        const cycleState = oven.reportStartedAt ? \"recording\" : \"ignition\";\n        await connection.execute(\n          `INSERT INTO oven_cycles (\n            company_id, oven_id, cycle_number, state, fired_at, report_started_at,\n            stopped_at, ready_temperature, ready_hold_seconds\n          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)\n          ON DUPLICATE KEY UPDATE\n            state=VALUES(state), fired_at=VALUES(fired_at),\n            report_started_at=VALUES(report_started_at),\n            stopped_at=VALUES(stopped_at),\n            updated_at=CURRENT_TIMESTAMP(3)`,\n          [\n            companyId, oven.id, oven.cycleCount, cycleState, oven.firedAt,\n            oven.reportStartedAt || null, oven.stoppedAt || null,\n            limits.chamberTemp.lower, 1800,\n          ],\n        );\n        const [cycleRows] = await connection.execute(\n          `SELECT id FROM oven_cycles WHERE company_id=? AND oven_id=? AND cycle_number=? LIMIT 1`,\n          [companyId, oven.id, oven.cycleCount],\n        );\n        cycleId = cycleRows[0]?.id || null;\n        if (cycleId) {\n          if (oven.reportStartedAt) {\n            await connection.execute(\n              `UPDATE sensor_readings\n               SET included_in_report=FALSE, cycle_phase='ignition'\n               WHERE cycle_id=? AND recorded_at<?`,\n              [cycleId, oven.reportStartedAt],\n            );\n          } else {\n            await connection.execute(\n              `UPDATE sensor_readings\n               SET included_in_report=FALSE, cycle_phase='ignition'\n               WHERE cycle_id=?`,\n              [cycleId],\n            );\n          }\n        }\n      }\n\n      const backfillKey = `dbBackfill:${companyId}:${oven.id}:${oven.cycleCount}:${oven.firedAt || \"none\"}`;\n      if (cycleId && oven.firedAt && !context.get(backfillKey)) {\n        const firedAtMs = Date.parse(oven.firedAt);\n        const reportStartMs = oven.reportStartedAt ? Date.parse(oven.reportStartedAt) : Number.POSITIVE_INFINITY;\n        const stoppedAtMs = oven.stoppedAt ? Date.parse(oven.stoppedAt) : Number.POSITIVE_INFINITY;\n        const history = (companyState.history[oven.id] || []).filter(\n          (point) => {\n            const timestamp = Date.parse(point.timestamp);\n            return timestamp >= firedAtMs && timestamp <= stoppedAtMs;\n          },\n        );\n\n        for (let offset = 0; offset < history.length; offset += 400) {\n          const chunk = history.slice(offset, offset + 400);\n          if (!chunk.length) continue;\n          const placeholders = chunk.map(() => \"(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'good', ?)\").join(\",\");\n          const values = chunk.flatMap((point) => {\n            const includedInReport = Date.parse(point.timestamp) >= reportStartMs;\n            return [\n              companyId, oven.id, cycleId, point.timestamp,\n              point.chamberTemp, point.humidity, point.furnaceTemp, point.blowerTemp,\n              includedInReport ? \"recording\" : \"ignition\", includedInReport,\n              point.timestamp,\n            ];\n          });\n          await connection.execute(\n            `INSERT INTO sensor_readings (\n              company_id, oven_id, cycle_id, recorded_at, chamber_temp, humidity,\n              furnace_temp, blower_temp, cycle_phase, included_in_report, quality, source_timestamp\n            ) VALUES ${placeholders}\n            ON DUPLICATE KEY UPDATE\n              cycle_id=VALUES(cycle_id), chamber_temp=VALUES(chamber_temp),\n              humidity=VALUES(humidity), furnace_temp=VALUES(furnace_temp),\n              blower_temp=VALUES(blower_temp), cycle_phase=VALUES(cycle_phase),\n              included_in_report=VALUES(included_in_report), quality=VALUES(quality),\n              source_timestamp=VALUES(source_timestamp)`,\n            values,\n          );\n        }\n        completedBackfills.push(backfillKey);\n      }\n\n      if (oven.status === \"open\" && updatedOvenIds.has(oven.id)) {\n        const reading = oven.readings;\n        const includedInReport = Boolean(oven.reportStartedAt);\n        const sensorSet = snapshot.telemetrySamples?.[`${companyId}:${oven.id}`] || {};\n        const quality = Object.values(sensorSet).some((sample) => sample.quality !== \"good\") ? \"suspect\" : \"good\";\n        const sourceTimestamp = sensorSet.chamberTemp?.sourceTimestamp || oven.lastUpdatedAt;\n        await connection.execute(\n          `INSERT INTO sensor_readings (\n            company_id, oven_id, cycle_id, recorded_at, chamber_temp, humidity,\n            furnace_temp, blower_temp, cycle_phase, included_in_report, quality, source_timestamp\n          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n          ON DUPLICATE KEY UPDATE\n            chamber_temp=VALUES(chamber_temp), humidity=VALUES(humidity),\n            furnace_temp=VALUES(furnace_temp), blower_temp=VALUES(blower_temp),\n            cycle_id=VALUES(cycle_id), cycle_phase=VALUES(cycle_phase),\n            included_in_report=VALUES(included_in_report), source_timestamp=VALUES(source_timestamp)`,\n          [\n            companyId, oven.id, cycleId, oven.lastUpdatedAt,\n            reading.chamberTemp.value, reading.humidity.value,\n            reading.furnaceTemp.value, reading.blowerTemp.value,\n            includedInReport ? \"recording\" : \"ignition\", includedInReport, quality,\n            sourceTimestamp,\n          ],\n        );\n      }\n\n      for (const cycle of companyState.archivedCycles?.[oven.id] || []) {\n        await persistArchivedCycle(connection, companyId, oven, limits, cycle, completedBackfills);\n      }\n    }\n\n    for (const alarm of companyState.alarms) {\n      await connection.execute(\n        `INSERT INTO alarms (\n          id, company_id, oven_id, sensor_key, severity, status, title, detail,\n          measured_value, limit_value, created_at, resolved_at\n        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n        ON DUPLICATE KEY UPDATE\n          status=VALUES(status), title=VALUES(title), detail=VALUES(detail),\n          measured_value=VALUES(measured_value), limit_value=VALUES(limit_value),\n          resolved_at=VALUES(resolved_at)`,\n        [\n          `${companyId}-${alarm.id}`, companyId, alarm.ovenId, alarm.sensor || null,\n          alarm.severity, alarm.status, alarm.title, alarm.detail,\n          alarm.value ?? null, alarm.limit ?? null, alarm.createdAt, alarm.resolvedAt || null,\n        ],\n      );\n    }\n\n    const unresolvedAlarmIds = companyState.alarms\n      .filter((alarm) => alarm.status === \"active\" || alarm.status === \"acknowledged\")\n      .map((alarm) => `${companyId}-${alarm.id}`);\n    const unresolvedClause = unresolvedAlarmIds.length\n      ? ` AND id NOT IN (${unresolvedAlarmIds.map(() => \"?\").join(\",\")})`\n      : \"\";\n    await connection.execute(\n      `UPDATE alarms\n       SET status='resolved', resolved_at=COALESCE(resolved_at, ?)\n       WHERE company_id=? AND status IN ('active','acknowledged')${unresolvedClause}`,\n      [snapshot.capturedAt, companyId, ...unresolvedAlarmIds],\n    );\n\n    const companySamples = Object.values(snapshot.telemetrySamples || {})\n      .flatMap((sensorSet) => Object.values(sensorSet))\n      .filter((sample) => sample.companyId === companyId);\n\n    for (const sample of companySamples) {\n      await connection.execute(\n        `INSERT INTO telemetry_events (\n          company_id, oven_id, batch_id, topic, device_id, sensor_id, sensor_key,\n          sequence_number, numeric_value, unit_symbol, quality, quality_reasons,\n          source_timestamp, gateway_timestamp\n        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n        ON DUPLICATE KEY UPDATE\n          numeric_value=VALUES(numeric_value), quality=VALUES(quality),\n          quality_reasons=VALUES(quality_reasons), source_timestamp=VALUES(source_timestamp),\n          gateway_timestamp=VALUES(gateway_timestamp), received_at=CURRENT_TIMESTAMP(3)`,\n        [\n          sample.companyId, sample.ovenId, sample.batchId, sample.topic,\n          sample.deviceId, sample.sensorId, sample.sensorKey, sample.sequence,\n          sample.rawValue ?? sample.value, sample.unit, sample.quality,\n          JSON.stringify(sample.qualityReasons || []), sample.sourceTimestamp,\n          sample.gatewayTimestamp,\n        ],\n      );\n    }\n  }\n\n  await connection.commit();\n  completedBackfills.forEach((key) => context.set(key, true));\n  node.status({ fill: \"green\", shape: \"dot\", text: `DB ${snapshot.capturedAt}` });\n} catch (error) {\n  if (connection) await connection.rollback();\n  node.status({ fill: \"red\", shape: \"ring\", text: `DB ${error.code || \"error\"}` });\n  node.error(`STCR database persistence failed: ${error.message}`, msg);\n} finally {\n  connection?.release();\n  context.set(persistenceLockKey, false);\n}\n\nreturn null;\n",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [
+      {
+        "var": "mysql",
+        "module": "mysql2/promise"
+      }
+    ],
+    "x": 390,
+    "y": 100,
     "wires": [
       []
     ]
@@ -56,14 +918,14 @@
   {
     "id": "stcr-http-1",
     "type": "http in",
-    "z": "stcr-simulator-tab",
-    "name": "Health",
+    "z": "stcr-platform-tab",
+    "name": "ตรวจสอบสถานะระบบ",
     "url": "/stcr/api/health",
     "method": "get",
     "upload": false,
     "swaggerDoc": "",
     "x": 170,
-    "y": 160,
+    "y": 250,
     "wires": [
       [
         "stcr-api-router"
@@ -73,14 +935,14 @@
   {
     "id": "stcr-http-2",
     "type": "http in",
-    "z": "stcr-simulator-tab",
-    "name": "All ovens",
+    "z": "stcr-platform-tab",
+    "name": "ข้อมูลเตาทั้งหมด",
     "url": "/stcr/api/ovens",
     "method": "get",
     "upload": false,
     "swaggerDoc": "",
     "x": 170,
-    "y": 202,
+    "y": 292,
     "wires": [
       [
         "stcr-api-router"
@@ -90,14 +952,14 @@
   {
     "id": "stcr-http-3",
     "type": "http in",
-    "z": "stcr-simulator-tab",
-    "name": "Oven detail",
+    "z": "stcr-platform-tab",
+    "name": "รายละเอียดเตา",
     "url": "/stcr/api/ovens/:ovenId",
     "method": "get",
     "upload": false,
     "swaggerDoc": "",
     "x": 170,
-    "y": 244,
+    "y": 334,
     "wires": [
       [
         "stcr-api-router"
@@ -107,14 +969,14 @@
   {
     "id": "stcr-http-4",
     "type": "http in",
-    "z": "stcr-simulator-tab",
-    "name": "History",
+    "z": "stcr-platform-tab",
+    "name": "ข้อมูลย้อนหลัง",
     "url": "/stcr/api/ovens/:ovenId/history",
     "method": "get",
     "upload": false,
     "swaggerDoc": "",
     "x": 170,
-    "y": 286,
+    "y": 376,
     "wires": [
       [
         "stcr-api-router"
@@ -124,14 +986,14 @@
   {
     "id": "stcr-http-5",
     "type": "http in",
-    "z": "stcr-simulator-tab",
-    "name": "CSV export",
+    "z": "stcr-platform-tab",
+    "name": "ส่งออกไฟล์ CSV",
     "url": "/stcr/api/ovens/:ovenId/export.csv",
     "method": "get",
     "upload": false,
     "swaggerDoc": "",
     "x": 170,
-    "y": 328,
+    "y": 418,
     "wires": [
       [
         "stcr-api-router"
@@ -141,14 +1003,14 @@
   {
     "id": "stcr-http-6",
     "type": "http in",
-    "z": "stcr-simulator-tab",
-    "name": "Alarms",
+    "z": "stcr-platform-tab",
+    "name": "รายการแจ้งเตือน",
     "url": "/stcr/api/alarms",
     "method": "get",
     "upload": false,
     "swaggerDoc": "",
     "x": 170,
-    "y": 370,
+    "y": 460,
     "wires": [
       [
         "stcr-api-router"
@@ -158,14 +1020,14 @@
   {
     "id": "stcr-http-7",
     "type": "http in",
-    "z": "stcr-simulator-tab",
-    "name": "Audit events",
+    "z": "stcr-platform-tab",
+    "name": "ประวัติการใช้งาน",
     "url": "/stcr/api/audit-events",
     "method": "get",
     "upload": false,
     "swaggerDoc": "",
     "x": 170,
-    "y": 412,
+    "y": 502,
     "wires": [
       [
         "stcr-api-router"
@@ -175,14 +1037,14 @@
   {
     "id": "stcr-http-8",
     "type": "http in",
-    "z": "stcr-simulator-tab",
-    "name": "Save limits",
+    "z": "stcr-platform-tab",
+    "name": "บันทึกค่าขอบเขต",
     "url": "/stcr/api/ovens/:ovenId/limits",
     "method": "put",
     "upload": false,
     "swaggerDoc": "",
     "x": 170,
-    "y": 454,
+    "y": 544,
     "wires": [
       [
         "stcr-api-router"
@@ -192,14 +1054,14 @@
   {
     "id": "stcr-http-9",
     "type": "http in",
-    "z": "stcr-simulator-tab",
-    "name": "Update oven",
+    "z": "stcr-platform-tab",
+    "name": "แก้ไขข้อมูลเตา",
     "url": "/stcr/api/ovens/:ovenId",
     "method": "patch",
     "upload": false,
     "swaggerDoc": "",
     "x": 170,
-    "y": 496,
+    "y": 586,
     "wires": [
       [
         "stcr-api-router"
@@ -209,14 +1071,14 @@
   {
     "id": "stcr-http-10",
     "type": "http in",
-    "z": "stcr-simulator-tab",
-    "name": "Add oven",
+    "z": "stcr-platform-tab",
+    "name": "เพิ่มเตา",
     "url": "/stcr/api/ovens",
     "method": "post",
     "upload": false,
     "swaggerDoc": "",
     "x": 170,
-    "y": 538,
+    "y": 628,
     "wires": [
       [
         "stcr-api-router"
@@ -226,14 +1088,14 @@
   {
     "id": "stcr-http-11",
     "type": "http in",
-    "z": "stcr-simulator-tab",
-    "name": "Acknowledge alarm",
+    "z": "stcr-platform-tab",
+    "name": "รับทราบการแจ้งเตือน",
     "url": "/stcr/api/alarms/:alarmId/acknowledge",
     "method": "post",
     "upload": false,
     "swaggerDoc": "",
     "x": 170,
-    "y": 580,
+    "y": 670,
     "wires": [
       [
         "stcr-api-router"
@@ -243,14 +1105,14 @@
   {
     "id": "stcr-http-12",
     "type": "http in",
-    "z": "stcr-simulator-tab",
-    "name": "CORS preflight",
+    "z": "stcr-platform-tab",
+    "name": "ตรวจสอบสิทธิ์ CORS",
     "url": "/stcr/api/*",
     "method": "options",
     "upload": false,
     "swaggerDoc": "",
     "x": 170,
-    "y": 622,
+    "y": 712,
     "wires": [
       [
         "stcr-api-router"
@@ -260,17 +1122,22 @@
   {
     "id": "stcr-api-router",
     "type": "function",
-    "z": "stcr-simulator-tab",
-    "name": "STCR API router",
-    "func": "function jsonResponse(payload, statusCode = 200) {\n  msg.statusCode = statusCode;\n  msg.headers = {\n    \"Content-Type\": \"application/json; charset=utf-8\",\n    \"Access-Control-Allow-Origin\": \"*\",\n    \"Access-Control-Allow-Headers\": \"Content-Type, Authorization\",\n    \"Access-Control-Allow-Methods\": \"GET, POST, PUT, PATCH, OPTIONS\",\n    \"Cache-Control\": \"no-store\",\n  };\n  msg.payload = payload;\n  return msg;\n}\n\nfunction errorResponse(message, statusCode = 400) {\n  return jsonResponse({ error: message }, statusCode);\n}\n\nfunction requestBody() {\n  if (msg.payload && typeof msg.payload === \"object\") return msg.payload;\n  if (typeof msg.payload === \"string\" && msg.payload.trim()) {\n    try {\n      return JSON.parse(msg.payload);\n    } catch (error) {\n      return null;\n    }\n  }\n  return {};\n}\n\nfunction addAudit(state, action, target, detail) {\n  state.auditEvents.unshift({\n    id: `audit-${Date.now()}`,\n    actor: \"node-red\",\n    action,\n    target,\n    detail,\n    createdAt: new Date().toISOString(),\n  });\n  state.auditEvents = state.auditEvents.slice(0, 100);\n}\n\nconst state = flow.get(\"stcrState\");\nif (!state) return errorResponse(\"Simulator is not initialized\", 503);\n\nconst method = (msg.req.method || \"GET\").toUpperCase();\nconst path = msg.req.path || msg.req._parsedUrl.pathname;\nconst query = msg.req.query || {};\n\nif (method === \"OPTIONS\") {\n  msg.statusCode = 204;\n  msg.headers = {\n    \"Access-Control-Allow-Origin\": \"*\",\n    \"Access-Control-Allow-Headers\": \"Content-Type, Authorization\",\n    \"Access-Control-Allow-Methods\": \"GET, POST, PUT, PATCH, OPTIONS\",\n  };\n  msg.payload = \"\";\n  return msg;\n}\n\nif (method === \"GET\" && path === \"/stcr/api/health\") {\n  return jsonResponse({ ok: true, ovens: state.ovens.length, timestamp: new Date().toISOString() });\n}\n\nif (method === \"GET\" && path === \"/stcr/api/ovens\") {\n  return jsonResponse(state.ovens);\n}\n\nif (method === \"GET\" && path === \"/stcr/api/alarms\") {\n  const search = String(query.search || \"\").trim().toLowerCase();\n  const alarms = state.alarms.filter((alarm) => {\n    const severityMatch = !query.severity || query.severity === \"all\" || alarm.severity === query.severity;\n    const statusMatch = !query.status || query.status === \"all\" || alarm.status === query.status;\n    const ovenMatch = !query.ovenId || query.ovenId === \"all\" || alarm.ovenId === query.ovenId;\n    const searchMatch = !search || `${alarm.ovenName} ${alarm.title} ${alarm.detail}`.toLowerCase().includes(search);\n    return severityMatch && statusMatch && ovenMatch && searchMatch;\n  });\n  return jsonResponse(alarms);\n}\n\nif (method === \"GET\" && path === \"/stcr/api/audit-events\") {\n  return jsonResponse(state.auditEvents);\n}\n\nif (method === \"POST\" && path === \"/stcr/api/ovens\") {\n  const nextNumber = Math.max(...state.ovens.map((oven) => oven.number)) + 1;\n  const now = new Date().toISOString();\n  const limits = JSON.parse(JSON.stringify(state.ovens[0].limits));\n  const values = { chamberTemp: 0, humidity: 0, furnaceTemp: 0, blowerTemp: 0 };\n  const readings = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, {\n    key,\n    value,\n    unit: key === \"humidity\" ? \"%\" : \"C\",\n    updatedAt: now,\n  }]));\n  const oven = {\n    id: `oven-${nextNumber}`,\n    number: nextNumber,\n    name: `เตา ${nextNumber}`,\n    zone: \"B\",\n    line: \"Line 2\",\n    status: \"closed\",\n    enabled: true,\n    cycleCount: 0,\n    stoppedAt: now,\n    lastUpdatedAt: now,\n    readings,\n    limits,\n  };\n  state.ovens.push(oven);\n  state.history[oven.id] = [];\n  addAudit(state, \"เพิ่มเตาใหม่\", oven.name, \"เพิ่มเตาผ่าน Node-RED API\");\n  flow.set(\"stcrState\", state);\n  return jsonResponse(oven, 201);\n}\n\nconst acknowledgeMatch = path.match(/^\\/stcr\\/api\\/alarms\\/([^/]+)\\/acknowledge$/);\nif (method === \"POST\" && acknowledgeMatch) {\n  const alarmId = decodeURIComponent(acknowledgeMatch[1]);\n  state.alarms = state.alarms.map((alarm) => alarm.id === alarmId ? { ...alarm, status: \"acknowledged\" } : alarm);\n  addAudit(state, \"รับทราบ Alarm\", alarmId, \"รับทราบผ่านหน้าเว็บ\");\n  flow.set(\"stcrState\", state);\n  return jsonResponse(state.alarms);\n}\n\nconst historyMatch = path.match(/^\\/stcr\\/api\\/ovens\\/([^/]+)\\/history$/);\nif (method === \"GET\" && historyMatch) {\n  const ovenId = decodeURIComponent(historyMatch[1]);\n  const points = state.history[ovenId];\n  if (!points) return errorResponse(`Oven not found: ${ovenId}`, 404);\n  const startAt = query.startAt ? Date.parse(query.startAt) : Number.NEGATIVE_INFINITY;\n  const endAt = query.endAt ? Date.parse(query.endAt) : Number.POSITIVE_INFINITY;\n  return jsonResponse(points.filter((point) => {\n    const timestamp = Date.parse(point.timestamp);\n    return timestamp >= startAt && timestamp <= endAt;\n  }));\n}\n\nconst exportMatch = path.match(/^\\/stcr\\/api\\/ovens\\/([^/]+)\\/export\\.csv$/);\nif (method === \"GET\" && exportMatch) {\n  const ovenId = decodeURIComponent(exportMatch[1]);\n  const points = state.history[ovenId];\n  if (!points) return errorResponse(`Oven not found: ${ovenId}`, 404);\n  const sensors = String(query.sensors || \"chamberTemp,humidity,furnaceTemp,blowerTemp\").split(\",\");\n  const rows = [[\"timestamp\", ...sensors], ...points.map((point) => [point.timestamp, ...sensors.map((sensor) => point[sensor])])];\n  msg.statusCode = 200;\n  msg.headers = {\n    \"Content-Type\": \"text/csv; charset=utf-8\",\n    \"Access-Control-Allow-Origin\": \"*\",\n    \"Cache-Control\": \"no-store\",\n  };\n  msg.payload = rows.map((row) => row.join(\",\")).join(\"\\n\");\n  return msg;\n}\n\nconst limitsMatch = path.match(/^\\/stcr\\/api\\/ovens\\/([^/]+)\\/limits$/);\nif (method === \"PUT\" && limitsMatch) {\n  const ovenId = decodeURIComponent(limitsMatch[1]);\n  const index = state.ovens.findIndex((oven) => oven.id === ovenId);\n  if (index < 0) return errorResponse(`Oven not found: ${ovenId}`, 404);\n  const body = requestBody();\n  if (!body) return errorResponse(\"Invalid JSON body\");\n  const valid = [\"chamberTemp\", \"humidity\", \"furnaceTemp\", \"blowerTemp\"].every((sensor) =>\n    body[sensor] && Number.isFinite(Number(body[sensor].lower)) && Number.isFinite(Number(body[sensor].upper)) && Number(body[sensor].lower) <= Number(body[sensor].upper)\n  );\n  if (!valid) return errorResponse(\"Invalid limits payload\");\n  state.ovens[index] = { ...state.ovens[index], limits: body };\n  addAudit(state, \"เปลี่ยนค่า Limit\", state.ovens[index].name, \"บันทึก Upper/Lower ผ่าน Node-RED API\");\n  flow.set(\"stcrState\", state);\n  return jsonResponse(state.ovens[index]);\n}\n\nconst ovenMatch = path.match(/^\\/stcr\\/api\\/ovens\\/([^/]+)$/);\nif (ovenMatch) {\n  const ovenId = decodeURIComponent(ovenMatch[1]);\n  const index = state.ovens.findIndex((oven) => oven.id === ovenId);\n  if (index < 0) return errorResponse(`Oven not found: ${ovenId}`, 404);\n\n  if (method === \"GET\") return jsonResponse(state.ovens[index]);\n  if (method === \"PATCH\") {\n    const body = requestBody();\n    if (!body) return errorResponse(\"Invalid JSON body\");\n    const current = state.ovens[index];\n    state.ovens[index] = {\n      ...current,\n      name: typeof body.name === \"string\" && body.name.trim() ? body.name.trim() : current.name,\n      zone: typeof body.zone === \"string\" && body.zone.trim() ? body.zone.trim() : current.zone,\n      line: typeof body.line === \"string\" && body.line.trim() ? body.line.trim() : current.line,\n    };\n    addAudit(state, \"แก้ไขข้อมูลเตา\", state.ovens[index].name, \"แก้ชื่อ โซน หรือไลน์ผ่าน Node-RED API\");\n    flow.set(\"stcrState\", state);\n    return jsonResponse(state.ovens[index]);\n  }\n}\n\nreturn errorResponse(`Route not found: ${method} ${path}`, 404);\n",
+    "z": "stcr-platform-tab",
+    "name": "จัดเส้นทาง STCR API และคำนวณค่าเฉลี่ย 10 นาที",
+    "func": "function jsonResponse(payload, statusCode = 200) {\n  msg.statusCode = statusCode;\n  msg.headers = {\n    \"Content-Type\": \"application/json; charset=utf-8\",\n    \"Access-Control-Allow-Origin\": \"*\",\n    \"Access-Control-Allow-Headers\": \"Content-Type, Authorization, X-Company-Id\",\n    \"Access-Control-Allow-Methods\": \"GET, POST, PUT, PATCH, OPTIONS\",\n    \"Cache-Control\": \"no-store\",\n  };\n  msg.payload = payload;\n  return msg;\n}\n\nfunction errorResponse(message, statusCode = 400) {\n  return jsonResponse({ error: message }, statusCode);\n}\n\nfunction requestBody() {\n  if (msg.payload && typeof msg.payload === \"object\") return msg.payload;\n  if (typeof msg.payload === \"string\" && msg.payload.trim()) {\n    try {\n      return JSON.parse(msg.payload);\n    } catch (error) {\n      return null;\n    }\n  }\n  return {};\n}\n\nfunction addAudit(state, action, target, detail) {\n  state.auditEvents.unshift({\n    id: `audit-${Date.now()}`,\n    actor: \"node-red\",\n    action,\n    target,\n    detail,\n    createdAt: new Date().toISOString(),\n  });\n  state.auditEvents = state.auditEvents.slice(0, 100);\n}\n\nfunction getDatabasePool() {\n  let pool = context.get(\"stcrApiDbPool\");\n  if (pool) return pool;\n  pool = mysql.createPool({\n    host: env.get(\"STCR_DB_HOST\") || \"127.0.0.1\",\n    port: Number(env.get(\"STCR_DB_PORT\") || 3306),\n    user: env.get(\"STCR_DB_USER\") || \"stcr_app\",\n    password: env.get(\"STCR_DB_PASSWORD\") || \"\",\n    database: env.get(\"STCR_DB_NAME\") || \"stcr\",\n    waitForConnections: true,\n    connectionLimit: 4,\n    timezone: \"Z\",\n  });\n  context.set(\"stcrApiDbPool\", pool);\n  return pool;\n}\n\nasync function readReportHistory(companyId, ovenId, query) {\n  const conditions = [\"r.company_id=?\", \"r.oven_id=?\"];\n  const values = [companyId, ovenId];\n  if (query.includeIgnition !== \"true\") conditions.push(\"r.included_in_report=TRUE\");\n  if (query.startAt) {\n    conditions.push(\"r.recorded_at>=?\");\n    values.push(query.startAt);\n  }\n  if (query.endAt) {\n    conditions.push(\"r.recorded_at<=?\");\n    values.push(query.endAt);\n  }\n  if (query.cycleNumber) {\n    conditions.push(\"c.cycle_number=?\");\n    values.push(Number(query.cycleNumber));\n  }\n\n  const pool = getDatabasePool();\n  await pool.query(\"SET time_zone = '+00:00'\");\n  const requestedRangeMs = query.startAt && query.endAt\n    ? Math.max(0, Date.parse(query.endAt) - Date.parse(query.startAt))\n    : 0;\n  const bucketSeconds = requestedRangeMs > 24 * 60 * 60 * 1000 ? 600 : 60;\n  const [rows] = await pool.execute(\n    `SELECT\n       DATE_FORMAT(MIN(r.recorded_at), '%Y-%m-%dT%H:%i:%s.%fZ') AS timestamp,\n       AVG(r.chamber_temp) AS chamberTemp,\n       AVG(r.humidity) AS humidity,\n       AVG(r.furnace_temp) AS furnaceTemp,\n       AVG(r.blower_temp) AS blowerTemp\n     FROM sensor_readings r\n     LEFT JOIN oven_cycles c ON c.id=r.cycle_id\n     WHERE ${conditions.join(\" AND \")}\n     GROUP BY FLOOR(UNIX_TIMESTAMP(r.recorded_at) / ${bucketSeconds})\n     ORDER BY MIN(r.recorded_at) ASC`,\n    values,\n  );\n  return rows.map((row) => ({\n    timestamp: row.timestamp,\n    chamberTemp: Number(row.chamberTemp),\n    humidity: Number(row.humidity),\n    furnaceTemp: Number(row.furnaceTemp),\n    blowerTemp: Number(row.blowerTemp),\n  }));\n}\n\nconst method = (msg.req.method || \"GET\").toUpperCase();\nconst path = msg.req.path || msg.req._parsedUrl.pathname;\nconst query = msg.req.query || {};\nconst requestHeaders = msg.req.headers || {};\nconst companyId = String(query.companyId || requestHeaders[\"x-company-id\"] || \"gr\").toLowerCase();\nconst rootState = global.get(\"stcrState\");\nif (!rootState || !rootState.companies) return errorResponse(\"Simulator is not initialized\", 503);\nconst state = rootState.companies[companyId];\nif (!state) return errorResponse(`Unknown company: ${companyId}`, 404);\nconst visibleOvens = state.ovens;\nconst visibleOvenById = new Map(visibleOvens.map((oven) => [oven.id, oven]));\n\nfunction persistState() {\n  rootState.companies[companyId] = state;\n  global.set(\"stcrState\", rootState);\n}\n\nif (method === \"OPTIONS\") {\n  msg.statusCode = 204;\n  msg.headers = {\n    \"Access-Control-Allow-Origin\": \"*\",\n    \"Access-Control-Allow-Headers\": \"Content-Type, Authorization, X-Company-Id\",\n    \"Access-Control-Allow-Methods\": \"GET, POST, PUT, PATCH, OPTIONS\",\n  };\n  msg.payload = \"\";\n  return msg;\n}\n\nif (method === \"GET\" && path === \"/stcr/api/health\") {\n  return jsonResponse({\n    ok: true,\n    companyId,\n    ovens: state.ovens.length,\n    sources: Object.keys(rootState.companies),\n    timestamp: new Date().toISOString(),\n  });\n}\n\nif (method === \"GET\" && path === \"/stcr/api/ovens\") {\n  return jsonResponse(visibleOvens);\n}\n\nif (method === \"GET\" && path === \"/stcr/api/alarms\") {\n  const search = String(query.search || \"\").trim().toLowerCase();\n  const alarms = state.alarms.filter((alarm) => visibleOvenById.has(alarm.ovenId)).map((alarm) => ({\n    ...alarm,\n    ovenName: visibleOvenById.get(alarm.ovenId).name,\n  })).filter((alarm) => {\n    const severityMatch = !query.severity || query.severity === \"all\" || alarm.severity === query.severity;\n    const statusMatch = !query.status || query.status === \"all\" || alarm.status === query.status;\n    const ovenMatch = !query.ovenId || query.ovenId === \"all\" || alarm.ovenId === query.ovenId;\n    const searchMatch = !search || `${alarm.ovenName} ${alarm.title} ${alarm.detail}`.toLowerCase().includes(search);\n    return severityMatch && statusMatch && ovenMatch && searchMatch;\n  });\n  return jsonResponse(alarms);\n}\n\nif (method === \"GET\" && path === \"/stcr/api/audit-events\") {\n  return jsonResponse(state.auditEvents);\n}\n\nif (method === \"POST\" && path === \"/stcr/api/ovens\") {\n  const nextNumber = Math.max(...state.ovens.map((oven) => oven.number)) + 1;\n  const now = new Date().toISOString();\n  const limits = JSON.parse(JSON.stringify(state.ovens[0].limits));\n  const values = { chamberTemp: 0, humidity: 0, furnaceTemp: 0, blowerTemp: 0 };\n  const readings = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, {\n    key,\n    value,\n    unit: key === \"humidity\" ? \"%\" : \"C\",\n    updatedAt: now,\n  }]));\n  const oven = {\n    id: `oven-${nextNumber}`,\n    number: nextNumber,\n    name: `เตา ${nextNumber}`,\n    zone: \"B\",\n    line: \"Line 2\",\n    status: \"closed\",\n    enabled: true,\n    cycleCount: 0,\n    stoppedAt: now,\n    lastUpdatedAt: now,\n    readings,\n    limits,\n  };\n  state.ovens.push(oven);\n  state.history[oven.id] = [];\n  addAudit(state, \"เพิ่มเตาใหม่\", oven.name, \"เพิ่มเตาผ่าน Node-RED API\");\n  persistState();\n  return jsonResponse(oven, 201);\n}\n\nconst acknowledgeMatch = path.match(/^\\/stcr\\/api\\/alarms\\/([^/]+)\\/acknowledge$/);\nif (method === \"POST\" && acknowledgeMatch) {\n  const alarmId = decodeURIComponent(acknowledgeMatch[1]);\n  state.alarms = state.alarms.map((alarm) => alarm.id === alarmId ? { ...alarm, status: \"acknowledged\" } : alarm);\n  addAudit(state, \"รับทราบ Alarm\", alarmId, \"รับทราบผ่านหน้าเว็บ\");\n  persistState();\n  return jsonResponse(state.alarms);\n}\n\nconst historyMatch = path.match(/^\\/stcr\\/api\\/ovens\\/([^/]+)\\/history$/);\nif (method === \"GET\" && historyMatch) {\n  const ovenId = decodeURIComponent(historyMatch[1]);\n  const points = state.history[ovenId];\n  if (!points) return errorResponse(`Oven not found: ${ovenId}`, 404);\n  try {\n    return jsonResponse(await readReportHistory(companyId, ovenId, query));\n  } catch (error) {\n    node.warn(`Database history fallback: ${error.message}`);\n  }\n  const startAt = query.startAt ? Date.parse(query.startAt) : Number.NEGATIVE_INFINITY;\n  const endAt = query.endAt ? Date.parse(query.endAt) : Number.POSITIVE_INFINITY;\n  return jsonResponse(points.filter((point) => {\n    const timestamp = Date.parse(point.timestamp);\n    return timestamp >= startAt && timestamp <= endAt;\n  }));\n}\n\nconst exportMatch = path.match(/^\\/stcr\\/api\\/ovens\\/([^/]+)\\/export\\.csv$/);\nif (method === \"GET\" && exportMatch) {\n  const ovenId = decodeURIComponent(exportMatch[1]);\n  const points = state.history[ovenId];\n  if (!points) return errorResponse(`Oven not found: ${ovenId}`, 404);\n  const sensors = String(query.sensors || \"chamberTemp,humidity,furnaceTemp,blowerTemp\").split(\",\");\n  const rows = [[\"timestamp\", ...sensors], ...points.map((point) => [point.timestamp, ...sensors.map((sensor) => point[sensor])])];\n  msg.statusCode = 200;\n  msg.headers = {\n    \"Content-Type\": \"text/csv; charset=utf-8\",\n    \"Access-Control-Allow-Origin\": \"*\",\n    \"Cache-Control\": \"no-store\",\n  };\n  msg.payload = rows.map((row) => row.join(\",\")).join(\"\\n\");\n  return msg;\n}\n\nconst limitsMatch = path.match(/^\\/stcr\\/api\\/ovens\\/([^/]+)\\/limits$/);\nif (method === \"PUT\" && limitsMatch) {\n  const ovenId = decodeURIComponent(limitsMatch[1]);\n  const index = state.ovens.findIndex((oven) => oven.id === ovenId);\n  if (index < 0) return errorResponse(`Oven not found: ${ovenId}`, 404);\n  const body = requestBody();\n  if (!body) return errorResponse(\"Invalid JSON body\");\n  const valid = [\"chamberTemp\", \"humidity\", \"furnaceTemp\", \"blowerTemp\"].every((sensor) =>\n    body[sensor] && Number.isFinite(Number(body[sensor].lower)) && Number.isFinite(Number(body[sensor].upper)) && Number(body[sensor].lower) <= Number(body[sensor].upper)\n  );\n  if (!valid) return errorResponse(\"Invalid limits payload\");\n  state.ovens[index] = { ...state.ovens[index], limits: body };\n  addAudit(state, \"เปลี่ยนค่า Limit\", state.ovens[index].name, \"บันทึก Upper/Lower ผ่าน Node-RED API\");\n  persistState();\n  return jsonResponse(\n    state.ovens.find((oven) => oven.id === ovenId) || state.ovens[index],\n  );\n}\n\nconst ovenMatch = path.match(/^\\/stcr\\/api\\/ovens\\/([^/]+)$/);\nif (ovenMatch) {\n  const ovenId = decodeURIComponent(ovenMatch[1]);\n  const index = state.ovens.findIndex((oven) => oven.id === ovenId);\n  if (index < 0) return errorResponse(`Oven not found: ${ovenId}`, 404);\n\n  if (method === \"GET\") return jsonResponse(visibleOvenById.get(ovenId) || state.ovens[index]);\n  if (method === \"PATCH\") {\n    const body = requestBody();\n    if (!body) return errorResponse(\"Invalid JSON body\");\n    const current = state.ovens[index];\n    state.ovens[index] = {\n      ...current,\n      name: typeof body.name === \"string\" && body.name.trim() ? body.name.trim() : current.name,\n      zone: typeof body.zone === \"string\" && body.zone.trim() ? body.zone.trim() : current.zone,\n      line: typeof body.line === \"string\" && body.line.trim() ? body.line.trim() : current.line,\n    };\n    addAudit(state, \"แก้ไขข้อมูลเตา\", state.ovens[index].name, \"แก้ชื่อ โซน หรือไลน์ผ่าน Node-RED API\");\n    persistState();\n    return jsonResponse(\n      state.ovens.find((oven) => oven.id === ovenId) || state.ovens[index],\n    );\n  }\n}\n\nreturn errorResponse(`Route not found: ${method} ${path}`, 404);\n",
     "outputs": 1,
     "timeout": 0,
     "noerr": 0,
     "initialize": "",
     "finalize": "",
-    "libs": [],
-    "x": 510,
-    "y": 390,
+    "libs": [
+      {
+        "var": "mysql",
+        "module": "mysql2/promise"
+      }
+    ],
+    "x": 560,
+    "y": 480,
     "wires": [
       [
         "stcr-http-response"
@@ -280,22 +1147,12 @@
   {
     "id": "stcr-http-response",
     "type": "http response",
-    "z": "stcr-simulator-tab",
-    "name": "HTTP response",
+    "z": "stcr-platform-tab",
+    "name": "ส่งผลลัพธ์ HTTP กลับเว็บไซต์",
     "statusCode": "",
     "headers": {},
-    "x": 760,
-    "y": 390,
-    "wires": []
-  },
-  {
-    "id": "stcr-flow-note",
-    "type": "comment",
-    "z": "stcr-simulator-tab",
-    "name": "Import, Deploy, then open http://127.0.0.1:1880/stcr/api/health",
-    "info": "Set VITE_DATA_SOURCE=node-red and VITE_API_BASE_URL=http://127.0.0.1:1880/stcr/api in the React app.",
-    "x": 330,
-    "y": 40,
+    "x": 850,
+    "y": 480,
     "wires": []
   }
 ]

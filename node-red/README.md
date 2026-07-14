@@ -1,38 +1,44 @@
-# STCR Node-RED Simulator
+# STCR Node-RED Runtime
 
-Flow นี้จำลองข้อมูลเตา 11-26 แบบมี state และเปิด REST API ตาม [Node-RED API Contract](../docs/node-red-api.md)
+## What the flow models
 
-## วิธีใช้
+- GR and TTN have independent device, gateway, filter, aggregation, history, and alarm state.
+- Open ovens publish four independent sensor messages every 5 seconds.
+- Chamber temperature, humidity, furnace temperature, and blower temperature follow a 6-day smoking cycle.
+- Ignition data is stored, but report recording and alarms begin only after the configured warmup condition.
+- Raw telemetry and processed snapshots are both persisted in MariaDB.
+- Realtime and historical graphs use the same 10-minute bucket resolution.
 
-1. เปิด Node-RED ที่ `http://127.0.0.1:1880`
-2. เลือก Menu → Import → Clipboard
-3. นำเข้าไฟล์ `flows.json`
-4. กด Deploy
-5. ตรวจที่ `http://127.0.0.1:1880/stcr/api/health`
-6. คัดลอก `.env.example` เป็น `.env.local` แล้วตั้ง `VITE_DATA_SOURCE=node-red`
-7. restart `npm run dev`
+See [IoT workflow](../docs/node-red-iot-workflow.md) and [API contract](../docs/node-red-api.md).
 
-Flow ใช้เฉพาะ node มาตรฐานของ Node-RED ไม่ต้องติดตั้ง palette เพิ่ม
+## Flow layout
 
-## พฤติกรรมข้อมูลจำลอง
+ไฟล์ `flows.json` ที่สร้างขึ้นมี 4 แท็บ:
 
-- อัปเดตเตาที่เปิดทุก 5 วินาที
-- เก็บ history 14 วันใน flow context และเพิ่ม point ทุก 1 นาที
-- seed history ทุก 10 นาทีเพื่อให้เปิดกราฟแล้วเห็นข้อมูลทันที
-- อุณหภูมิและความชื้นเปลี่ยนตาม progress ของรอบ 6 วัน
-- เตาปิดคงค่าล่าสุดและเตา offline ใช้ timestamp เก่า
-- เตา 18 จำลอง Blower ต่ำ และเตา 20 จำลองอุณหภูมิสูงเพื่อทดสอบ Alarm
-- `cycleCount` เพิ่มเมื่อรอบเปิดครบ 6 วันเท่านั้น
+1. `01 จำลองข้อมูลอุปกรณ์หน้างาน`
+2. `02 ประมวลผลข้อมูล GR`
+3. `03 ประมวลผลข้อมูล TTN`
+4. `04 ฐานข้อมูลและ API`
 
-ข้อมูลอยู่ใน memory context ของ Node-RED และจะเริ่มใหม่เมื่อ restart หากยังไม่ได้ตั้ง context storage แบบ file/database ขั้น production ควรส่ง history ลงฐานข้อมูลภายนอก
+Each company has four visible sensor lanes. Every lane passes through gateway validation and signal processing before a company-specific batch aggregator creates one synchronized oven snapshot.
 
-## แก้ Function node อย่างเป็นระบบ
+## Run or import
 
-ไฟล์ต้นฉบับอยู่ใน `functions/` หลังแก้ให้สร้าง flow ใหม่ด้วย:
+1. Open Node-RED at `http://127.0.0.1:1880`.
+2. Import `node-red/flows.json` only when the deployed flow is older than this file.
+3. Select full-flow import and press Deploy.
+4. Check `http://127.0.0.1:1880/stcr/api/health?companyId=gr`.
+5. Check `http://127.0.0.1:1880/stcr/api/health?companyId=ttn`.
+
+The flow uses standard Node-RED nodes and Function nodes. No additional palette package is required.
+
+## Source of truth
+
+Function source files live in `node-red/functions/`. Do not edit generated Function node code inside `flows.json` directly. Rebuild and validate after a source change:
 
 ```powershell
 npm run node-red:build
 npm run node-red:validate
 ```
 
-อย่าแก้ `flows.json` โดยตรง เพราะไฟล์นี้ generate จาก `build-flow.mjs`
+The web application uses Node-RED when `VITE_DATA_SOURCE=node-red` is configured. Each company can also point to a separate API URL through its company configuration when the production deployment is split later.

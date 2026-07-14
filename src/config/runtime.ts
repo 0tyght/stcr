@@ -1,6 +1,6 @@
 export type DataSource = "mock" | "node-red";
 
-const DEFAULT_POLL_INTERVAL_MS = 7_000;
+const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 
 function readPositiveInteger(value: string | undefined, fallback: number): number {

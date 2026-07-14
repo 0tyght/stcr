@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { Download, FileArchive, FileDown, RefreshCw } from "lucide-react";
+import { Download, FileArchive, FileDown, Lock, RefreshCw, Unlock } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -45,7 +45,15 @@ type SavePickerWindow = Window & {
   }) => Promise<SaveFileHandleLike>;
 };
 
-type RubberType = "latex" | "yellow" | "black" | "angka" | "";
+type RubberType =
+  | "latex"
+  | "yellow"
+  | "black"
+  | "angka"
+  | "uss97"
+  | "uss96"
+  | "uss94"
+  | "";
 type SmokingPeriodStatus = "under" | "over" | "notReached" | "";
 type TemperatureControlStatus = "underControl" | "outOfControl" | "";
 
@@ -54,8 +62,9 @@ type ReportFormState = {
   smokingPeriodStatus: SmokingPeriodStatus;
   temperatureControlStatus: TemperatureControlStatus;
   reason: string;
-  reporter: string;
-  productionHead: string;
+  inputNetWeight: string;
+  outputNetWeight: string;
+  documentNo: string;
   targetTemperature: number;
   showTargetLine: boolean;
 };
@@ -65,18 +74,35 @@ const defaultReportForm: ReportFormState = {
   smokingPeriodStatus: "",
   temperatureControlStatus: "",
   reason: "",
-  reporter: "",
-  productionHead: "",
+  inputNetWeight: "",
+  outputNetWeight: "",
+  documentNo: "F-WS-05 Rev.11",
   targetTemperature: 45,
   showTargetLine: false,
 };
 
-const rubberOptions: Array<{ value: Exclude<RubberType, "">; label: string }> = [
+type RubberOption = {
+  value: Exclude<RubberType, "">;
+  label: string;
+  description?: string;
+};
+
+const grRubberOptions: RubberOption[] = [
   { value: "latex", label: "น้ำยาง" },
   { value: "yellow", label: "ยางเหลือง" },
   { value: "black", label: "ยางดำ" },
   { value: "angka", label: "ยางอังคา" },
 ];
+
+const ttnRubberOptions: RubberOption[] = [
+  { value: "uss97", label: "USS ≥ 97%" },
+  { value: "uss96", label: "USS ≥ 96%", description: "แต่ < 97%" },
+  { value: "uss94", label: "USS ≥ 94%", description: "แต่ < 96% (ควบคุมพิเศษ)" },
+];
+
+function getRubberOptions(company: CompanyConfig): RubberOption[] {
+  return company.id === "ttn" ? ttnRubberOptions : grRubberOptions;
+}
 
 const smokingPeriodOptions: Array<{
   value: Exclude<SmokingPeriodStatus, "">;
@@ -184,7 +210,7 @@ function createCsvBlob(points: TimeSeriesPoint[], sensors: SensorKey[]): Blob {
 
 export function ReportPage() {
   const { ovens } = useAppData();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const company = useMemo(() => getCurrentCompany(), []);
 
@@ -220,9 +246,21 @@ export function ReportPage() {
     const latest = mode === "current"
       ? Math.max(oven.cycleCount || 1, 1)
       : getDefaultHistoricalCycle(oven);
-    const availableCycleCount = mode === "current" ? 1 : Math.min(6, latest);
+    const availableCycleCount = mode === "current" ? 1 : latest;
     return Array.from({ length: availableCycleCount }, (_, index) => latest - index);
   }, [mode, oven]);
+
+  const updateReportLocation = useCallback(
+    ({ nextOvenId, nextMode }: { nextOvenId?: string; nextMode?: ReportMode }) => {
+      const next = new URLSearchParams(searchParams);
+      if (nextOvenId) next.set("ovenId", nextOvenId);
+      if (nextMode) next.set("mode", nextMode);
+      next.delete("cycle");
+      next.delete("auto");
+      setSearchParams(next);
+    },
+    [searchParams, setSearchParams],
+  );
 
   useEffect(() => {
     if (!oven) return;
@@ -331,15 +369,13 @@ export function ReportPage() {
         throw new Error("ไม่สามารถสร้าง PDF ได้");
       }
 
-      const filename = `F-WS-05_OVEN${oven.number}_Cycle${safeCycle}_${formatFileDate(
-        range.start,
-      )}_to_${formatFileDate(range.end)}.pdf`;
+      const filename = createPdfFilename(company, safeCycle, range.start);
 
       const blob = await createLandscapePdfBlobFromSvg(reportRef.current);
 
       return { blob, filename };
     },
-    [mode, oven],
+    [company, mode, oven],
   );
 
   const downloadSelectedPdf = useCallback(
@@ -348,9 +384,7 @@ export function ReportPage() {
 
       const safeCycle = clampCycleNumber(selectedCycle, oven);
       const range = getCycleRange(oven, mode, safeCycle);
-      const filename = `F-WS-05_OVEN${oven.number}_Cycle${safeCycle}_${formatFileDate(
-        range.start,
-      )}_to_${formatFileDate(range.end)}.pdf`;
+      const filename = createPdfFilename(company, safeCycle, range.start);
 
       const fileHandle = chooseLocation
         ? await requestSaveFile(filename, "PDF document", "application/pdf", ".pdf")
@@ -385,7 +419,7 @@ export function ReportPage() {
         setDownloadingPdf(false);
       }
     },
-    [mode, oven, selectedCycle],
+    [company, mode, oven, selectedCycle],
   );
 
   const downloadHistoricalRangeZip = useCallback(async () => {
@@ -396,7 +430,7 @@ export function ReportPage() {
 
     const high = Math.max(rangeFromCycle, rangeToCycle);
     const low = Math.min(rangeFromCycle, rangeToCycle);
-    const filename = `F-WS-05_OVEN${oven.number}_Cycle${high}_to_${low}.zip`;
+    const filename = `${company.shortName}-รอบที่-${high}-ถึง-${low}.zip`;
     const fileHandle = await requestSaveFile(
       filename,
       "ZIP archive",
@@ -410,7 +444,7 @@ export function ReportPage() {
 
     try {
       const zip = new JSZip();
-      const folder = zip.folder(`F-WS-05_OVEN${oven.number}`) ?? zip;
+      const folder = zip.folder(`${company.shortName}-เตา-${oven.number}`) ?? zip;
 
       for (const [index, cycle] of cycles.entries()) {
         setDownloadMessage(`กำลังสร้างไฟล์ ${index + 1}/${cycles.length} · รอบ ${cycle}`);
@@ -434,7 +468,7 @@ export function ReportPage() {
       setDownloadMessage("");
       setDownloadingPdf(false);
     }
-  }, [oven, rangeFromCycle, rangeToCycle, renderCycleAndCreatePdfBlob]);
+  }, [company, oven, rangeFromCycle, rangeToCycle, renderCycleAndCreatePdfBlob]);
 
   const downloadCurrentCsv = useCallback(async () => {
     if (!oven || selectedCycle == null || !points.length) return;
@@ -489,6 +523,17 @@ export function ReportPage() {
             </Link>
           }
         />
+        <ReportSelectionToolbar
+          ovens={ovens}
+          oven={oven}
+          mode={mode}
+          selectedCycle={selectedCycle}
+          cycleOptions={cycleOptions}
+          disabled={loadingReport || downloadingPdf}
+          onOvenChange={(nextOvenId) => updateReportLocation({ nextOvenId })}
+          onModeChange={(nextMode) => updateReportLocation({ nextMode })}
+          onCycleChange={setSelectedCycle}
+        />
         <EmptyState
           title="ยังไม่เริ่มบันทึกรอบรายงาน"
           description="เตากำลังอยู่ในช่วงจุดไฟหรืออุ่นระบบ กราฟเรียลไทม์ยังดูได้ตามปกติ และรายงานจะพร้อมเมื่ออุณหภูมิห้องอบถึงช่วงที่กำหนด"
@@ -538,6 +583,22 @@ export function ReportPage() {
             </button>
           </>
         }
+      />
+
+      <ReportSelectionToolbar
+        ovens={ovens}
+        oven={oven}
+        mode={mode}
+        selectedCycle={selectedCycle}
+        cycleOptions={cycleOptions}
+        disabled={loadingReport || downloadingPdf}
+        onOvenChange={(nextOvenId) => updateReportLocation({ nextOvenId })}
+        onModeChange={(nextMode) => updateReportLocation({ nextMode })}
+        onCycleChange={(cycle) => {
+          setSelectedCycle(cycle);
+          setRangeFromCycle(cycle);
+          setRangeToCycle(cycle);
+        }}
       />
 
       <section className="panel report-filter report-cycle-toolbar">
@@ -720,7 +781,11 @@ export function ReportPage() {
         </section>
       ) : null}
 
-      <ReportFormControls form={reportForm} onChange={setReportForm} />
+      <ReportFormControls
+        form={reportForm}
+        company={company}
+        onChange={setReportForm}
+      />
 
       <section className="report-page-shell">
         <FwsSvgReport
@@ -737,13 +802,90 @@ export function ReportPage() {
   );
 }
 
+function ReportSelectionToolbar({
+  ovens,
+  oven,
+  mode,
+  selectedCycle,
+  cycleOptions,
+  disabled,
+  onOvenChange,
+  onModeChange,
+  onCycleChange,
+}: {
+  ovens: Oven[];
+  oven: Oven;
+  mode: ReportMode;
+  selectedCycle: number | null;
+  cycleOptions: number[];
+  disabled: boolean;
+  onOvenChange: (ovenId: string) => void;
+  onModeChange: (mode: ReportMode) => void;
+  onCycleChange: (cycle: number) => void;
+}) {
+  return (
+    <section className="panel report-selection-toolbar" aria-label="เลือกข้อมูลรายงาน">
+      <div className="report-selection-toolbar__heading">
+        <strong>เลือกรายงานที่ต้องการ</strong>
+        <span>เลือกเตาและรอบได้จากหน้านี้โดยตรง</span>
+      </div>
+
+      <label className="field compact-field">
+        <span>เตา</span>
+        <select
+          value={oven.id}
+          disabled={disabled}
+          onChange={(event) => onOvenChange(event.target.value)}
+        >
+          {ovens.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="field compact-field">
+        <span>ประเภทรอบ</span>
+        <select
+          value={mode}
+          disabled={disabled}
+          onChange={(event) => onModeChange(event.target.value as ReportMode)}
+        >
+          <option value="current">รอบปัจจุบัน</option>
+          <option value="history">รอบย้อนหลัง</option>
+        </select>
+      </label>
+
+      <label className="field compact-field">
+        <span>รอบที่</span>
+        <select
+          value={selectedCycle ?? ""}
+          disabled={disabled || !cycleOptions.length}
+          onChange={(event) => onCycleChange(Number(event.target.value))}
+        >
+          {cycleOptions.map((cycle) => (
+            <option key={cycle} value={cycle}>
+              รอบ {cycle}
+            </option>
+          ))}
+        </select>
+      </label>
+    </section>
+  );
+}
+
 function ReportFormControls({
   form,
+  company,
   onChange,
 }: {
   form: ReportFormState;
+  company: CompanyConfig;
   onChange: (next: ReportFormState) => void;
 }) {
+  const [documentNoLocked, setDocumentNoLocked] = useState(true);
+  const rubberOptions = getRubberOptions(company);
   function update<Key extends keyof ReportFormState>(key: Key, value: ReportFormState[Key]) {
     onChange({
       ...form,
@@ -765,6 +907,7 @@ function ReportFormControls({
           onClick={() =>
             onChange({
               ...defaultReportForm,
+              documentNo: form.documentNo,
               targetTemperature: form.targetTemperature,
               showTargetLine: false,
             })
@@ -788,7 +931,10 @@ function ReportFormControls({
                     update("rubberType", form.rubberType === option.value ? "" : option.value)
                   }
                 />
-                <span>{option.label}</span>
+                <span className="report-choice__content">
+                  <strong>{option.label}</strong>
+                  {option.description ? <small>{option.description}</small> : null}
+                </span>
               </label>
             ))}
           </div>
@@ -890,22 +1036,53 @@ function ReportFormControls({
         </label>
 
         <label className="field compact-field report-form-field">
-          <span>ผู้รายงาน</span>
+          <span>ปริมาณน้ำหนักยางเข้าเตา (Net Weight)</span>
           <input
-            value={form.reporter}
-            onChange={(event) => update("reporter", event.target.value)}
-            placeholder="ชื่อผู้รายงาน"
+            type="number"
+            min="0"
+            step="0.01"
+            inputMode="decimal"
+            value={form.inputNetWeight}
+            onChange={(event) => update("inputNetWeight", event.target.value)}
+            placeholder="กิโลกรัม"
           />
         </label>
 
         <label className="field compact-field report-form-field">
-          <span>หัวหน้าฝ่ายผลิต</span>
+          <span>ปริมาณน้ำหนักยางออกเตา (Net Weight)</span>
           <input
-            value={form.productionHead}
-            onChange={(event) => update("productionHead", event.target.value)}
-            placeholder="ชื่อหัวหน้าฝ่ายผลิต"
+            type="number"
+            min="0"
+            step="0.01"
+            inputMode="decimal"
+            value={form.outputNetWeight}
+            onChange={(event) => update("outputNetWeight", event.target.value)}
+            placeholder="กิโลกรัม"
           />
         </label>
+
+        <div className="report-document-field">
+          <label className="field compact-field report-form-field">
+            <span>Document No.</span>
+            <input
+              value={form.documentNo}
+              readOnly={documentNoLocked}
+              aria-readonly={documentNoLocked}
+              onChange={(event) => update("documentNo", event.target.value)}
+            />
+          </label>
+
+          <button
+            className={`button report-document-lock ${documentNoLocked ? "is-locked" : ""}`}
+            type="button"
+            aria-pressed={!documentNoLocked}
+            title={documentNoLocked ? "ปลดล็อกเพื่อแก้ไข Document No." : "ล็อก Document No."}
+            onClick={() => setDocumentNoLocked((locked) => !locked)}
+          >
+            {documentNoLocked ? <Lock size={16} /> : <Unlock size={16} />}
+            {documentNoLocked ? "ล็อกอยู่" : "กำลังแก้ไข"}
+          </button>
+        </div>
       </div>
     </section>
   );
@@ -961,7 +1138,7 @@ function FwsSvgReport({
       <g transform={`translate(${mainX} ${mainY})`}>
         <rect x="0" y="0" width={mainW} height={mainH} fill="#ffffff" stroke="#000000" strokeWidth="1" />
 
-        <FwsSvgHeader width={mainW} height={headerH} company={company} />
+        <FwsSvgHeader width={mainW} height={headerH} company={company} form={form} />
 
         <FwsSvgMeta
           y={metaY}
@@ -970,6 +1147,7 @@ function FwsSvgReport({
           oven={oven}
           cycle={cycle}
           cycleRange={cycleRange}
+          company={company}
           form={form}
         />
 
@@ -987,7 +1165,7 @@ function FwsSvgReport({
       </g>
 
       <SvgText x={8} y={779} size={8}>
-        F-WS-05 รายงานการตรวจสอบอุณหภูมิเตา Rev.11
+        {form.documentNo} รายงานการตรวจสอบอุณหภูมิเตา
       </SvgText>
 
       <SvgText x={1096} y={779} size={8} anchor="end">
@@ -1001,10 +1179,12 @@ function FwsSvgHeader({
   width,
   height,
   company,
+  form,
 }: {
   width: number;
   height: number;
   company: CompanyConfig;
+  form: ReportFormState;
 }) {
   const logoW = 174;
   const docW = 205;
@@ -1037,7 +1217,7 @@ function FwsSvgHeader({
         Document No.
       </SvgText>
       <SvgText x={docX + docW / 2} y={34} size={11} weight={800} anchor="middle">
-        F-WS-05 Rev.11
+        {form.documentNo}
       </SvgText>
 
       <SvgText x={docX + 46} y={59} size={10.5} weight={800} anchor="middle">
@@ -1057,6 +1237,7 @@ function FwsSvgMeta({
   oven,
   cycle,
   cycleRange,
+  company,
   form,
 }: {
   y: number;
@@ -1065,8 +1246,11 @@ function FwsSvgMeta({
   oven: Oven;
   cycle: number;
   cycleRange: { start: Date; end: Date };
+  company: CompanyConfig;
   form: ReportFormState;
 }) {
+  const rubberOptions = getRubberOptions(company);
+
   return (
     <g transform={`translate(0 ${y})`}>
       <rect x="0" y="0" width={width} height={height} fill="#ffffff" stroke="#000000" strokeWidth="0.75" />
@@ -1086,18 +1270,36 @@ function FwsSvgMeta({
         Type of rubber
       </SvgText>
 
-      {rubberOptions.map((item, index) => {
-        const x = 88 + index * 50;
+      {company.id === "ttn"
+        ? rubberOptions.map((item, index) => {
+            const x = 90 + index * 78;
 
-        return (
-          <g key={item.value}>
-            <FwsCheckbox x={x} y={30} checked={form.rubberType === item.value} />
-            <SvgText x={x + 6.5} y={62} size={8.7} anchor="middle">
-              {item.label}
-            </SvgText>
-          </g>
-        );
-      })}
+            return (
+              <g key={item.value}>
+                <FwsCheckbox x={x} y={27} checked={form.rubberType === item.value} />
+                <SvgText x={x + 6.5} y={53} size={7.8} anchor="middle">
+                  {item.label}
+                </SvgText>
+                {item.description ? (
+                  <SvgText x={x + 6.5} y={66} size={7.1} anchor="middle">
+                    {item.description}
+                  </SvgText>
+                ) : null}
+              </g>
+            );
+          })
+        : rubberOptions.map((item, index) => {
+            const x = 88 + index * 50;
+
+            return (
+              <g key={item.value}>
+                <FwsCheckbox x={x} y={30} checked={form.rubberType === item.value} />
+                <SvgText x={x + 6.5} y={62} size={8.7} anchor="middle">
+                  {item.label}
+                </SvgText>
+              </g>
+            );
+          })}
 
       <SvgText x={335} y={18} size={11} weight={700}>
         เข้าเตาวันที่
@@ -1130,6 +1332,11 @@ function FwsSvgMeta({
         ปริมาณน้ำหนักยางเข้าเตา (Net Weight) :
       </SvgText>
       <DottedLine x={570} y={43} width={230} />
+      {form.inputNetWeight ? (
+        <SvgText x={685} y={40} size={10.5} weight={700} anchor="middle">
+          {form.inputNetWeight}
+        </SvgText>
+      ) : null}
       <SvgText x={805} y={43} size={11} weight={700}>
         (ก.ก.)
       </SvgText>
@@ -1138,6 +1345,11 @@ function FwsSvgMeta({
         ปริมาณน้ำหนักยางออกเตา (Net Weight) :
       </SvgText>
       <DottedLine x={570} y={66} width={230} />
+      {form.outputNetWeight ? (
+        <SvgText x={685} y={63} size={10.5} weight={700} anchor="middle">
+          {form.outputNetWeight}
+        </SvgText>
+      ) : null}
       <SvgText x={805} y={66} size={11} weight={700}>
         (ก.ก.)
       </SvgText>
@@ -1530,23 +1742,11 @@ function FwsSvgNotes({ y, form }: { y: number; form: ReportFormState }) {
 
       <DottedLine x={345} y={100} width={210} />
 
-      {form.reporter ? (
-        <SvgText x={355} y={97} size={8.4}>
-          {form.reporter}
-        </SvgText>
-      ) : null}
-
       <SvgText x={650} y={100} size={9.4} weight={700}>
         หัวหน้าฝ่ายผลิต
       </SvgText>
 
       <DottedLine x={740} y={100} width={245} />
-
-      {form.productionHead ? (
-        <SvgText x={750} y={97} size={8.4}>
-          {form.productionHead}
-        </SvgText>
-      ) : null}
     </g>
   );
 }
@@ -1737,11 +1937,11 @@ function formatReportDate(value: Date): string {
   )}-${buddhistShortYear}`;
 }
 
-function formatFileDate(value: Date): string {
-  return `${String(value.getDate()).padStart(2, "0")}${String(value.getMonth() + 1).padStart(
-    2,
-    "0",
-  )}${value.getFullYear()}`;
+function createPdfFilename(company: CompanyConfig, cycle: number, start: Date): string {
+  const date = `${String(start.getDate()).padStart(2, "0")}-${String(
+    start.getMonth() + 1,
+  ).padStart(2, "0")}-${start.getFullYear()}`;
+  return `${company.shortName}-รอบที่-${cycle}-${date}.pdf`;
 }
 
 function formatReportTime(value: Date): string {
@@ -1763,6 +1963,7 @@ const reportPageStyles = `
   }
 
   .report-page .report-cycle-toolbar,
+  .report-page .report-selection-toolbar,
   .report-page .report-form-controls,
   .report-page .report-page-shell {
     border: 1px solid var(--line);
@@ -1775,6 +1976,32 @@ const reportPageStyles = `
     margin: 0;
     padding: 11px 14px;
     border-top: 3px solid var(--company-primary);
+  }
+
+  .report-page .report-selection-toolbar {
+    display: grid;
+    grid-template-columns: minmax(210px, 1fr) repeat(3, minmax(150px, 0.7fr));
+    gap: 10px;
+    align-items: end;
+    margin: 0;
+    padding: 11px 14px;
+    border-top: 3px solid var(--company-primary);
+  }
+
+  .report-selection-toolbar__heading {
+    display: grid;
+    align-self: center;
+    gap: 2px;
+  }
+
+  .report-selection-toolbar__heading strong {
+    color: var(--ink-strong);
+    font-size: 14px;
+  }
+
+  .report-selection-toolbar__heading span {
+    color: var(--muted);
+    font-size: 11.5px;
   }
 
   .report-page .report-cycle-toolbar > div:first-child {
@@ -2039,13 +2266,37 @@ const reportPageStyles = `
 
   .report-form-fields {
     display: grid;
-    grid-template-columns: minmax(260px, 1.45fr) minmax(180px, 0.78fr) minmax(180px, 0.78fr);
+    grid-template-columns: minmax(230px, 1.2fr) repeat(3, minmax(175px, 0.8fr));
     gap: 10px;
     margin-top: 10px;
   }
 
   .report-form-field {
     min-width: 0;
+  }
+
+  .report-document-field {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+    align-items: end;
+    min-width: 0;
+  }
+
+  .report-page .report-document-lock {
+    min-width: 88px;
+    white-space: nowrap;
+  }
+
+  .report-page .report-document-lock.is-locked {
+    border-color: color-mix(in srgb, var(--company-primary) 55%, var(--line));
+    background: color-mix(in srgb, var(--company-primary) 10%, var(--surface));
+  }
+
+  .report-page input[readonly] {
+    cursor: not-allowed;
+    background: var(--surface-soft);
+    color: var(--muted);
   }
 
   .report-page .field > span {
@@ -2101,8 +2352,20 @@ const reportPageStyles = `
   }
 
   @media (max-width: 1180px) {
+    .report-page .report-selection-toolbar {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .report-selection-toolbar__heading {
+      grid-column: 1 / -1;
+    }
+
     .report-form-controls__grid {
       grid-template-columns: 1fr;
+    }
+
+    .report-form-fields {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .report-choice-list {
@@ -2117,6 +2380,7 @@ const reportPageStyles = `
 
     .report-choice-list,
     .report-choice-row--temperature,
+    .report-page .report-selection-toolbar,
     .report-form-fields {
       grid-template-columns: 1fr;
     }

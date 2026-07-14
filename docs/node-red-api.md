@@ -1,8 +1,12 @@
 # Node-RED API Contract
 
+Company data is isolated in separate source state. The frontend sends `companyId`, and each company can use a separate Node-RED URL configured in `src/config/companies.ts`.
+
 Frontend ใช้ REST polling เป็นฐานก่อน โดยเรียกค่าปัจจุบันทุก `VITE_REALTIME_POLL_INTERVAL_MS` ข้อมูลทุกรายการต้องเป็น JSON และ timestamp ต้องเป็น ISO 8601 เช่น `2026-07-12T08:30:00.000+07:00`
 
 Base path ตัวอย่าง: `http://127.0.0.1:1880/stcr/api`
+
+Frontend ส่ง `companyId` query parameter ทุก request เพื่อให้ backend แยกข้อมูลบริษัท เช่น `gr` หรือ `ttn` และ backend อาจรองรับ header `X-Company-Id` เพิ่มเติมได้ เมื่อเพิ่มบริษัทใหม่ต้องเพิ่ม company id เดียวกันใน backend ด้วย
 
 ## Endpoint
 

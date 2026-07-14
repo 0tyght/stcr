@@ -27,6 +27,12 @@ VITE_API_TIMEOUT_MS=10000
 
 มี Node-RED simulator พร้อม import อยู่ใน [node-red/README.md](node-red/README.md)
 
+หลักการจำลอง thermal lag, เวลาเริ่มรายงาน และแหล่งอ้างอิงอยู่ใน [docs/simulation-model.md](docs/simulation-model.md) ส่วน schema ฐานข้อมูลอยู่ใน [database/README.md](database/README.md)
+
+โครงสร้าง telemetry แบบ IoT และวิธีเปลี่ยน simulator เป็น MQTT/PLC จริงอยู่ใน [docs/node-red-iot-workflow.md](docs/node-red-iot-workflow.md)
+
+การเพิ่มบริษัท โลโก้ บัญชีและธีมใหม่ ดูที่ [docs/adding-company.md](docs/adding-company.md)
+
 ## คำสั่งหลัก
 
 ```powershell

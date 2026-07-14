@@ -492,7 +492,7 @@ export function TimeSeriesChart({
                 strokeDasharray="8 7"
                 opacity={palette.markLineOpacity}
                 style={{
-                  animation: "stcrDashMove 0.9s linear infinite",
+                  animation: "stcrDashMove 3s linear infinite",
                 }}
               />
 

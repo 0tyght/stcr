@@ -3,7 +3,7 @@ function jsonResponse(payload, statusCode = 200) {
   msg.headers = {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Company-Id",
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, OPTIONS",
     "Cache-Control": "no-store",
   };
@@ -39,18 +39,91 @@ function addAudit(state, action, target, detail) {
   state.auditEvents = state.auditEvents.slice(0, 100);
 }
 
-const state = flow.get("stcrState");
-if (!state) return errorResponse("Simulator is not initialized", 503);
+function getDatabasePool() {
+  let pool = context.get("stcrApiDbPool");
+  if (pool) return pool;
+  pool = mysql.createPool({
+    host: env.get("STCR_DB_HOST") || "127.0.0.1",
+    port: Number(env.get("STCR_DB_PORT") || 3306),
+    user: env.get("STCR_DB_USER") || "stcr_app",
+    password: env.get("STCR_DB_PASSWORD") || "",
+    database: env.get("STCR_DB_NAME") || "stcr",
+    waitForConnections: true,
+    connectionLimit: 4,
+    timezone: "Z",
+  });
+  context.set("stcrApiDbPool", pool);
+  return pool;
+}
+
+async function readReportHistory(companyId, ovenId, query) {
+  const conditions = ["r.company_id=?", "r.oven_id=?"];
+  const values = [companyId, ovenId];
+  if (query.includeIgnition !== "true") conditions.push("r.included_in_report=TRUE");
+  if (query.startAt) {
+    conditions.push("r.recorded_at>=?");
+    values.push(query.startAt);
+  }
+  if (query.endAt) {
+    conditions.push("r.recorded_at<=?");
+    values.push(query.endAt);
+  }
+  if (query.cycleNumber) {
+    conditions.push("c.cycle_number=?");
+    values.push(Number(query.cycleNumber));
+  }
+
+  const pool = getDatabasePool();
+  await pool.query("SET time_zone = '+00:00'");
+  const requestedRangeMs = query.startAt && query.endAt
+    ? Math.max(0, Date.parse(query.endAt) - Date.parse(query.startAt))
+    : 0;
+  const bucketSeconds = requestedRangeMs > 24 * 60 * 60 * 1000 ? 600 : 60;
+  const [rows] = await pool.execute(
+    `SELECT
+       DATE_FORMAT(MIN(r.recorded_at), '%Y-%m-%dT%H:%i:%s.%fZ') AS timestamp,
+       AVG(r.chamber_temp) AS chamberTemp,
+       AVG(r.humidity) AS humidity,
+       AVG(r.furnace_temp) AS furnaceTemp,
+       AVG(r.blower_temp) AS blowerTemp
+     FROM sensor_readings r
+     LEFT JOIN oven_cycles c ON c.id=r.cycle_id
+     WHERE ${conditions.join(" AND ")}
+     GROUP BY FLOOR(UNIX_TIMESTAMP(r.recorded_at) / ${bucketSeconds})
+     ORDER BY MIN(r.recorded_at) ASC`,
+    values,
+  );
+  return rows.map((row) => ({
+    timestamp: row.timestamp,
+    chamberTemp: Number(row.chamberTemp),
+    humidity: Number(row.humidity),
+    furnaceTemp: Number(row.furnaceTemp),
+    blowerTemp: Number(row.blowerTemp),
+  }));
+}
 
 const method = (msg.req.method || "GET").toUpperCase();
 const path = msg.req.path || msg.req._parsedUrl.pathname;
 const query = msg.req.query || {};
+const requestHeaders = msg.req.headers || {};
+const companyId = String(query.companyId || requestHeaders["x-company-id"] || "gr").toLowerCase();
+const rootState = global.get("stcrState");
+if (!rootState || !rootState.companies) return errorResponse("Simulator is not initialized", 503);
+const state = rootState.companies[companyId];
+if (!state) return errorResponse(`Unknown company: ${companyId}`, 404);
+const visibleOvens = state.ovens;
+const visibleOvenById = new Map(visibleOvens.map((oven) => [oven.id, oven]));
+
+function persistState() {
+  rootState.companies[companyId] = state;
+  global.set("stcrState", rootState);
+}
 
 if (method === "OPTIONS") {
   msg.statusCode = 204;
   msg.headers = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Company-Id",
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, OPTIONS",
   };
   msg.payload = "";
@@ -58,16 +131,25 @@ if (method === "OPTIONS") {
 }
 
 if (method === "GET" && path === "/stcr/api/health") {
-  return jsonResponse({ ok: true, ovens: state.ovens.length, timestamp: new Date().toISOString() });
+  return jsonResponse({
+    ok: true,
+    companyId,
+    ovens: state.ovens.length,
+    sources: Object.keys(rootState.companies),
+    timestamp: new Date().toISOString(),
+  });
 }
 
 if (method === "GET" && path === "/stcr/api/ovens") {
-  return jsonResponse(state.ovens);
+  return jsonResponse(visibleOvens);
 }
 
 if (method === "GET" && path === "/stcr/api/alarms") {
   const search = String(query.search || "").trim().toLowerCase();
-  const alarms = state.alarms.filter((alarm) => {
+  const alarms = state.alarms.filter((alarm) => visibleOvenById.has(alarm.ovenId)).map((alarm) => ({
+    ...alarm,
+    ovenName: visibleOvenById.get(alarm.ovenId).name,
+  })).filter((alarm) => {
     const severityMatch = !query.severity || query.severity === "all" || alarm.severity === query.severity;
     const statusMatch = !query.status || query.status === "all" || alarm.status === query.status;
     const ovenMatch = !query.ovenId || query.ovenId === "all" || alarm.ovenId === query.ovenId;
@@ -109,7 +191,7 @@ if (method === "POST" && path === "/stcr/api/ovens") {
   state.ovens.push(oven);
   state.history[oven.id] = [];
   addAudit(state, "เพิ่มเตาใหม่", oven.name, "เพิ่มเตาผ่าน Node-RED API");
-  flow.set("stcrState", state);
+  persistState();
   return jsonResponse(oven, 201);
 }
 
@@ -118,7 +200,7 @@ if (method === "POST" && acknowledgeMatch) {
   const alarmId = decodeURIComponent(acknowledgeMatch[1]);
   state.alarms = state.alarms.map((alarm) => alarm.id === alarmId ? { ...alarm, status: "acknowledged" } : alarm);
   addAudit(state, "รับทราบ Alarm", alarmId, "รับทราบผ่านหน้าเว็บ");
-  flow.set("stcrState", state);
+  persistState();
   return jsonResponse(state.alarms);
 }
 
@@ -127,6 +209,11 @@ if (method === "GET" && historyMatch) {
   const ovenId = decodeURIComponent(historyMatch[1]);
   const points = state.history[ovenId];
   if (!points) return errorResponse(`Oven not found: ${ovenId}`, 404);
+  try {
+    return jsonResponse(await readReportHistory(companyId, ovenId, query));
+  } catch (error) {
+    node.warn(`Database history fallback: ${error.message}`);
+  }
   const startAt = query.startAt ? Date.parse(query.startAt) : Number.NEGATIVE_INFINITY;
   const endAt = query.endAt ? Date.parse(query.endAt) : Number.POSITIVE_INFINITY;
   return jsonResponse(points.filter((point) => {
@@ -165,8 +252,10 @@ if (method === "PUT" && limitsMatch) {
   if (!valid) return errorResponse("Invalid limits payload");
   state.ovens[index] = { ...state.ovens[index], limits: body };
   addAudit(state, "เปลี่ยนค่า Limit", state.ovens[index].name, "บันทึก Upper/Lower ผ่าน Node-RED API");
-  flow.set("stcrState", state);
-  return jsonResponse(state.ovens[index]);
+  persistState();
+  return jsonResponse(
+    state.ovens.find((oven) => oven.id === ovenId) || state.ovens[index],
+  );
 }
 
 const ovenMatch = path.match(/^\/stcr\/api\/ovens\/([^/]+)$/);
@@ -175,7 +264,7 @@ if (ovenMatch) {
   const index = state.ovens.findIndex((oven) => oven.id === ovenId);
   if (index < 0) return errorResponse(`Oven not found: ${ovenId}`, 404);
 
-  if (method === "GET") return jsonResponse(state.ovens[index]);
+  if (method === "GET") return jsonResponse(visibleOvenById.get(ovenId) || state.ovens[index]);
   if (method === "PATCH") {
     const body = requestBody();
     if (!body) return errorResponse("Invalid JSON body");
@@ -187,8 +276,10 @@ if (ovenMatch) {
       line: typeof body.line === "string" && body.line.trim() ? body.line.trim() : current.line,
     };
     addAudit(state, "แก้ไขข้อมูลเตา", state.ovens[index].name, "แก้ชื่อ โซน หรือไลน์ผ่าน Node-RED API");
-    flow.set("stcrState", state);
-    return jsonResponse(state.ovens[index]);
+    persistState();
+    return jsonResponse(
+      state.ovens.find((oven) => oven.id === ovenId) || state.ovens[index],
+    );
   }
 }
 

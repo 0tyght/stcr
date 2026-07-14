@@ -9,7 +9,9 @@
     "build": "npm run typecheck && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "node-red:build": "node node-red/build-flow.mjs",
-    "node-red:validate": "node node-red/validate-flow.mjs"
+    "node-red:validate": "node node-red/validate-flow.mjs",
+    "node-red:reseed-current": "node node-red/reseed-current-simulation.mjs",
+    "node-red:reseed-simulation": "node node-red/reseed-current-simulation.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.0.4",
