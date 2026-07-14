@@ -45,10 +45,6 @@ export function clearAuthSession(): void {
 }
 
 export async function login(username: string, password: string): Promise<AuthSession> {
-  if (!password) {
-    throw new ApiError("กรุณากรอกรหัสผ่าน", { code: "PASSWORD_REQUIRED" });
-  }
-
   if (runtimeConfig.dataSource === "mock") {
     const session: AuthSession = {
       token: "mock-session",
@@ -58,6 +54,10 @@ export async function login(username: string, password: string): Promise<AuthSes
     };
     saveAuthSession(session);
     return session;
+  }
+
+  if (!password) {
+    throw new ApiError("กรุณากรอกรหัสผ่าน", { code: "PASSWORD_REQUIRED" });
   }
 
   const company = getCompany(getCompanyIdFromAccount(username));

@@ -27,7 +27,7 @@ VITE_API_TIMEOUT_MS=10000
 
 มี Node-RED simulator พร้อม import อยู่ใน [node-red/README.md](node-red/README.md)
 
-เมื่อใช้ `VITE_DATA_SOURCE=node-red` ต้องตั้งค่า `STCR_AUTH_USERS_JSON` และรหัสผ่านฐานข้อมูลให้กับ process ของ Node-RED ก่อน จึงจะ Login ได้ ส่วนโหมด `mock` เป็นข้อมูลสาธิตและรับรหัสผ่านที่ไม่ว่างเพื่อให้ทดสอบหน้าจอได้ รายการที่ต้องทำก่อนเปิดเซิร์ฟเวอร์จริงอยู่ใน [docs/security-deployment.md](docs/security-deployment.md)
+เมื่อใช้ `VITE_DATA_SOURCE=node-red` ต้องตั้งค่า `STCR_AUTH_USERS_JSON` และรหัสผ่านฐานข้อมูลให้กับ process ของ Node-RED ก่อน จึงจะ Login ได้ ส่วนโหมด `mock` เป็นข้อมูลสาธิตและเข้าระบบได้จากการเลือกบัญชีโดยไม่ต้องกรอกรหัสผ่าน รายการที่ต้องทำก่อนเปิดเซิร์ฟเวอร์จริงอยู่ใน [docs/security-deployment.md](docs/security-deployment.md)
 
 หลักการจำลอง thermal lag, เวลาเริ่มรายงาน และแหล่งอ้างอิงอยู่ใน [docs/simulation-model.md](docs/simulation-model.md) ส่วน schema ฐานข้อมูลอยู่ใน [database/README.md](database/README.md)
 

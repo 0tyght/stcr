@@ -68,6 +68,7 @@ type ReportFormState = {
   effectiveDate: string;
   targetTemperature: number;
   showTargetLine: boolean;
+  showHumidityLine: boolean;
 };
 
 const defaultReportForm: ReportFormState = {
@@ -81,6 +82,7 @@ const defaultReportForm: ReportFormState = {
   effectiveDate: "1-ธ.ค.-68",
   targetTemperature: 45,
   showTargetLine: false,
+  showHumidityLine: false,
 };
 
 type SavedReportDocumentMeta = Pick<ReportFormState, "documentNo" | "effectiveDate">;
@@ -177,7 +179,8 @@ type ReportSlot = {
   dayIndex: number;
   timeLabel: string;
   date: Date;
-  actual: number | null;
+  temperature: number | null;
+  humidity: number | null;
   target: number;
 };
 
@@ -912,6 +915,7 @@ function ReportFormControls({
               effectiveDate: form.effectiveDate,
               targetTemperature: form.targetTemperature,
               showTargetLine: false,
+              showHumidityLine: false,
             })
           }
         >
@@ -995,9 +999,22 @@ function ReportFormControls({
         </fieldset>
 
         <fieldset className="report-form-group report-form-group--target">
-          <legend>อุณหภูมิที่ต้องการ</legend>
+          <legend>เส้นข้อมูลในกราฟ</legend>
 
           <div className="report-target-row">
+            <label className="report-target-toggle">
+              <input
+                type="checkbox"
+                checked={form.showHumidityLine}
+                onChange={(event) => update("showHumidityLine", event.target.checked)}
+              />
+
+              <span>
+                <strong>แสดงเส้นความชื้นสีส้ม</strong>
+                <small>ค่าเริ่มต้นปิด และใช้สเกลเดียวกับอุณหภูมิ</small>
+              </span>
+            </label>
+
             <label className="report-target-toggle">
               <input
                 type="checkbox"
@@ -1428,6 +1445,7 @@ function FwsSvgTemperatureGrid({
   const chartH = 303;
   const chartBottom = chartTop + chartH;
   const chartW = width - left;
+  const chartRight = width;
   const cellW = chartW / reportSlotCount;
 
   const tempToY = (value: number) => {
@@ -1435,16 +1453,39 @@ function FwsSvgTemperatureGrid({
     return chartTop + ((graphMaxTemp - clamped) / (graphMaxTemp - graphMinTemp)) * chartH;
   };
 
+  const humidityToY = (value: number) => {
+    return tempToY(value);
+  };
+
   const slotToX = (index: number) => left + (index + 0.5) * cellW;
 
-  const actualPath = buildLinePath(
+  const temperaturePath = buildLinePath(
     slots
-      .filter((slot) => slot.actual !== null)
+      .filter((slot) => slot.temperature !== null)
       .map((slot) => ({
         x: slotToX(slot.index),
-        y: tempToY(slot.actual ?? graphMinTemp),
+        y: tempToY(slot.temperature ?? graphMinTemp),
       })),
   );
+
+  const humidityPath = form.showHumidityLine
+    ? buildLinePath(
+        slots
+          .filter((slot) => slot.humidity !== null)
+          .map((slot) => ({
+            x: slotToX(slot.index),
+            y: humidityToY(slot.humidity ?? graphMinTemp),
+          })),
+      )
+    : "";
+
+  const temperatureLabels = selectSignificantReportLabels(
+    slots,
+    (slot) => slot.temperature,
+  );
+  const humidityLabels = form.showHumidityLine
+    ? selectSignificantReportLabels(slots, (slot) => slot.humidity)
+    : [];
 
   const targetPath = form.showTargetLine
     ? buildLinePath(
@@ -1569,7 +1610,7 @@ function FwsSvgTemperatureGrid({
             <line
               x1={left}
               y1={lineY}
-              x2={width}
+              x2={chartRight}
               y2={lineY}
               stroke="#000000"
               strokeWidth={isMajor ? 0.9 : isFive ? 0.58 : 0.26}
@@ -1651,25 +1692,107 @@ function FwsSvgTemperatureGrid({
         data-control-lower-y={tempToY(lower).toFixed(2)}
       />
 
+      <g aria-label="คำอธิบายสีกราฟ">
+        <rect x={left + 4} y={chartTop + 4} width={form.showHumidityLine ? 154 : 82} height="16" rx="3" fill="#ffffff" opacity="0.9" />
+        <line x1={left + 10} y1={chartTop + 12} x2={left + 28} y2={chartTop + 12} stroke="#d62027" strokeWidth="2" />
+        <circle cx={left + 19} cy={chartTop + 12} r="1.5" fill="#d62027" />
+        <SvgText x={left + 33} y={chartTop + 15} size={7.5} weight={700}>
+          อุณหภูมิ °C
+        </SvgText>
+        {form.showHumidityLine ? (
+          <>
+            <line x1={left + 91} y1={chartTop + 12} x2={left + 109} y2={chartTop + 12} stroke="#f59e0b" strokeWidth="2" />
+            <circle cx={left + 100} cy={chartTop + 12} r="1.5" fill="#f59e0b" />
+            <SvgText x={left + 114} y={chartTop + 15} size={7.5} weight={700}>
+              ความชื้น %
+            </SvgText>
+          </>
+        ) : null}
+      </g>
+
       {targetPath ? (
         <path d={targetPath} fill="none" stroke="#0f4c81" strokeWidth="1.35" opacity="0.9" />
       ) : null}
 
-      {actualPath ? (
-        <path d={actualPath} fill="none" stroke="#d62027" strokeWidth="1.45" opacity="0.96" />
+      {temperaturePath ? (
+        <path d={temperaturePath} fill="none" stroke="#d62027" strokeWidth="1.55" opacity="0.96" />
+      ) : null}
+
+      {humidityPath ? (
+        <path d={humidityPath} fill="none" stroke="#f59e0b" strokeWidth="1.55" opacity="0.96" />
       ) : null}
 
       {slots
-        .filter((slot) => slot.actual !== null)
+        .filter((slot) => slot.temperature !== null)
         .map((slot) => (
           <circle
-            key={`actual-${slot.index}`}
+            key={`temperature-${slot.index}`}
             cx={slotToX(slot.index)}
-            cy={tempToY(slot.actual ?? graphMinTemp)}
+            cy={tempToY(slot.temperature ?? graphMinTemp)}
             r="1.25"
             fill="#d62027"
           />
         ))}
+
+      {form.showHumidityLine
+        ? slots
+            .filter((slot) => slot.humidity !== null)
+            .map((slot) => (
+              <circle
+                key={`humidity-${slot.index}`}
+                cx={slotToX(slot.index)}
+                cy={humidityToY(slot.humidity ?? graphMinTemp)}
+                r="1.25"
+                fill="#f59e0b"
+              />
+            ))
+        : null}
+
+      {temperatureLabels.map((slot) => {
+        const value = slot.temperature ?? graphMinTemp;
+        const x = slotToX(slot.index) - 2.2;
+        const pointY = tempToY(value);
+        const nearTop = pointY - chartTop < 42;
+        const labelY = pointY + (nearTop ? 4 : -4);
+        return (
+          <text
+            key={`temperature-label-${slot.index}`}
+            x={x}
+            y={labelY}
+            transform={`rotate(-90 ${x} ${labelY})`}
+            textAnchor={nearTop ? "end" : "start"}
+            fontFamily="Sarabun"
+            fontSize="6.7"
+            fontWeight="bold"
+            fill="#a31218"
+          >
+            {value.toFixed(1)}
+          </text>
+        );
+      })}
+
+      {humidityLabels.map((slot) => {
+        const value = slot.humidity ?? graphMinTemp;
+        const x = slotToX(slot.index) + 3.2;
+        const pointY = humidityToY(value);
+        const nearTop = pointY - chartTop < 42;
+        const labelY = pointY + (nearTop ? 4 : -4);
+        return (
+          <text
+            key={`humidity-label-${slot.index}`}
+            x={x}
+            y={labelY}
+            transform={`rotate(-90 ${x} ${labelY})`}
+            textAnchor={nearTop ? "end" : "start"}
+            fontFamily="Sarabun"
+            fontSize="6.7"
+            fontWeight="bold"
+            fill="#b45309"
+          >
+            {value.toFixed(1)}
+          </text>
+        );
+      })}
     </g>
   );
 }
@@ -1888,23 +2011,31 @@ function buildReportSlots({
   lower: number;
 }): ReportSlot[] {
   const target = Math.round((upper + lower) / 2);
-  const indexedPoints = points
+  const indexedTemperaturePoints = points
     .map((point) => ({
       time: new Date(point.timestamp).getTime(),
       value: point.chamberTemp,
     }))
     .filter((point) => Number.isFinite(point.time) && Number.isFinite(point.value));
+  const indexedHumidityPoints = points
+    .map((point) => ({
+      time: new Date(point.timestamp).getTime(),
+      value: point.humidity,
+    }))
+    .filter((point) => Number.isFinite(point.time) && Number.isFinite(point.value));
 
   return Array.from({ length: reportSlotCount }, (_, index) => {
     const date = new Date(start.getTime() + index * 3 * 60 * 60 * 1000);
-    const closest = findClosestPoint(indexedPoints, date.getTime());
+    const closestTemperature = findClosestPoint(indexedTemperaturePoints, date.getTime());
+    const closestHumidity = findClosestPoint(indexedHumidityPoints, date.getTime());
 
     return {
       index,
       dayIndex: Math.floor(index / timeSlots.length),
       timeLabel: timeSlots[index % timeSlots.length],
       date,
-      actual: closest ? closest.value : null,
+      temperature: closestTemperature ? closestTemperature.value : null,
+      humidity: closestHumidity ? closestHumidity.value : null,
       target,
     };
   });
@@ -1976,6 +2107,31 @@ function createPdfFilename(company: CompanyConfig, cycle: number, start: Date): 
     start.getMonth() + 1,
   ).padStart(2, "0")}⁄${start.getFullYear()}`;
   return `${company.shortName}-${cycle}-${date}.pdf`;
+}
+
+function selectSignificantReportLabels(
+  slots: ReportSlot[],
+  readValue: (slot: ReportSlot) => number | null,
+  maxLabels = 7,
+): ReportSlot[] {
+  const validSlots = slots.filter((slot) => readValue(slot) !== null);
+  if (validSlots.length <= 1) return validSlots;
+
+  const candidates = validSlots.slice(1).map((slot, index) => ({
+    slot,
+    change: Math.abs((readValue(slot) ?? 0) - (readValue(validSlots[index]) ?? 0)),
+  }));
+  candidates.sort((a, b) => b.change - a.change);
+
+  const selected: ReportSlot[] = [];
+  for (const candidate of candidates) {
+    if (selected.every((slot) => Math.abs(slot.index - candidate.slot.index) >= 4)) {
+      selected.push(candidate.slot);
+    }
+    if (selected.length >= maxLabels) break;
+  }
+
+  return selected.sort((a, b) => a.index - b.index);
 }
 
 function formatReportTime(value: Date): string {
@@ -2289,7 +2445,7 @@ const reportPageStyles = `
 
   .report-target-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(118px, 138px);
+    grid-template-columns: minmax(140px, 1fr) minmax(170px, 1.1fr) minmax(105px, 120px);
     gap: 9px;
     min-width: 0;
     max-width: 100%;

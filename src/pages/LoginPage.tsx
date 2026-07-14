@@ -13,6 +13,7 @@ import {
   THEME_STORAGE_KEY,
   type ThemeMode,
 } from "../config/preferences";
+import { runtimeConfig } from "../config/runtime";
 
 export function LoginPage({
   onLogin,
@@ -24,6 +25,7 @@ export function LoginPage({
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => getStoredThemeMode("company"));
   const [loginError, setLoginError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const passwordRequired = runtimeConfig.dataSource === "node-red";
 
   const companyId = useMemo(() => getCompanyIdFromAccount(username), [username]);
   const company = useMemo(() => getCompany(companyId), [companyId]);
@@ -115,9 +117,9 @@ export function LoginPage({
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             type="password"
-            placeholder="กรอกรหัสผ่าน"
+            placeholder={passwordRequired ? "กรอกรหัสผ่าน" : "โหมดทดลองไม่ต้องกรอก"}
             autoComplete="current-password"
-            required
+            required={passwordRequired}
           />
         </label>
 
