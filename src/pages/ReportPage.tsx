@@ -280,6 +280,7 @@ export function ReportPage() {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [downloadMessage, setDownloadMessage] = useState("");
   const [autoDownloaded, setAutoDownloaded] = useState(false);
+  const [previewExpanded, setPreviewExpanded] = useState(true);
   const [reportForm, setReportForm] = useState<ReportFormState>(() => ({
     ...defaultReportForm,
     ...readSavedReportDocumentMeta(company.id),
@@ -600,35 +601,11 @@ export function ReportPage() {
 
       <PageHeader
         title={mode === "current" ? "รายงานรอบปัจจุบัน" : "ดาวน์โหลดรายงานย้อนหลัง"}
-        description={`${oven.name} · รอบ ${selectedCycle} · แบบฟอร์ม F-WS-05 รายงานการตรวจสอบอุณหภูมิเตา`}
+        description="แบบฟอร์ม F-WS-05 รายงานการตรวจสอบอุณหภูมิเตา"
         actions={
-          <>
-            <Link className="button" to={`/ovens/${oven.id}`}>
-              กลับหน้าเตา
-            </Link>
-
-            {mode === "current" ? (
-              <button
-                className="button button-primary"
-                type="button"
-                onClick={() => void downloadSelectedPdf()}
-                disabled={downloadingPdf || loadingReport}
-              >
-                <FileDown size={17} />
-                {downloadingPdf ? "กำลังโหลด..." : "ดาวน์โหลด PDF"}
-              </button>
-            ) : null}
-
-            <button
-              className="button"
-              type="button"
-              onClick={() => void downloadCurrentCsv()}
-              disabled={loadingReport || !points.length || downloadingPdf}
-            >
-              <Download size={17} />
-              ส่งออก CSV
-            </button>
-          </>
+          <Link className="button" to={`/ovens/${oven.id}`}>
+            กลับหน้าเตา
+          </Link>
         }
       />
 
@@ -650,22 +627,50 @@ export function ReportPage() {
 
       <section className="panel report-filter report-cycle-toolbar">
         <div className="report-download-summary">
-          <strong>ดาวน์โหลดรายงาน</strong>
+          <strong>ไฟล์รายงานและพรีวิว</strong>
           <span>
             {oven.name} · รอบ {selectedCycle} · {formatReportDateTime(cycleRange.start)} ถึง {formatReportDateTime(cycleRange.end)}
           </span>
         </div>
 
         {mode === "current" ? (
-          <button
-            className="button button-dark"
-            type="button"
-            onClick={() => void loadReport()}
-            disabled={loadingReport || downloadingPdf}
-          >
-            <RefreshCw size={17} />
-            โหลดรายงานใหม่
-          </button>
+          <div className="report-primary-actions">
+            <button
+              className="button button-primary"
+              type="button"
+              onClick={() => void downloadSelectedPdf()}
+              disabled={downloadingPdf || loadingReport}
+            >
+              <FileDown size={17} />
+              {downloadingPdf ? "กำลังโหลด..." : "ดาวน์โหลด PDF"}
+            </button>
+            <button
+              className="button"
+              type="button"
+              onClick={() => void downloadCurrentCsv()}
+              disabled={loadingReport || !points.length || downloadingPdf}
+            >
+              <Download size={17} />
+              ส่งออก CSV
+            </button>
+            <button
+              className="button button-dark"
+              type="button"
+              onClick={() => void loadReport()}
+              disabled={loadingReport || downloadingPdf}
+            >
+              <RefreshCw size={17} />
+              โหลดข้อมูลใหม่
+            </button>
+            <button
+              className="button"
+              type="button"
+              aria-expanded={previewExpanded}
+              onClick={() => setPreviewExpanded((current) => !current)}
+            >
+              {previewExpanded ? "ซ่อนพรีวิว" : "แสดงพรีวิว"}
+            </button>
+          </div>
         ) : (
           <div className="report-history-panel">
             <div className="report-history-controls">
@@ -752,6 +757,16 @@ export function ReportPage() {
               )}
 
               <button
+                className="button"
+                type="button"
+                onClick={() => void downloadCurrentCsv()}
+                disabled={loadingReport || !points.length || downloadingPdf}
+              >
+                <Download size={17} />
+                ส่งออก CSV
+              </button>
+
+              <button
                 className="button button-dark report-preview-refresh"
                 type="button"
                 onClick={() => void loadReport()}
@@ -759,6 +774,15 @@ export function ReportPage() {
               >
                 <RefreshCw size={17} />
                 โหลดพรีวิวใหม่
+              </button>
+
+              <button
+                className="button"
+                type="button"
+                aria-expanded={previewExpanded}
+                onClick={() => setPreviewExpanded((current) => !current)}
+              >
+                {previewExpanded ? "ซ่อนพรีวิว" : "แสดงพรีวิว"}
               </button>
             </div>
 
@@ -791,7 +815,11 @@ export function ReportPage() {
         onChange={setReportForm}
       />
 
-      <section className="report-page-shell">
+      <section
+        className="report-page-shell"
+        aria-label="พรีวิวรายงาน PDF"
+        hidden={!previewExpanded}
+      >
         <FwsSvgReport
           refElement={reportRef}
           oven={oven}
@@ -908,7 +936,8 @@ function ReportFormControls({
         <button
           className="button report-clear-button"
           type="button"
-          onClick={() =>
+          onClick={() => {
+            if (!window.confirm("ต้องการล้างข้อมูลในฟอร์มทั้งหมดหรือไม่?")) return;
             onChange({
               ...defaultReportForm,
               documentNo: form.documentNo,
@@ -916,8 +945,8 @@ function ReportFormControls({
               targetTemperature: form.targetTemperature,
               showTargetLine: false,
               showHumidityLine: false,
-            })
-          }
+            });
+          }}
         >
           ล้างข้อมูล
         </button>
@@ -931,11 +960,10 @@ function ReportFormControls({
             {rubberOptions.map((option) => (
               <label key={option.value} className="report-choice report-choice--chip">
                 <input
-                  type="checkbox"
+                  type="radio"
+                  name="report-rubber-type"
                   checked={form.rubberType === option.value}
-                  onChange={() =>
-                    update("rubberType", form.rubberType === option.value ? "" : option.value)
-                  }
+                  onChange={() => update("rubberType", option.value)}
                 />
                 <span className="report-choice__content">
                   <strong>{option.label}</strong>
@@ -953,14 +981,10 @@ function ReportFormControls({
             {smokingPeriodOptions.map((option) => (
               <label key={option.value} className="report-choice report-choice--option">
                 <input
-                  type="checkbox"
+                  type="radio"
+                  name="report-smoking-period"
                   checked={form.smokingPeriodStatus === option.value}
-                  onChange={() =>
-                    update(
-                      "smokingPeriodStatus",
-                      form.smokingPeriodStatus === option.value ? "" : option.value,
-                    )
-                  }
+                  onChange={() => update("smokingPeriodStatus", option.value)}
                 />
 
                 <span className="report-choice__content">
@@ -979,14 +1003,10 @@ function ReportFormControls({
             {temperatureControlOptions.map((option) => (
               <label key={option.value} className="report-choice report-choice--option">
                 <input
-                  type="checkbox"
+                  type="radio"
+                  name="report-temperature-status"
                   checked={form.temperatureControlStatus === option.value}
-                  onChange={() =>
-                    update(
-                      "temperatureControlStatus",
-                      form.temperatureControlStatus === option.value ? "" : option.value,
-                    )
-                  }
+                  onChange={() => update("temperatureControlStatus", option.value)}
                 />
 
                 <span className="report-choice__content">
@@ -1035,8 +1055,9 @@ function ReportFormControls({
                 min={graphMinTemp}
                 max={graphMaxTemp}
                 step={1}
-                value={form.targetTemperature}
+                value={form.showTargetLine ? form.targetTemperature : ""}
                 disabled={!form.showTargetLine}
+                placeholder="เปิดค่าเป้าหมายก่อน"
                 onChange={(event) => update("targetTemperature", Number(event.target.value))}
               />
             </label>
@@ -1858,12 +1879,8 @@ function FwsSvgNotes({ y, form }: { y: number; form: ReportFormState }) {
         * ✕ ไม่สุก (ปากกาสีน้ำเงิน) / ✓ สุก (ปากกาสีแดง)   Ø ยางสุกแล้วยังไม่ออกเตา (อุ่นใช้ปากกาสีแดง) / เกณฑ์ประเมินวันรมยาง ต้องใช้ระยะเวลาการรมควันตามที่ WI กำหนด (WI-WS-06)
       </SvgText>
 
-      <SvgText x={58} y={16} size={8.1} weight={700}>
-        ** ควบคุมอุณหภูมิ: [รมควัน] 40 - 60°C, [อุ่นยาง] 35 - 40°C
-      </SvgText>
-
-      <SvgText x={590} y={16} size={7.0}>
-        (ประเมินอุณหภูมิวันที่ 3 หลังปิดเตา 2 วัน / เกณฑ์การรมควัน = ความชื้นยาง บวกลบ 1 วัน)
+      <SvgText x={58} y={16} size={7.3} weight={700}>
+        ** ควบคุมอุณหภูมิ: [รมควัน] 40 - 60°C, [อุ่นยาง] 35-40°C (ประเมินอุณหภูมิวันที่ 3 หลังปิดเตา 2 วัน/ เกณฑ์การรมควัน ความชื้นยาง บวกลบ 1 วัน)
       </SvgText>
 
       {/* ประเมินวันรมควัน: 3 ตัวเลือกตามแบบฟอร์มต้นฉบับ (WI-WS-06) */}
@@ -2169,10 +2186,16 @@ function formatReportDateTime(value: Date): string {
 }
 
 const reportPageStyles = `
+  .view-root:has(.report-page) {
+    overflow-x: hidden;
+  }
+
   .report-page {
     display: grid;
     gap: 14px;
     min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   .report-page .report-cycle-toolbar,
@@ -2256,6 +2279,16 @@ const reportPageStyles = `
     width: 100%;
     min-width: 0;
     justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .report-primary-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    min-width: 0;
   }
 
   .report-history-tabs {
@@ -2334,6 +2367,9 @@ const reportPageStyles = `
     min-height: 32px;
     padding: 6px 10px;
     flex: 0 0 auto;
+    border-color: color-mix(in srgb, #b42318 45%, var(--line));
+    color: #9f1c13;
+    background: color-mix(in srgb, #fff1f0 72%, var(--surface));
   }
 
   .report-form-controls__grid {
@@ -2443,13 +2479,13 @@ const reportPageStyles = `
 
   .report-choice__content strong {
     color: var(--ink-strong);
-    font-size: 11.5px;
+    font-size: 12px;
     line-height: 1.3;
   }
 
   .report-choice__content small {
     color: var(--muted);
-    font-size: 9.5px;
+    font-size: 10.5px;
     line-height: 1.3;
     overflow-wrap: anywhere;
   }
@@ -2499,13 +2535,13 @@ const reportPageStyles = `
   }
 
   .report-target-toggle strong {
-    font-size: 11.5px;
+    font-size: 12px;
     line-height: 1.3;
   }
 
   .report-target-toggle small {
     color: var(--muted);
-    font-size: 9.5px;
+    font-size: 10.5px;
     line-height: 1.3;
   }
 
@@ -2567,13 +2603,13 @@ const reportPageStyles = `
 
   .report-detail-card__heading strong {
     color: var(--ink-strong);
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.35;
   }
 
   .report-detail-card__heading span {
     color: var(--muted);
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1.35;
   }
 
@@ -2624,7 +2660,7 @@ const reportPageStyles = `
     max-width: 100%;
   }
 
-  .report-page input:not([type="checkbox"]),
+  .report-page input:not([type="checkbox"]):not([type="radio"]),
   .report-page select {
     width: 100%;
     min-width: 0;
@@ -2637,7 +2673,7 @@ const reportPageStyles = `
     font-size: 12px;
   }
 
-  .report-page input:not([type="checkbox"]):focus,
+  .report-page input:not([type="checkbox"]):not([type="radio"]):focus,
   .report-page select:focus {
     border-color: var(--company-primary);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--company-primary) 14%, transparent);
@@ -2651,15 +2687,18 @@ const reportPageStyles = `
   }
 
   .report-page .report-page-shell {
-    overflow: auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+    overflow-y: visible;
     padding: 14px;
     border-left: 4px solid var(--company-primary);
   }
 
   .report-page .report-page-shell .fws-svg-report {
     display: block;
-    width: min(100%, 1123px) !important;
-    max-width: 1123px !important;
+    width: 100% !important;
+    max-width: min(1123px, 100%) !important;
     height: auto !important;
     margin-inline: auto;
   }
