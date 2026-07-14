@@ -1167,14 +1167,14 @@ function FwsSvgReport({
   const mainX = 25;
   const mainY = 15;
   const mainW = 1073;
-  const mainH = 730;
+  const mainH = 748;
 
   const headerH = 75;
   const metaY = headerH;
   const metaH = 78;
   const graphY = metaY + metaH;
   const graphH = 445;
-  const noteY = graphY + graphH + 9;
+  const noteY = graphY + graphH + 18;
 
   return (
     <svg
@@ -1854,108 +1854,102 @@ function FwsSvgTemperatureGrid({
 function FwsSvgNotes({ y, form }: { y: number; form: ReportFormState }) {
   return (
     <g transform={`translate(0 ${y})`}>
-      {/* หมายเหตุด้านบน: ใช้เพียง 2 บรรทัด และไม่มีเส้นแบ่งคอลัมน์ */}
-      <SvgText x={58} y={0} size={8.1} weight={700}>
-        * ✕ ไม่สุก (ปากกาสีน้ำเงิน) / ✓ สุก (ปากกาสีแดง)   Ø ยางสุกแล้วยังไม่ออกเตา (อุ่นใช้ปากกาสีแดง)
+      <SvgText x={58} y={0} size={7.4} weight={700}>
+        * ✕ ไม่สุก (ปากกาสีน้ำเงิน) / ✓ สุก (ปากกาสีแดง)   Ø ยางสุกแล้วยังไม่ออกเตา (อุ่นใช้ปากกาสีแดง) / เกณฑ์ประเมินวันรมยาง ต้องใช้ระยะเวลาการรมควันตามที่ WI กำหนด (WI-WS-06)
       </SvgText>
 
-      <SvgText x={58} y={14} size={8.1} weight={700}>
+      <SvgText x={58} y={16} size={8.1} weight={700}>
         ** ควบคุมอุณหภูมิ: [รมควัน] 40 - 60°C, [อุ่นยาง] 35 - 40°C
       </SvgText>
 
-      {/* ข้อความด้านขวา */}
-      <SvgText x={590} y={0} size={7.6}>
-        After the 3rd day of smoking, control the temperature between 40 - 55 °C.
-      </SvgText>
-
-      <SvgText x={590} y={14} size={7.0}>
+      <SvgText x={590} y={16} size={7.0}>
         (ประเมินอุณหภูมิวันที่ 3 หลังปิดเตา 2 วัน / เกณฑ์การรมควัน = ความชื้นยาง บวกลบ 1 วัน)
       </SvgText>
 
       {/* ประเมินวันรมควัน: 3 ตัวเลือกตามแบบฟอร์มต้นฉบับ (WI-WS-06) */}
-      <SvgText x={58} y={32} size={8.8} weight={700}>
+      <SvgText x={58} y={40} size={8.8} weight={700}>
         ประเมินวันรมควัน
       </SvgText>
 
-      <FwsCheckbox x={178} y={22} size={10} checked={form.smokingPeriodStatus === "under"} />
+      <FwsCheckbox x={178} y={30} size={10} checked={form.smokingPeriodStatus === "under"} />
 
-      <SvgText x={193} y={32} size={8.5} weight={700}>
+      <SvgText x={193} y={40} size={8.5} weight={700}>
         อยู่ในเกณฑ์
       </SvgText>
 
-      <FwsCheckbox x={270} y={22} size={10} checked={form.smokingPeriodStatus === "over"} />
+      <FwsCheckbox x={270} y={30} size={10} checked={form.smokingPeriodStatus === "over"} />
 
-      <SvgText x={285} y={32} size={8} weight={700}>
+      <SvgText x={285} y={40} size={8} weight={700}>
         เกินเกณฑ์ (เกณฑ์รมควัน = ระยะเวลาการรมควันเกินที่ WI กำหนด (WI-WS-06))
       </SvgText>
 
-      <FwsCheckbox x={270} y={36} size={10} checked={form.smokingPeriodStatus === "notReached"} />
+      <FwsCheckbox x={270} y={46} size={10} checked={form.smokingPeriodStatus === "notReached"} />
 
-      <SvgText x={285} y={46} size={8} weight={700}>
+      <SvgText x={285} y={56} size={8} weight={700}>
         ไม่ถึงเกณฑ์ (เกณฑ์รมควัน = ระยะเวลาการรมควันไม่ถึงเกณฑ์ที่ WI กำหนด (WI-WS-06))
       </SvgText>
 
       {/* ประเมินอุณหภูมิ: จัดให้อยู่แถวเดียว */}
-      <SvgText x={58} y={62} size={8.8} weight={700}>
+      <SvgText x={58} y={74} size={8.8} weight={700}>
         อุณหภูมิ
       </SvgText>
 
       <FwsCheckbox
         x={178}
-        y={52}
+        y={64}
         size={10}
         checked={form.temperatureControlStatus === "underControl"}
       />
 
-      <SvgText x={193} y={62} size={8.5} weight={700}>
+      <SvgText x={193} y={74} size={8.5} weight={700}>
         อยู่ในค่าควบคุม / Under Control
       </SvgText>
 
       <FwsCheckbox
         x={405}
-        y={52}
+        y={64}
         size={10}
         checked={form.temperatureControlStatus === "outOfControl"}
       />
 
-      <SvgText x={420} y={62} size={8.5} weight={700}>
+      <SvgText x={420} y={74} size={8.5} weight={700}>
         ไม่อยู่ในค่าควบคุม / Out of Control
       </SvgText>
 
       {/* คำอธิบายสี */}
-      <SvgText x={760} y={32} size={8.4} weight={800}>
+      <SvgText x={760} y={40} size={8.4} weight={800}>
         สีน้ำเงิน = อุณหภูมิที่ต้องการ : หัวหน้างาน
       </SvgText>
 
-      <SvgText x={760} y={62} size={8.4} weight={800}>
+      <SvgText x={760} y={74} size={8.4} weight={800}>
         สีแดง = อุณหภูมิจริง : พนักงานคุมเตา
       </SvgText>
 
       {/* สาเหตุ */}
-      <SvgText x={350} y={80} size={9.2} weight={700}>
+      <SvgText x={350} y={94} size={9.2} weight={700}>
         สาเหตุ
       </SvgText>
 
-      <DottedLine x={390} y={80} width={430} />
+      <DottedLine x={390} y={94} width={430} />
 
       {form.reason ? (
-        <SvgText x={400} y={77} size={8.4}>
+        <SvgText x={400} y={91} size={8.4}>
           {form.reason}
         </SvgText>
       ) : null}
 
       {/* ลายเซ็นอยู่ภายในกรอบ */}
-      <SvgText x={290} y={100} size={9.4} weight={700}>
+      <SvgText x={290} y={116} size={9.4} weight={700}>
         ผู้รายงาน
       </SvgText>
 
-      <DottedLine x={345} y={100} width={210} />
+      <DottedLine x={345} y={116} width={210} />
 
-      <SvgText x={650} y={100} size={9.4} weight={700}>
+      <SvgText x={650} y={116} size={9.4} weight={700}>
         หัวหน้าฝ่ายผลิต
       </SvgText>
 
-      <DottedLine x={740} y={100} width={245} />
+      <DottedLine x={740} y={116} width={245} />
     </g>
   );
 }

@@ -39,13 +39,25 @@ export function createHistory(
   const latestAvailableTime = requestedEnd > now
     ? Math.min(now, Number.isFinite(lastUpdatedAt) ? lastUpdatedAt : now)
     : requestedEnd;
-  const firedAt = getSimulatedFiredAt(
-    oven.firedAt ?? oven.startedAt,
-    Math.min(latestAvailableTime, end.getTime()),
-  );
-  const firstAvailableTime = oven.firedAt
-    ? Math.max(start.getTime(), firedAt)
-    : start.getTime();
+  const requestedCycle = query.cycleNumber;
+  const isCurrentOpenCycle =
+    oven.status === "open" && requestedCycle === oven.cycleCount;
+  const isHistoricalCycle =
+    requestedCycle != null && Number.isFinite(requestedCycle) && !isCurrentOpenCycle;
+  const historicalWarmupHours = isHistoricalCycle
+    ? 8 + ((oven.number + requestedCycle) % 5)
+    : 0;
+  const firedAt = isHistoricalCycle
+    ? start.getTime() - historicalWarmupHours * 60 * 60 * 1000
+    : getSimulatedFiredAt(
+        oven.firedAt ?? oven.startedAt,
+        Math.min(latestAvailableTime, end.getTime()),
+      );
+  const firstAvailableTime = isHistoricalCycle
+    ? start.getTime()
+    : oven.firedAt
+      ? Math.max(start.getTime(), firedAt)
+      : start.getTime();
 
   for (let time = firstAvailableTime; time <= latestAvailableTime; time += stepMs) {
     const values = simulateTenMinuteAverage(companyId, oven.number, time, firedAt);
