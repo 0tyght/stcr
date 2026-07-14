@@ -620,26 +620,9 @@ export function ReportPage() {
             โหลดรายงานใหม่
           </button>
         ) : (
-          <div style={{ display: "grid", gap: 12, width: "100%" }}>
-            <div
-              style={{
-                display: "flex",
-                gap: 10,
-                flexWrap: "wrap",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <div
-                style={{
-                  display: "inline-flex",
-                  gap: 8,
-                  padding: 4,
-                  border: "1px solid var(--line)",
-                  borderRadius: 12,
-                  background: "var(--surface-soft)",
-                }}
-              >
+          <div className="report-history-panel">
+            <div className="report-history-controls">
+              <div className="report-history-tabs">
                 <button
                   className={`tab ${historicalDownloadMode === "single" ? "is-active" : ""}`}
                   type="button"
@@ -659,27 +642,8 @@ export function ReportPage() {
                 </button>
               </div>
 
-              <button
-                className="button button-dark"
-                type="button"
-                onClick={() => void loadReport()}
-                disabled={loadingReport || downloadingPdf}
-              >
-                <RefreshCw size={17} />
-                โหลดพรีวิวใหม่
-              </button>
-            </div>
-
-            {historicalDownloadMode === "single" ? (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "minmax(220px, 1fr) auto",
-                  gap: 12,
-                  alignItems: "end",
-                }}
-              >
-                <label className="field compact-field">
+              {historicalDownloadMode === "single" ? (
+                <label className="field compact-field report-cycle-field">
                   <span>เลือกรอบย้อนหลัง</span>
 
                   <select
@@ -694,7 +658,47 @@ export function ReportPage() {
                     ))}
                   </select>
                 </label>
+              ) : (
+                <>
+                  <label className="field compact-field report-cycle-field">
+                    <span>ตั้งแต่รอบที่</span>
 
+                    <select
+                      value={rangeFromCycle ?? ""}
+                      disabled={downloadingPdf}
+                      onChange={(event) => {
+                        const cycle = Number(event.target.value);
+                        setRangeFromCycle(cycle);
+                        setSelectedCycle(cycle);
+                      }}
+                    >
+                      {cycleOptions.map((cycle) => (
+                        <option key={cycle} value={cycle}>
+                          รอบ {cycle}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="field compact-field report-cycle-field">
+                    <span>ถึงรอบที่</span>
+
+                    <select
+                      value={rangeToCycle ?? ""}
+                      disabled={downloadingPdf}
+                      onChange={(event) => setRangeToCycle(Number(event.target.value))}
+                    >
+                      {cycleOptions.map((cycle) => (
+                        <option key={cycle} value={cycle}>
+                          รอบ {cycle}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              )}
+
+              {historicalDownloadMode === "single" ? (
                 <button
                   className="button button-primary"
                   type="button"
@@ -704,52 +708,7 @@ export function ReportPage() {
                   <FileDown size={17} />
                   {downloadingPdf ? "กำลังโหลด..." : "ดาวน์โหลดรอบนี้"}
                 </button>
-              </div>
-            ) : (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "minmax(160px, 1fr) minmax(160px, 1fr) auto",
-                  gap: 12,
-                  alignItems: "end",
-                }}
-              >
-                <label className="field compact-field">
-                  <span>ตั้งแต่รอบที่</span>
-
-                  <select
-                    value={rangeFromCycle ?? ""}
-                    disabled={downloadingPdf}
-                    onChange={(event) => {
-                      const cycle = Number(event.target.value);
-                      setRangeFromCycle(cycle);
-                      setSelectedCycle(cycle);
-                    }}
-                  >
-                    {cycleOptions.map((cycle) => (
-                      <option key={cycle} value={cycle}>
-                        รอบ {cycle}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="field compact-field">
-                  <span>ถึงรอบที่</span>
-
-                  <select
-                    value={rangeToCycle ?? ""}
-                    disabled={downloadingPdf}
-                    onChange={(event) => setRangeToCycle(Number(event.target.value))}
-                  >
-                    {cycleOptions.map((cycle) => (
-                      <option key={cycle} value={cycle}>
-                        รอบ {cycle}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
+              ) : (
                 <button
                   className="button button-primary"
                   type="button"
@@ -759,15 +718,25 @@ export function ReportPage() {
                   <FileArchive size={17} />
                   {downloadingPdf ? "กำลังรวม ZIP..." : `ดาวน์โหลด ZIP (${rangeCycles.length} รอบ)`}
                 </button>
-              </div>
-            )}
+              )}
+
+              <button
+                className="button button-dark report-preview-refresh"
+                type="button"
+                onClick={() => void loadReport()}
+                disabled={loadingReport || downloadingPdf}
+              >
+                <RefreshCw size={17} />
+                โหลดพรีวิวใหม่
+              </button>
+            </div>
 
             {downloadMessage ? (
-              <p style={{ margin: 0, color: "var(--ink-strong)", fontSize: 12, fontWeight: 750 }}>
+              <p className="report-history-note is-active">
                 {downloadMessage}
               </p>
             ) : (
-              <p style={{ margin: 0, color: "var(--muted)", fontSize: 12 }}>
+              <p className="report-history-note">
                 โหมดหลายรอบจะรวม PDF เป็น ZIP โดยแยก 1 ไฟล์ต่อ 1 รอบ
               </p>
             )}
@@ -1194,6 +1163,11 @@ function FwsSvgHeader({
 
   return (
     <g>
+      <defs>
+        <clipPath id="report-logo-frame-clip">
+          <rect x="1" y="1" width={logoW - 2} height={height - 2} />
+        </clipPath>
+      </defs>
       <rect x="0" y="0" width={width} height={height} fill="#ffffff" stroke="#000000" />
       <line x1={logoW} y1="0" x2={logoW} y2={height} stroke="#000000" />
       <line x1={docX} y1="0" x2={docX} y2={height} stroke="#000000" />
@@ -1207,6 +1181,7 @@ function FwsSvgHeader({
         width={logoBox.width}
         height={logoBox.height}
         preserveAspectRatio="xMidYMid meet"
+        clipPath="url(#report-logo-frame-clip)"
       />
 
       <SvgText x={logoW + titleW / 2} y={43} size={16} weight={800} anchor="middle">
@@ -1941,7 +1916,7 @@ function createPdfFilename(company: CompanyConfig, cycle: number, start: Date): 
   const date = `${String(start.getDate()).padStart(2, "0")}-${String(
     start.getMonth() + 1,
   ).padStart(2, "0")}-${start.getFullYear()}`;
-  return `${company.shortName}-รอบที่-${cycle}-${date}.pdf`;
+  return `${company.shortName}-${cycle}-${date}.pdf`;
 }
 
 function formatReportTime(value: Date): string {
@@ -2017,6 +1992,51 @@ const reportPageStyles = `
   .report-page .report-cycle-toolbar span {
     color: var(--muted);
     font-size: 12px;
+  }
+
+  .report-history-panel {
+    display: grid;
+    gap: 6px;
+    width: 100%;
+  }
+
+  .report-history-controls {
+    display: flex;
+    align-items: end;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .report-history-tabs {
+    display: inline-flex;
+    flex: 0 0 auto;
+    gap: 6px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface-soft);
+  }
+
+  .report-cycle-field {
+    flex: 0 0 150px;
+    width: 150px;
+  }
+
+  .report-preview-refresh {
+    margin-left: auto;
+    flex: 0 0 auto;
+  }
+
+  .report-history-note {
+    margin: 0;
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .report-history-note.is-active {
+    color: var(--ink-strong);
+    font-weight: 750;
   }
 
   .report-page .report-form-controls {
@@ -2352,6 +2372,10 @@ const reportPageStyles = `
   }
 
   @media (max-width: 1180px) {
+    .report-history-controls {
+      flex-wrap: wrap;
+    }
+
     .report-page .report-selection-toolbar {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
@@ -2374,6 +2398,23 @@ const reportPageStyles = `
   }
 
   @media (max-width: 820px) {
+    .report-history-tabs {
+      width: 100%;
+    }
+
+    .report-history-tabs .tab {
+      flex: 1 1 0;
+    }
+
+    .report-cycle-field {
+      flex: 1 1 140px;
+      width: auto;
+    }
+
+    .report-preview-refresh {
+      margin-left: 0;
+    }
+
     .report-form-controls__header {
       align-items: flex-start;
     }

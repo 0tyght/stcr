@@ -127,7 +127,7 @@ export const companies = {
     },
     report: {
       logo: ttnLogo,
-      logoBox: { x: 52, y: 7, width: 70, height: 62 },
+      logoBox: { x: 34.5, y: -15, width: 105, height: 105 },
     },
     mockData: {
       sourceStartIndex: 0,
