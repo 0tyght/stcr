@@ -6,21 +6,28 @@ import {
   getCompanyIdFromAccount,
 } from "./config/companies";
 import { getStoredAccountId, getStoredThemeMode } from "./config/preferences";
+import { loadRuntimeConfig } from "./config/runtime";
 import "./styles/globals.css";
 import "./styles/theme.css";
 import "./styles/auth.css";
 
-document.documentElement.dataset.uiTheme = getStoredThemeMode();
-applyCompanyTheme(getCompanyIdFromAccount(getStoredAccountId()));
+async function bootstrap() {
+  await loadRuntimeConfig();
 
-const root = document.getElementById("root");
+  document.documentElement.dataset.uiTheme = getStoredThemeMode();
+  applyCompanyTheme(getCompanyIdFromAccount(getStoredAccountId()));
 
-if (!root) {
-  throw new Error("Root element #root was not found");
+  const root = document.getElementById("root");
+
+  if (!root) {
+    throw new Error("Root element #root was not found");
+  }
+
+  createRoot(root).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
 }
 
-createRoot(root).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+void bootstrap();

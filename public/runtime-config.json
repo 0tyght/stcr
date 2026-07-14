@@ -1,0 +1,7 @@
+{
+  "dataSource": "node-red",
+  "apiBaseUrl": "https://file-superintendent-deposits-term.trycloudflare.com/stcr/api",
+  "pollIntervalMs": 5000,
+  "requestTimeoutMs": 15000,
+  "updatedAt": "2026-07-14T10:19:03.000Z"
+}

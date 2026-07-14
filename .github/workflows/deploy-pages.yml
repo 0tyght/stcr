@@ -41,7 +41,6 @@ jobs:
         env:
           GITHUB_PAGES: "true"
           VITE_DATA_SOURCE: "node-red"
-          VITE_API_BASE_URL: "https://file-superintendent-deposits-term.trycloudflare.com/stcr/api"
           VITE_REALTIME_POLL_INTERVAL_MS: "5000"
           VITE_API_TIMEOUT_MS: "15000"
 
