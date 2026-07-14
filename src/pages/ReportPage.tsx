@@ -65,6 +65,7 @@ type ReportFormState = {
   inputNetWeight: string;
   outputNetWeight: string;
   documentNo: string;
+  effectiveDate: string;
   targetTemperature: number;
   showTargetLine: boolean;
 };
@@ -77,9 +78,45 @@ const defaultReportForm: ReportFormState = {
   inputNetWeight: "",
   outputNetWeight: "",
   documentNo: "F-WS-05 Rev.11",
+  effectiveDate: "1-ธ.ค.-68",
   targetTemperature: 45,
   showTargetLine: false,
 };
+
+type SavedReportDocumentMeta = Pick<ReportFormState, "documentNo" | "effectiveDate">;
+
+function reportDocumentStorageKey(companyId: string): string {
+  return `stcr-report-document-meta:${companyId}`;
+}
+
+function readSavedReportDocumentMeta(companyId: string): SavedReportDocumentMeta | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const saved = window.localStorage.getItem(reportDocumentStorageKey(companyId));
+    if (!saved) return null;
+    const parsed = JSON.parse(saved) as Partial<SavedReportDocumentMeta>;
+    if (typeof parsed.documentNo !== "string" || typeof parsed.effectiveDate !== "string") {
+      return null;
+    }
+    return {
+      documentNo: parsed.documentNo,
+      effectiveDate: parsed.effectiveDate,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveReportDocumentMeta(companyId: string, form: ReportFormState): void {
+  window.localStorage.setItem(
+    reportDocumentStorageKey(companyId),
+    JSON.stringify({
+      documentNo: form.documentNo,
+      effectiveDate: form.effectiveDate,
+    } satisfies SavedReportDocumentMeta),
+  );
+}
 
 type RubberOption = {
   value: Exclude<RubberType, "">;
@@ -236,7 +273,10 @@ export function ReportPage() {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [downloadMessage, setDownloadMessage] = useState("");
   const [autoDownloaded, setAutoDownloaded] = useState(false);
-  const [reportForm, setReportForm] = useState<ReportFormState>(defaultReportForm);
+  const [reportForm, setReportForm] = useState<ReportFormState>(() => ({
+    ...defaultReportForm,
+    ...readSavedReportDocumentMeta(company.id),
+  }));
 
   const reportRef = useRef<SVGSVGElement | null>(null);
 
@@ -877,6 +917,7 @@ function ReportFormControls({
             onChange({
               ...defaultReportForm,
               documentNo: form.documentNo,
+              effectiveDate: form.effectiveDate,
               targetTemperature: form.targetTemperature,
               showTargetLine: false,
             })
@@ -1041,15 +1082,34 @@ function ReportFormControls({
             />
           </label>
 
+          <label className="field compact-field report-form-field">
+            <span>เริ่มใช้วันที่</span>
+            <input
+              value={form.effectiveDate}
+              readOnly={documentNoLocked}
+              aria-readonly={documentNoLocked}
+              onChange={(event) => update("effectiveDate", event.target.value)}
+              placeholder="เช่น 1-ธ.ค.-68"
+            />
+          </label>
+
           <button
             className={`button report-document-lock ${documentNoLocked ? "is-locked" : ""}`}
             type="button"
             aria-pressed={!documentNoLocked}
-            title={documentNoLocked ? "ปลดล็อกเพื่อแก้ไข Document No." : "ล็อก Document No."}
-            onClick={() => setDocumentNoLocked((locked) => !locked)}
+            title={documentNoLocked ? "ปลดล็อกเพื่อแก้ไขข้อมูลเอกสาร" : "บันทึกและล็อกข้อมูลเอกสาร"}
+            onClick={() => {
+              if (documentNoLocked) {
+                setDocumentNoLocked(false);
+                return;
+              }
+
+              saveReportDocumentMeta(company.id, form);
+              setDocumentNoLocked(true);
+            }}
           >
             {documentNoLocked ? <Lock size={16} /> : <Unlock size={16} />}
-            {documentNoLocked ? "ล็อกอยู่" : "กำลังแก้ไข"}
+            {documentNoLocked ? "ปลดล็อก" : "บันทึกและล็อก"}
           </button>
         </div>
       </div>
@@ -1199,7 +1259,7 @@ function FwsSvgHeader({
         เริ่มใช้วันที่
       </SvgText>
       <SvgText x={docX + 148} y={59} size={11} weight={800} anchor="middle">
-        1-ธ.ค.-68
+        {form.effectiveDate}
       </SvgText>
     </g>
   );
@@ -2286,7 +2346,11 @@ const reportPageStyles = `
 
   .report-form-fields {
     display: grid;
-    grid-template-columns: minmax(230px, 1.2fr) repeat(3, minmax(175px, 0.8fr));
+    grid-template-columns:
+      minmax(230px, 1.1fr)
+      minmax(175px, 0.75fr)
+      minmax(175px, 0.75fr)
+      minmax(390px, 1.4fr);
     gap: 10px;
     margin-top: 10px;
   }
@@ -2297,14 +2361,18 @@ const reportPageStyles = `
 
   .report-document-field {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 6px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr) auto;
+    gap: 8px;
     align-items: end;
     min-width: 0;
+    padding: 8px;
+    border: 1px solid color-mix(in srgb, var(--company-primary) 28%, var(--line));
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--company-primary) 5%, var(--surface-soft));
   }
 
   .report-page .report-document-lock {
-    min-width: 88px;
+    min-width: 108px;
     white-space: nowrap;
   }
 
