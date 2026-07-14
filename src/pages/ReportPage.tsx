@@ -999,7 +999,7 @@ function ReportFormControls({
         </fieldset>
 
         <fieldset className="report-form-group report-form-group--target">
-          <legend>เส้นข้อมูลในกราฟ</legend>
+          <legend>ข้อมูลที่แสดงในกราฟ</legend>
 
           <div className="report-target-row">
             <label className="report-target-toggle">
@@ -1010,8 +1010,8 @@ function ReportFormControls({
               />
 
               <span>
-                <strong>แสดงเส้นความชื้นสีส้ม</strong>
-                <small>ค่าเริ่มต้นปิด และใช้สเกลเดียวกับอุณหภูมิ</small>
+                <strong>แสดงค่าความชื้น</strong>
+                <small>ค่าเริ่มต้นปิด และใช้ช่วงตัวเลขเดียวกับอุณหภูมิ</small>
               </span>
             </label>
 
@@ -1023,8 +1023,8 @@ function ReportFormControls({
               />
 
               <span>
-                <strong>แสดงเส้นสีน้ำเงินในกราฟ</strong>
-                <small>เปิดใช้เมื่อต้องการระบุค่าเป้าหมายในเอกสาร</small>
+                <strong>แสดงค่าเป้าหมาย</strong>
+                <small>เปิดเมื่อต้องการแสดงเกณฑ์อุณหภูมิในรายงาน</small>
               </span>
             </label>
 
@@ -1044,85 +1044,101 @@ function ReportFormControls({
         </fieldset>
       </div>
 
-      <div className="report-form-fields">
-        <label className="field compact-field report-form-field report-form-field--reason">
-          <span>สาเหตุ</span>
-          <input
-            value={form.reason}
-            onChange={(event) => update("reason", event.target.value)}
-            placeholder="ระบุสาเหตุถ้ามี"
-          />
-        </label>
+      <div className="report-form-details">
+        <section className="report-detail-card report-cycle-detail-card">
+          <div className="report-detail-card__heading">
+            <strong>รายละเอียดรอบอบ</strong>
+            <span>บันทึกสาเหตุและน้ำหนักสุทธิของยาง</span>
+          </div>
 
-        <label className="field compact-field report-form-field">
-          <span>ปริมาณน้ำหนักยางเข้าเตา (Net Weight)</span>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            inputMode="decimal"
-            value={form.inputNetWeight}
-            onChange={(event) => update("inputNetWeight", event.target.value)}
-            placeholder="กิโลกรัม"
-          />
-        </label>
+          <div className="report-cycle-fields">
+            <label className="field compact-field report-form-field report-form-field--reason">
+              <span>สาเหตุ</span>
+              <input
+                value={form.reason}
+                onChange={(event) => update("reason", event.target.value)}
+                placeholder="ระบุสาเหตุถ้ามี"
+              />
+            </label>
 
-        <label className="field compact-field report-form-field">
-          <span>ปริมาณน้ำหนักยางออกเตา (Net Weight)</span>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            inputMode="decimal"
-            value={form.outputNetWeight}
-            onChange={(event) => update("outputNetWeight", event.target.value)}
-            placeholder="กิโลกรัม"
-          />
-        </label>
+            <label className="field compact-field report-form-field">
+              <span>น้ำหนักยางเข้าเตา (Net Weight)</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={form.inputNetWeight}
+                onChange={(event) => update("inputNetWeight", event.target.value)}
+                placeholder="กิโลกรัม"
+              />
+            </label>
 
-        <div className="report-document-field">
-          <label className="field compact-field report-form-field">
-            <span>Document No.</span>
-            <input
-              value={form.documentNo}
-              maxLength={80}
-              readOnly={documentNoLocked}
-              aria-readonly={documentNoLocked}
-              onChange={(event) => update("documentNo", event.target.value)}
-            />
-          </label>
+            <label className="field compact-field report-form-field">
+              <span>น้ำหนักยางออกเตา (Net Weight)</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={form.outputNetWeight}
+                onChange={(event) => update("outputNetWeight", event.target.value)}
+                placeholder="กิโลกรัม"
+              />
+            </label>
+          </div>
+        </section>
 
-          <label className="field compact-field report-form-field">
-            <span>เริ่มใช้วันที่</span>
-            <input
-              value={form.effectiveDate}
-              maxLength={40}
-              readOnly={documentNoLocked}
-              aria-readonly={documentNoLocked}
-              onChange={(event) => update("effectiveDate", event.target.value)}
-              placeholder="เช่น 1-ธ.ค.-68"
-            />
-          </label>
+        <section className="report-detail-card report-document-card">
+          <div className="report-detail-card__heading">
+            <strong>ข้อมูลเอกสาร</strong>
+            <span>ปลดล็อกเมื่อต้องการแก้ไข แล้วกดบันทึกเพื่อล็อกค่า</span>
+          </div>
 
-          <button
-            className={`button report-document-lock ${documentNoLocked ? "is-locked" : ""}`}
-            type="button"
-            aria-pressed={!documentNoLocked}
-            title={documentNoLocked ? "ปลดล็อกเพื่อแก้ไขข้อมูลเอกสาร" : "บันทึกและล็อกข้อมูลเอกสาร"}
-            onClick={() => {
-              if (documentNoLocked) {
-                setDocumentNoLocked(false);
-                return;
-              }
+          <div className="report-document-field">
+            <label className="field compact-field report-form-field">
+              <span>Document No.</span>
+              <input
+                value={form.documentNo}
+                maxLength={80}
+                readOnly={documentNoLocked}
+                aria-readonly={documentNoLocked}
+                onChange={(event) => update("documentNo", event.target.value)}
+              />
+            </label>
 
-              saveReportDocumentMeta(company.id, form);
-              setDocumentNoLocked(true);
-            }}
-          >
-            {documentNoLocked ? <Lock size={16} /> : <Unlock size={16} />}
-            {documentNoLocked ? "ปลดล็อก" : "บันทึกและล็อก"}
-          </button>
-        </div>
+            <label className="field compact-field report-form-field">
+              <span>เริ่มใช้วันที่</span>
+              <input
+                value={form.effectiveDate}
+                maxLength={40}
+                readOnly={documentNoLocked}
+                aria-readonly={documentNoLocked}
+                onChange={(event) => update("effectiveDate", event.target.value)}
+                placeholder="เช่น 1-ธ.ค.-68"
+              />
+            </label>
+
+            <button
+              className={`button report-document-lock ${documentNoLocked ? "is-locked" : ""}`}
+              type="button"
+              aria-pressed={!documentNoLocked}
+              title={documentNoLocked ? "ปลดล็อกเพื่อแก้ไขข้อมูลเอกสาร" : "บันทึกและล็อกข้อมูลเอกสาร"}
+              onClick={() => {
+                if (documentNoLocked) {
+                  setDocumentNoLocked(false);
+                  return;
+                }
+
+                saveReportDocumentMeta(company.id, form);
+                setDocumentNoLocked(true);
+              }}
+            >
+              {documentNoLocked ? <Lock size={16} /> : <Unlock size={16} />}
+              {documentNoLocked ? "ปลดล็อก" : "บันทึกและล็อก"}
+            </button>
+          </div>
+        </section>
       </div>
     </section>
   );
@@ -1750,10 +1766,10 @@ function FwsSvgTemperatureGrid({
 
       {temperatureLabels.map((slot) => {
         const value = slot.temperature ?? graphMinTemp;
-        const x = slotToX(slot.index) - 2.2;
+        const x = slotToX(slot.index);
         const pointY = tempToY(value);
-        const nearTop = pointY - chartTop < 42;
-        const labelY = pointY + (nearTop ? 4 : -4);
+        const nearTop = pointY - chartTop < 46;
+        const labelY = pointY + (nearTop ? 10 : -10);
         return (
           <text
             key={`temperature-label-${slot.index}`}
@@ -1765,6 +1781,10 @@ function FwsSvgTemperatureGrid({
             fontSize="6.7"
             fontWeight="bold"
             fill="#a31218"
+            stroke="#ffffff"
+            strokeWidth="2.4"
+            strokeLinejoin="round"
+            paintOrder="stroke"
           >
             {value.toFixed(1)}
           </text>
@@ -1773,10 +1793,10 @@ function FwsSvgTemperatureGrid({
 
       {humidityLabels.map((slot) => {
         const value = slot.humidity ?? graphMinTemp;
-        const x = slotToX(slot.index) + 3.2;
+        const x = slotToX(slot.index);
         const pointY = humidityToY(value);
-        const nearTop = pointY - chartTop < 42;
-        const labelY = pointY + (nearTop ? 4 : -4);
+        const nearTop = pointY - chartTop < 46;
+        const labelY = pointY + (nearTop ? 10 : -10);
         return (
           <text
             key={`humidity-label-${slot.index}`}
@@ -1788,6 +1808,10 @@ function FwsSvgTemperatureGrid({
             fontSize="6.7"
             fontWeight="bold"
             fill="#b45309"
+            stroke="#ffffff"
+            strokeWidth="2.4"
+            strokeLinejoin="round"
+            paintOrder="stroke"
           >
             {value.toFixed(1)}
           </text>
@@ -2515,15 +2539,50 @@ const reportPageStyles = `
     background: var(--surface-soft);
   }
 
-  .report-form-fields {
+  .report-form-details {
     display: grid;
-    grid-template-columns:
-      minmax(230px, 1.1fr)
-      minmax(175px, 0.75fr)
-      minmax(175px, 0.75fr)
-      minmax(390px, 1.4fr);
+    grid-template-columns: minmax(0, 1.45fr) minmax(390px, 0.95fr);
     gap: 10px;
     margin-top: 10px;
+  }
+
+  .report-detail-card {
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid color-mix(in srgb, var(--company-primary) 24%, var(--line));
+    border-radius: 10px;
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--company-primary) 4%, var(--surface)) 0%,
+      var(--surface-soft) 100%
+    );
+  }
+
+  .report-detail-card__heading {
+    display: grid;
+    gap: 1px;
+    margin-bottom: 9px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .report-detail-card__heading strong {
+    color: var(--ink-strong);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .report-detail-card__heading span {
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  .report-cycle-fields {
+    display: grid;
+    grid-template-columns: minmax(210px, 1.25fr) repeat(2, minmax(155px, 0.8fr));
+    gap: 9px;
+    align-items: end;
   }
 
   .report-form-field {
@@ -2536,10 +2595,6 @@ const reportPageStyles = `
     gap: 8px;
     align-items: end;
     min-width: 0;
-    padding: 8px;
-    border: 1px solid color-mix(in srgb, var(--company-primary) 28%, var(--line));
-    border-radius: 9px;
-    background: color-mix(in srgb, var(--company-primary) 5%, var(--surface-soft));
   }
 
   .report-page .report-document-lock {
@@ -2637,8 +2692,8 @@ const reportPageStyles = `
       grid-template-columns: 1fr;
     }
 
-    .report-form-fields {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+    .report-form-details {
+      grid-template-columns: 1fr;
     }
 
     .report-choice-list {
@@ -2671,8 +2726,13 @@ const reportPageStyles = `
     .report-choice-list,
     .report-choice-row--temperature,
     .report-page .report-selection-toolbar,
-    .report-form-fields {
+    .report-cycle-fields,
+    .report-document-field {
       grid-template-columns: 1fr;
+    }
+
+    .report-page .report-document-lock {
+      width: 100%;
     }
 
     .report-choice-row--rubber {
