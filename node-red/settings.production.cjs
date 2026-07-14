@@ -16,6 +16,11 @@ module.exports = {
   // stay disabled, so the tunnel cannot expose flow editing by accident.
   httpAdminRoot: false,
   httpNodeRoot: "/",
+  httpNodeCors: {
+    origin: "https://0tyght.github.io",
+    methods: "GET,POST,PUT,PATCH,OPTIONS",
+    allowedHeaders: "Content-Type,Authorization",
+  },
 
   credentialSecret: requiredEnvironment("STCR_NODE_RED_CREDENTIAL_SECRET"),
   functionExternalModules: true,
