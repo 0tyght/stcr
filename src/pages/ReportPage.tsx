@@ -1495,13 +1495,39 @@ function FwsSvgTemperatureGrid({
       )
     : "";
 
-  const temperatureLabels = selectSignificantReportLabels(
-    slots,
-    (slot) => slot.temperature,
-  );
+  const temperatureLabels = slots.filter((slot) => slot.temperature !== null);
   const humidityLabels = form.showHumidityLine
-    ? selectSignificantReportLabels(slots, (slot) => slot.humidity)
+    ? slots.filter((slot) => slot.humidity !== null)
     : [];
+
+  function getLabelPosition(
+    slot: ReportSlot,
+    value: number,
+    readValue: (item: ReportSlot) => number | null,
+    preferAbove: boolean,
+  ) {
+    const pointY = tempToY(value);
+    const previousValue = readValue(slots[Math.max(0, slot.index - 1)] ?? slot);
+    const nextValue = readValue(slots[Math.min(slots.length - 1, slot.index + 1)] ?? slot);
+    const isLocalHigh =
+      previousValue !== null && nextValue !== null && value >= previousValue && value >= nextValue;
+    const isLocalLow =
+      previousValue !== null && nextValue !== null && value <= previousValue && value <= nextValue;
+
+    let placeAbove = preferAbove;
+    if (pointY - chartTop < 24) placeAbove = false;
+    else if (chartBottom - pointY < 24) placeAbove = true;
+    else if (isLocalHigh) placeAbove = true;
+    else if (isLocalLow) placeAbove = false;
+    else placeAbove = slot.index % 2 === 0 ? preferAbove : !preferAbove;
+
+    return {
+      x: slotToX(slot.index),
+      pointY,
+      labelY: pointY + (placeAbove ? -3.2 : 3.2),
+      textAnchor: placeAbove ? "start" : "end",
+    } as const;
+  }
 
   const targetPath = form.showTargetLine
     ? buildLinePath(
@@ -1766,23 +1792,25 @@ function FwsSvgTemperatureGrid({
 
       {temperatureLabels.map((slot) => {
         const value = slot.temperature ?? graphMinTemp;
-        const x = slotToX(slot.index);
-        const pointY = tempToY(value);
-        const nearTop = pointY - chartTop < 46;
-        const labelY = pointY + (nearTop ? 10 : -10);
+        const { x, labelY, textAnchor } = getLabelPosition(
+          slot,
+          value,
+          (item) => item.temperature,
+          true,
+        );
         return (
           <text
             key={`temperature-label-${slot.index}`}
             x={x}
             y={labelY}
             transform={`rotate(-90 ${x} ${labelY})`}
-            textAnchor={nearTop ? "end" : "start"}
+            textAnchor={textAnchor}
             fontFamily="Sarabun"
-            fontSize="6.7"
+            fontSize="5.8"
             fontWeight="bold"
             fill="#a31218"
             stroke="#ffffff"
-            strokeWidth="2.4"
+            strokeWidth="1.8"
             strokeLinejoin="round"
             paintOrder="stroke"
           >
@@ -1793,23 +1821,25 @@ function FwsSvgTemperatureGrid({
 
       {humidityLabels.map((slot) => {
         const value = slot.humidity ?? graphMinTemp;
-        const x = slotToX(slot.index);
-        const pointY = humidityToY(value);
-        const nearTop = pointY - chartTop < 46;
-        const labelY = pointY + (nearTop ? 10 : -10);
+        const { x, labelY, textAnchor } = getLabelPosition(
+          slot,
+          value,
+          (item) => item.humidity,
+          false,
+        );
         return (
           <text
             key={`humidity-label-${slot.index}`}
             x={x}
             y={labelY}
             transform={`rotate(-90 ${x} ${labelY})`}
-            textAnchor={nearTop ? "end" : "start"}
+            textAnchor={textAnchor}
             fontFamily="Sarabun"
-            fontSize="6.7"
+            fontSize="5.8"
             fontWeight="bold"
             fill="#b45309"
             stroke="#ffffff"
-            strokeWidth="2.4"
+            strokeWidth="1.8"
             strokeLinejoin="round"
             paintOrder="stroke"
           >
@@ -2133,31 +2163,6 @@ function createPdfFilename(company: CompanyConfig, cycle: number, start: Date): 
   return `${company.shortName}-${cycle}-${date}.pdf`;
 }
 
-function selectSignificantReportLabels(
-  slots: ReportSlot[],
-  readValue: (slot: ReportSlot) => number | null,
-  maxLabels = 7,
-): ReportSlot[] {
-  const validSlots = slots.filter((slot) => readValue(slot) !== null);
-  if (validSlots.length <= 1) return validSlots;
-
-  const candidates = validSlots.slice(1).map((slot, index) => ({
-    slot,
-    change: Math.abs((readValue(slot) ?? 0) - (readValue(validSlots[index]) ?? 0)),
-  }));
-  candidates.sort((a, b) => b.change - a.change);
-
-  const selected: ReportSlot[] = [];
-  for (const candidate of candidates) {
-    if (selected.every((slot) => Math.abs(slot.index - candidate.slot.index) >= 4)) {
-      selected.push(candidate.slot);
-    }
-    if (selected.length >= maxLabels) break;
-  }
-
-  return selected.sort((a, b) => a.index - b.index);
-}
-
 function formatReportTime(value: Date): string {
   return `${String(value.getHours()).padStart(2, "0")}.${String(value.getMinutes()).padStart(
     2,
@@ -2172,7 +2177,7 @@ function formatReportDateTime(value: Date): string {
 const reportPageStyles = `
   .report-page {
     display: grid;
-    gap: 12px;
+    gap: 14px;
     min-width: 0;
   }
 
@@ -2180,44 +2185,46 @@ const reportPageStyles = `
   .report-page .report-selection-toolbar,
   .report-page .report-form-controls,
   .report-page .report-page-shell {
-    border: 1px solid var(--line);
-    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--company-primary) 18%, var(--line));
+    border-radius: 14px;
     background: var(--surface);
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.07);
   }
 
   .report-page .report-cycle-toolbar {
     margin: 0;
-    padding: 11px 14px;
-    border-top: 3px solid var(--company-primary);
+    padding: 14px 16px;
+    border-left: 4px solid var(--company-primary);
     align-items: center;
-    gap: 14px;
+    gap: 18px;
   }
 
   .report-page .report-selection-toolbar {
     display: grid;
-    grid-template-columns: minmax(210px, 1fr) repeat(3, minmax(150px, 0.7fr));
-    gap: 10px;
+    grid-template-columns: minmax(190px, 0.78fr) repeat(3, minmax(160px, 1fr));
+    gap: 12px;
     align-items: end;
     margin: 0;
-    padding: 11px 14px;
-    border-top: 3px solid var(--company-primary);
+    padding: 14px 16px;
+    border-left: 4px solid var(--company-primary);
   }
 
   .report-selection-toolbar__heading {
     display: grid;
     align-self: center;
-    gap: 2px;
+    gap: 3px;
+    padding-right: 16px;
+    border-right: 1px solid var(--line);
   }
 
   .report-selection-toolbar__heading strong {
     color: var(--ink-strong);
-    font-size: 14px;
+    font-size: 15px;
   }
 
   .report-selection-toolbar__heading span {
     color: var(--muted);
-    font-size: 11.5px;
+    font-size: 11px;
   }
 
   .report-page .report-cycle-toolbar > div:first-child {
@@ -2263,8 +2270,8 @@ const reportPageStyles = `
     gap: 6px;
     padding: 4px;
     border: 1px solid var(--line);
-    border-radius: 10px;
-    background: var(--surface-soft);
+    border-radius: 11px;
+    background: color-mix(in srgb, var(--company-primary) 4%, var(--surface-soft));
   }
 
   .report-cycle-field {
@@ -2296,8 +2303,9 @@ const reportPageStyles = `
 
   .report-page .report-form-controls {
     margin: 0;
-    padding: 12px;
-    border-top: 3px solid var(--company-primary);
+    padding: 16px;
+    border-left: 4px solid var(--company-primary);
+    background: color-mix(in srgb, var(--company-primary) 2.5%, var(--surface));
   }
 
   .report-form-controls__header {
@@ -2305,8 +2313,8 @@ const reportPageStyles = `
     align-items: center;
     justify-content: space-between;
     gap: 14px;
-    margin-bottom: 10px;
-    padding-bottom: 10px;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
     border-bottom: 1px solid var(--line);
   }
 
@@ -2318,7 +2326,7 @@ const reportPageStyles = `
 
   .report-form-controls__heading strong {
     color: var(--ink-strong);
-    font-size: 14px;
+    font-size: 15px;
     line-height: 1.35;
   }
 
@@ -2336,30 +2344,28 @@ const reportPageStyles = `
 
   .report-form-controls__grid {
     display: grid;
-    grid-template-columns: minmax(250px, 0.82fr) minmax(460px, 1.6fr);
-    gap: 10px;
-    align-items: start;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    align-items: stretch;
   }
 
   .report-form-group {
     min-width: 0;
-    align-self: start;
+    align-self: stretch;
     margin: 0;
-    padding: 9px 10px 10px;
-    border: 1px solid color-mix(in srgb, var(--company-primary) 22%, var(--line));
-    border-radius: 10px;
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in srgb, var(--company-primary) 5%, var(--surface)) 0%,
-        var(--surface-soft) 100%
-      );
+    padding: 12px 12px 13px;
+    border: 1px solid color-mix(in srgb, var(--company-primary) 20%, var(--line));
+    border-top: 2px solid color-mix(in srgb, var(--company-primary) 48%, var(--line));
+    border-radius: 12px;
+    background: var(--surface);
   }
 
   .report-form-group legend {
-    padding: 0 5px;
+    padding: 0 7px;
     color: var(--ink-strong);
-    font-size: 12px;
+    border-radius: 6px;
+    background: var(--surface);
+    font-size: 12.5px;
     font-weight: 800;
     line-height: 1.2;
   }
@@ -2378,7 +2384,7 @@ const reportPageStyles = `
 
   .report-choice-row--rubber {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
   }
 
   .report-choice-row--temperature {
@@ -2414,8 +2420,8 @@ const reportPageStyles = `
     align-items: center;
     justify-content: center;
     gap: 7px;
-    min-height: 34px;
-    padding: 6px 8px;
+    min-height: 42px;
+    padding: 8px 10px;
     border: 1px solid var(--line);
     border-radius: 8px;
     background: var(--surface);
@@ -2428,8 +2434,8 @@ const reportPageStyles = `
     display: flex;
     align-items: flex-start;
     gap: 7px;
-    min-height: 46px;
-    padding: 7px 8px;
+    min-height: 52px;
+    padding: 9px 10px;
     border: 1px solid var(--line);
     border-radius: 8px;
     background: var(--surface);
@@ -2459,7 +2465,9 @@ const reportPageStyles = `
   .report-target-toggle:has(input:checked) {
     border-color: color-mix(in srgb, var(--company-primary) 65%, var(--line));
     background: color-mix(in srgb, var(--company-primary) 10%, var(--surface));
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--company-primary) 16%, transparent);
+    box-shadow:
+      inset 3px 0 0 var(--company-primary),
+      0 0 0 1px color-mix(in srgb, var(--company-primary) 16%, transparent);
   }
 
   .report-form-group--target {
@@ -2481,8 +2489,8 @@ const reportPageStyles = `
     align-items: flex-start;
     gap: 8px;
     min-width: 0;
-    min-height: 46px;
-    padding: 7px 9px;
+    min-height: 52px;
+    padding: 9px 10px;
     border: 1px solid var(--line);
     border-radius: 8px;
     background: var(--surface);
@@ -2541,21 +2549,18 @@ const reportPageStyles = `
 
   .report-form-details {
     display: grid;
-    grid-template-columns: minmax(0, 1.45fr) minmax(390px, 0.95fr);
-    gap: 10px;
-    margin-top: 10px;
+    grid-template-columns: minmax(0, 1.35fr) minmax(390px, 1fr);
+    gap: 12px;
+    margin-top: 12px;
   }
 
   .report-detail-card {
     min-width: 0;
-    padding: 10px;
+    padding: 12px;
     border: 1px solid color-mix(in srgb, var(--company-primary) 24%, var(--line));
-    border-radius: 10px;
-    background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--company-primary) 4%, var(--surface)) 0%,
-      var(--surface-soft) 100%
-    );
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: inset 0 3px 0 color-mix(in srgb, var(--company-primary) 26%, transparent);
   }
 
   .report-detail-card__heading {
@@ -2631,8 +2636,8 @@ const reportPageStyles = `
     min-width: 0;
     max-width: 100%;
     box-sizing: border-box;
-    min-height: 34px;
-    padding: 6px 9px;
+    min-height: 38px;
+    padding: 7px 10px;
     border-color: var(--line);
     border-radius: 8px;
     font-size: 12px;
@@ -2653,8 +2658,8 @@ const reportPageStyles = `
 
   .report-page .report-page-shell {
     overflow: auto;
-    padding: 10px;
-    border-top: 3px solid var(--company-primary);
+    padding: 14px;
+    border-left: 4px solid var(--company-primary);
   }
 
   .report-page .report-page-shell .fws-svg-report {
