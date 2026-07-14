@@ -7,16 +7,17 @@ type OvenSeed = {
   cycleCount: number;
   updatedMinutesAgo: number;
   readings: Record<SensorKey, number>;
+  firedHoursAgo?: number;
   startedHoursAgo?: number;
   stoppedHoursAgo?: number;
 };
 
 export function createDefaultLimits(): LimitMap {
   return {
-    chamberTemp: { sensor: "chamberTemp", lower: 30, upper: 60 },
-    humidity: { sensor: "humidity", lower: 45, upper: 70 },
-    furnaceTemp: { sensor: "furnaceTemp", lower: 140, upper: 450 },
-    blowerTemp: { sensor: "blowerTemp", lower: 140, upper: 450 },
+    chamberTemp: { sensor: "chamberTemp", lower: 35, upper: 60 },
+    humidity: { sensor: "humidity", lower: 45, upper: 85 },
+    furnaceTemp: { sensor: "furnaceTemp", lower: 450, upper: 550 },
+    blowerTemp: { sensor: "blowerTemp", lower: 330, upper: 400 },
   };
 }
 
@@ -151,6 +152,29 @@ const seeds: OvenSeed[] = [
   },
 ];
 
+const ttnSeeds: OvenSeed[] = [
+  { number: 1, status: "open", cycleCount: 42, updatedMinutesAgo: 0, firedHoursAgo: 1,
+    readings: { chamberTemp: 29, humidity: 80, furnaceTemp: 0, blowerTemp: 0 } },
+  { number: 2, status: "open", cycleCount: 38, updatedMinutesAgo: 0, firedHoursAgo: 23, startedHoursAgo: 15,
+    readings: { chamberTemp: 56, humidity: 79, furnaceTemp: 490, blowerTemp: 355 } },
+  { number: 3, status: "closed", cycleCount: 51, updatedMinutesAgo: 0, stoppedHoursAgo: 11,
+    readings: { chamberTemp: 30, humidity: 68, furnaceTemp: 0, blowerTemp: 0 } },
+  { number: 4, status: "open", cycleCount: 46, updatedMinutesAgo: 0, firedHoursAgo: 45, startedHoursAgo: 37,
+    readings: { chamberTemp: 56, humidity: 78, furnaceTemp: 490, blowerTemp: 355 } },
+  { number: 5, status: "closed", cycleCount: 33, updatedMinutesAgo: 0, stoppedHoursAgo: 13,
+    readings: { chamberTemp: 30, humidity: 68, furnaceTemp: 0, blowerTemp: 0 } },
+  { number: 6, status: "open", cycleCount: 55, updatedMinutesAgo: 0, firedHoursAgo: 67, startedHoursAgo: 59,
+    readings: { chamberTemp: 56, humidity: 75, furnaceTemp: 490, blowerTemp: 355 } },
+  { number: 7, status: "offline", cycleCount: 29, updatedMinutesAgo: 42, stoppedHoursAgo: 15,
+    readings: { chamberTemp: 30, humidity: 68, furnaceTemp: 0, blowerTemp: 0 } },
+  { number: 8, status: "open", cycleCount: 48, updatedMinutesAgo: 0, firedHoursAgo: 89, startedHoursAgo: 81,
+    readings: { chamberTemp: 56, humidity: 70, furnaceTemp: 490, blowerTemp: 355 } },
+  { number: 9, status: "closed", cycleCount: 36, updatedMinutesAgo: 0, stoppedHoursAgo: 17,
+    readings: { chamberTemp: 30, humidity: 68, furnaceTemp: 0, blowerTemp: 0 } },
+  { number: 10, status: "open", cycleCount: 44, updatedMinutesAgo: 0, firedHoursAgo: 111, startedHoursAgo: 103,
+    readings: { chamberTemp: 56, humidity: 64, furnaceTemp: 490, blowerTemp: 355 } },
+];
+
 export function createSensorSnapshot(
   readings: Record<SensorKey, number>,
   updatedAt: string,
@@ -167,13 +191,20 @@ export function createSensorSnapshot(
   }, {} as SensorSnapshot);
 }
 
-export function createMockOvens(now = new Date()): Oven[] {
-  return seeds.map((seed) => {
+export function createMockOvens(companyId = "gr", now = new Date()): Oven[] {
+  const companySeeds = companyId === "ttn" ? ttnSeeds : seeds;
+
+  return companySeeds.map((seed) => {
     const updatedAt = new Date(now.getTime() - seed.updatedMinutesAgo * 60 * 1000).toISOString();
 
     const startedAt = seed.startedHoursAgo
       ? new Date(now.getTime() - seed.startedHoursAgo * 60 * 60 * 1000).toISOString()
       : undefined;
+    const firedAt = seed.firedHoursAgo
+      ? new Date(now.getTime() - seed.firedHoursAgo * 60 * 60 * 1000).toISOString()
+      : startedAt
+        ? new Date(Date.parse(startedAt) - 8 * 60 * 60 * 1000).toISOString()
+        : undefined;
 
     const stoppedAt = seed.stoppedHoursAgo
       ? new Date(now.getTime() - seed.stoppedHoursAgo * 60 * 60 * 1000).toISOString()
@@ -188,6 +219,8 @@ export function createMockOvens(now = new Date()): Oven[] {
       status: seed.status,
       enabled: true,
       cycleCount: seed.cycleCount,
+      firedAt,
+      reportStartedAt: startedAt,
       startedAt,
       stoppedAt,
       lastUpdatedAt: updatedAt,
@@ -204,42 +237,7 @@ export function createMockOvens(now = new Date()): Oven[] {
 
 export function deriveOvenStatus(oven: Oven): OvenStatus {
   if (oven.status === "offline") return "offline";
-  return oven.startedAt && !oven.stoppedAt ? "open" : "closed";
-}
-
-export function advanceOvenReadings(oven: Oven, now = new Date()): Oven {
-  if (oven.status === "offline" || oven.status === "closed") {
-    return oven;
-  }
-
-  const drift = (sensor: SensorKey, spread: number) => {
-    const phase = (now.getTime() / 1000 + oven.number * 19) / 30;
-    const wave = Math.sin(phase) * spread + Math.cos(phase / 2) * (spread / 2);
-    const previous = oven.readings[sensor].value;
-
-    return Number((previous + wave * 0.08).toFixed(1));
-  };
-
-  const readings = createSensorSnapshot(
-    {
-      chamberTemp: drift("chamberTemp", 1.5),
-      humidity: drift("humidity", 1.2),
-      furnaceTemp: drift("furnaceTemp", 14),
-      blowerTemp: Math.max(0, drift("blowerTemp", 4)),
-    },
-    now.toISOString(),
-  );
-
-  const nextOven: Oven = {
-    ...oven,
-    lastUpdatedAt: now.toISOString(),
-    readings,
-  };
-
-  return {
-    ...nextOven,
-    status: deriveOvenStatus(nextOven),
-  };
+  return (oven.firedAt || oven.startedAt) && !oven.stoppedAt ? "open" : "closed";
 }
 
 export function createNewOven(number: number): Oven {

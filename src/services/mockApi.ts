@@ -1,10 +1,11 @@
 import { createHistory } from "../data/mockHistory";
 import {
-  advanceOvenReadings,
   createMockOvens,
   createNewOven,
+  createSensorSnapshot,
   deriveOvenStatus,
 } from "../data/mockOvens";
+import { getSimulatedFiredAt, simulateSensorValues } from "../data/simulationModel";
 import type {
   Alarm,
   AlarmFilter,
@@ -22,7 +23,10 @@ import { DEFAULT_ACCOUNT_ID, getCurrentCompany } from "../config/companies";
 import { ACCOUNT_STORAGE_KEY, getStoredAccountId } from "../config/preferences";
 import type { AppApi } from "./api/contracts";
 
-let ovens: Oven[] = createMockOvens();
+const ovensByCompany: Record<string, Oven[]> = {
+  gr: createMockOvens("gr"),
+  ttn: createMockOvens("ttn"),
+};
 
 let auditEvents: AuditEvent[] = [
   {
@@ -92,8 +96,10 @@ function getCurrentAccount(): string {
 }
 
 function getVisibleOvens(): Oven[] {
-  const profile = getCurrentCompany().mockData;
-  const visible = ovens.slice(
+  const company = getCurrentCompany();
+  const profile = company.mockData;
+  const companyOvens = ovensByCompany[company.id] ?? ovensByCompany.gr;
+  const visible = companyOvens.slice(
     profile.sourceStartIndex,
     profile.count == null ? undefined : profile.sourceStartIndex + profile.count,
   );
@@ -102,6 +108,19 @@ function getVisibleOvens(): Oven[] {
     const displayNumber = profile.displayNumberStart == null
       ? oven.number
       : profile.displayNumberStart + index;
+    const now = Date.now();
+    const sampleTime = Math.floor(now / 5000) * 5000;
+    const updatedAt = oven.status === "offline"
+      ? oven.lastUpdatedAt
+      : new Date(sampleTime).toISOString();
+    const simulatedValues = oven.status === "open"
+      ? simulateSensorValues(
+          company.id,
+          displayNumber,
+          sampleTime,
+          getSimulatedFiredAt(oven.firedAt ?? oven.startedAt, sampleTime),
+        )
+      : { chamberTemp: 30, humidity: 68, furnaceTemp: 0, blowerTemp: 0 };
 
     return {
       ...oven,
@@ -109,9 +128,17 @@ function getVisibleOvens(): Oven[] {
       name: `เตา ${displayNumber}`,
       zone: profile.zone ?? oven.zone,
       line: profile.line ?? oven.line,
+      lastUpdatedAt: updatedAt,
+      readings: createSensorSnapshot(simulatedValues, updatedAt),
     };
   });
 }
+
+function updateCurrentCompanyOvens(update: (items: Oven[]) => Oven[]): void {
+  const companyId = getCurrentCompany().id;
+  ovensByCompany[companyId] = update(ovensByCompany[companyId] ?? []);
+}
+
 function getVisibleOvenIds(): Set<string> {
   return new Set(getVisibleOvens().map((oven) => oven.id));
 }
@@ -214,7 +241,7 @@ export const mockApi: AppApi = {
   async getHistory(query: HistoryQuery): Promise<TimeSeriesPoint[]> {
     const oven = getOvenOrThrow(query.ovenId);
 
-    return wait(createHistory(query, oven), 160);
+    return wait(createHistory(query, oven, getCurrentCompany().id), 160);
   },
 
   async getAlarms(filter?: AlarmFilter): Promise<Alarm[]> {
@@ -238,7 +265,9 @@ export const mockApi: AppApi = {
       status: deriveOvenStatus(updated),
     };
 
-    ovens = ovens.map((item) => (item.id === ovenId ? withStatus : item));
+    updateCurrentCompanyOvens((items) =>
+      items.map((item) => (item.id === ovenId ? withStatus : item)),
+    );
 
     pushAudit("เปลี่ยนค่า Limit", oven.name, "บันทึกค่า Upper/Lower Limit ใหม่");
 
@@ -258,7 +287,9 @@ export const mockApi: AppApi = {
       status: deriveOvenStatus(updated),
     };
 
-    ovens = ovens.map((item) => (item.id === ovenId ? withStatus : item));
+    updateCurrentCompanyOvens((items) =>
+      items.map((item) => (item.id === ovenId ? withStatus : item)),
+    );
 
     pushAudit("แก้ไขข้อมูลเตา", withStatus.name, "ปรับข้อมูลชื่อเตา โซน หรือไลน์");
 
@@ -266,10 +297,12 @@ export const mockApi: AppApi = {
   },
 
   async addOven(): Promise<Oven> {
-    const nextNumber = Math.max(...ovens.map((oven) => oven.number)) + 1;
+    const companyId = getCurrentCompany().id;
+    const companyOvens = ovensByCompany[companyId] ?? [];
+    const nextNumber = Math.max(0, ...companyOvens.map((oven) => oven.number)) + 1;
     const oven = createNewOven(nextNumber);
 
-    ovens = [...ovens, oven];
+    ovensByCompany[companyId] = [...companyOvens, oven];
 
     pushAudit("เพิ่มเตาใหม่", oven.name, "เพิ่มเตาใหม่สำหรับรองรับการขยายระบบ");
 
@@ -277,10 +310,6 @@ export const mockApi: AppApi = {
   },
 
   async getRealtimeOvens(): Promise<Oven[]> {
-    const now = new Date();
-
-    ovens = ovens.map((oven) => advanceOvenReadings(oven, now));
-
     return wait(getVisibleOvens(), 60);
   },
 
@@ -298,6 +327,7 @@ export const mockApi: AppApi = {
         sensors,
       },
       getOvenOrThrow(ovenId),
+      getCurrentCompany().id,
     );
 
     const header = ["timestamp", ...sensors];

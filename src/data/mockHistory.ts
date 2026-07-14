@@ -1,10 +1,6 @@
-import type { HistoryQuery, Oven, SensorKey, TimeSeriesPoint } from "../types";
+import type { HistoryQuery, Oven, TimeSeriesPoint } from "../types";
 import { REPORT_CYCLE_MS } from "../utils/reportCycle";
-
-function seededNoise(seed: number): number {
-  const x = Math.sin(seed) * 10000;
-  return x - Math.floor(x);
-}
+import { getSimulatedFiredAt, simulateTenMinuteAverage } from "./simulationModel";
 
 function getRange(query: HistoryQuery): { start: Date; end: Date; stepMs: number } {
   const now = new Date();
@@ -23,38 +19,18 @@ function getRange(query: HistoryQuery): { start: Date; end: Date; stepMs: number
   })();
 
   const duration = end.getTime() - start.getTime();
-  const stepMs =
-    duration > 14 * 24 * 60 * 60 * 1000
-      ? 60 * 60 * 1000
-      : duration > 3 * 24 * 60 * 60 * 1000
-        ? 15 * 60 * 1000
-        : 5 * 60 * 1000;
+  const stepMs = duration > 14 * 24 * 60 * 60 * 1000
+    ? 60 * 60 * 1000
+    : 10 * 60 * 1000;
 
   return { start, end, stepMs };
 }
 
-function valueFor(sensor: SensorKey, oven: Oven, index: number, seed: number): number {
-  const base = oven.readings[sensor].value || 0;
-  const noise = seededNoise(seed + index * 13 + oven.number) - 0.5;
-  const wave = Math.sin(index / 9 + oven.number) + Math.cos(index / 21);
-
-  switch (sensor) {
-    case "chamberTemp":
-      return clamp(base + wave * 2.2 + noise * 1.3, 24, 78);
-    case "humidity":
-      return clamp(base + wave * 4 + noise * 2.5, 30, 86);
-    case "furnaceTemp":
-      return clamp(base + Math.abs(wave) * 70 + noise * 24, 20, 560);
-    case "blowerTemp":
-      return clamp(base + wave * 7 + noise * 5, 0, 120);
-  }
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Number(Math.min(max, Math.max(min, value)).toFixed(1));
-}
-
-export function createHistory(query: HistoryQuery, oven: Oven): TimeSeriesPoint[] {
+export function createHistory(
+  query: HistoryQuery,
+  oven: Oven,
+  companyId = "gr",
+): TimeSeriesPoint[] {
   const { start, end, stepMs } = getRange(query);
   const points: TimeSeriesPoint[] = [];
   const now = Date.now();
@@ -63,17 +39,20 @@ export function createHistory(query: HistoryQuery, oven: Oven): TimeSeriesPoint[
   const latestAvailableTime = requestedEnd > now
     ? Math.min(now, Number.isFinite(lastUpdatedAt) ? lastUpdatedAt : now)
     : requestedEnd;
-  let index = 0;
+  const firedAt = getSimulatedFiredAt(
+    oven.firedAt ?? oven.startedAt,
+    Math.min(latestAvailableTime, end.getTime()),
+  );
+  const firstAvailableTime = oven.firedAt
+    ? Math.max(start.getTime(), firedAt)
+    : start.getTime();
 
-  for (let time = start.getTime(); time <= latestAvailableTime; time += stepMs) {
+  for (let time = firstAvailableTime; time <= latestAvailableTime; time += stepMs) {
+    const values = simulateTenMinuteAverage(companyId, oven.number, time, firedAt);
     points.push({
       timestamp: new Date(time).toISOString(),
-      chamberTemp: valueFor("chamberTemp", oven, index, 11),
-      humidity: valueFor("humidity", oven, index, 23),
-      furnaceTemp: valueFor("furnaceTemp", oven, index, 37),
-      blowerTemp: valueFor("blowerTemp", oven, index, 41),
+      ...values,
     });
-    index += 1;
   }
 
   return points;
