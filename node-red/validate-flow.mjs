@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -47,6 +48,27 @@ assert.equal(
 const state = globalApi.get("stcrState");
 assert.ok(state, "Simulator must initialize stcrState");
 assert.deepEqual(Object.keys(state.companies).sort(), ["gr", "ttn"]);
+const gatewayContextMap = new Map();
+const gatewayContext = {
+  get: (key) => gatewayContextMap.get(key),
+  set: (key, value) => gatewayContextMap.set(key, value),
+};
+const runGateway = new Function("msg", "context", "global", "node", gatewaySource);
+const gatewaySample = structuredClone(telemetryOutputs[0][0]);
+const acceptedGatewaySample = runGateway(gatewaySample, gatewayContext, globalApi, node);
+assert.ok(acceptedGatewaySample, "Known telemetry source must pass gateway identity checks");
+assert.equal(
+  runGateway(structuredClone(telemetryOutputs[0][0]), gatewayContext, globalApi, node),
+  null,
+  "Repeated sensor sequence must be rejected as replay",
+);
+const spoofedGatewaySample = structuredClone(telemetryOutputs[0][0]);
+spoofedGatewaySample.payload.ovenId = "oven-999";
+assert.equal(
+  runGateway(spoofedGatewaySample, gatewayContext, globalApi, node),
+  null,
+  "Unknown oven identity must be rejected",
+);
 const grState = state.companies.gr;
 const ttnState = state.companies.ttn;
 grState.alarms.push({
@@ -118,49 +140,83 @@ const contextApi = {
   get: (key) => functionContext.get(key),
   set: (key, value) => functionContext.set(key, value),
 };
-const env = { get: () => undefined };
+const testPassword = "contract-test-password";
+const testSalt = Buffer.from("00112233445566778899aabbccddeeff", "hex");
+const testHash = crypto.pbkdf2Sync(testPassword, testSalt, 100000, 32, "sha256").toString("hex");
+const authUsers = JSON.stringify({
+  gr_dev_admin: {
+    companyId: "gr",
+    passwordHash: `pbkdf2$sha256$100000$${testSalt.toString("hex")}$${testHash}`,
+  },
+  ttn_dev_admin: {
+    companyId: "ttn",
+    passwordHash: `pbkdf2$sha256$100000$${testSalt.toString("hex")}$${testHash}`,
+  },
+});
+const envValues = new Map([
+  ["STCR_AUTH_USERS_JSON", authUsers],
+  ["STCR_ALLOWED_ORIGINS", "http://127.0.0.1:5173"],
+]);
+const env = { get: (key) => envValues.get(key) };
 const mysql = { createPool: () => { throw new Error("Database disabled in contract test"); } };
-const runRouter = new AsyncFunction("msg", "flow", "global", "node", "context", "env", "mysql", routerSource);
+const runRouter = new AsyncFunction(
+  "msg", "flow", "global", "node", "context", "env", "mysql", "crypto", routerSource,
+);
+const callRouter = (request) => runRouter(request, flow, globalApi, node, contextApi, env, mysql, crypto);
 
-const health = await runRouter(
+const health = await callRouter(
   { req: { method: "GET", path: "/stcr/api/health", query: {} } },
-  flow,
-  globalApi,
-  node, contextApi, env, mysql,
 );
 assert.equal(health.statusCode, 200);
 assert.equal(health.payload.ok, true);
-assert.deepEqual(health.payload.sources.sort(), ["gr", "ttn"]);
+assert.equal(health.payload.sources, undefined, "Public health response must not expose tenant names");
 
-const ovens = await runRouter(
-  { req: { method: "GET", path: "/stcr/api/ovens", query: {} } },
-  flow,
-  globalApi,
-  node, contextApi, env, mysql,
+const unauthorized = await callRouter(
+  { req: { method: "GET", path: "/stcr/api/ovens", query: {}, headers: {} } },
+);
+assert.equal(unauthorized.statusCode, 401);
+
+const login = await callRouter({
+  req: { method: "POST", path: "/stcr/api/auth/login", query: {}, headers: {} },
+  payload: { username: "gr_dev_admin", password: testPassword },
+});
+assert.equal(login.statusCode, 200);
+assert.equal(login.payload.companyId, "gr");
+assert.match(login.payload.token, /^[a-f0-9]{64}$/);
+const grAuthHeaders = { authorization: `Bearer ${login.payload.token}` };
+
+const ttnLogin = await callRouter({
+  req: { method: "POST", path: "/stcr/api/auth/login", query: {}, headers: {} },
+  payload: { username: "ttn_dev_admin", password: testPassword },
+});
+const ttnAuthHeaders = { authorization: `Bearer ${ttnLogin.payload.token}` };
+
+const ovens = await callRouter(
+  { req: { method: "GET", path: "/stcr/api/ovens", query: {}, headers: grAuthHeaders } },
 );
 assert.equal(ovens.payload.length, 16);
 
-const ttnOvens = await runRouter(
-  { req: { method: "GET", path: "/stcr/api/ovens", query: { companyId: "ttn" }, headers: {} } },
-  flow,
-  globalApi,
-  node, contextApi, env, mysql,
+const ttnOvens = await callRouter(
+  { req: { method: "GET", path: "/stcr/api/ovens", query: { companyId: "ttn" }, headers: ttnAuthHeaders } },
 );
 assert.equal(ttnOvens.payload.length, 10);
 assert.equal(ttnOvens.payload[0].number, 1);
 assert.equal(ttnOvens.payload[0].zone, "TTN");
 
-const history = await runRouter(
+const tenantEscape = await callRouter(
+  { req: { method: "GET", path: "/stcr/api/ovens", query: { companyId: "ttn" }, headers: grAuthHeaders } },
+);
+assert.equal(tenantEscape.statusCode, 403, "Authenticated GR user must not access TTN");
+
+const history = await callRouter(
   {
     req: {
       method: "GET",
       path: "/stcr/api/ovens/oven-18/history",
-      query: {},
+      query: { cycleNumber: "83" },
+      headers: grAuthHeaders,
     },
   },
-  flow,
-  globalApi,
-  node, contextApi, env, mysql,
 );
 assert.ok(history.payload.length > 10);
 assert.deepEqual(
@@ -170,6 +226,8 @@ assert.deepEqual(
 
 const requiredPaths = [
   "/stcr/api/health",
+  "/stcr/api/auth/login",
+  "/stcr/api/auth/logout",
   "/stcr/api/ovens",
   "/stcr/api/ovens/:ovenId/history",
   "/stcr/api/alarms",
@@ -191,6 +249,11 @@ assert.deepEqual(
 const persistenceNode = flows.find((item) => item.id === "stcr-db-persistence");
 assert.ok(persistenceNode, "Flow must include MariaDB persistence");
 assert.deepEqual(persistenceNode.libs, [{ var: "mysql", module: "mysql2/promise" }]);
+const apiRouterNode = flows.find((item) => item.id === "stcr-api-router");
+assert.deepEqual(apiRouterNode.libs, [
+  { var: "mysql", module: "mysql2/promise" },
+  { var: "crypto", module: "crypto" },
+]);
 assert.match(persistenceSource, /INSERT INTO sensor_readings/);
 assert.match(persistenceSource, /included_in_report/);
 assert.match(persistenceSource, /INSERT INTO telemetry_events/);

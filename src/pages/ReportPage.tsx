@@ -85,6 +85,10 @@ const defaultReportForm: ReportFormState = {
 
 type SavedReportDocumentMeta = Pick<ReportFormState, "documentNo" | "effectiveDate">;
 
+function normalizeDocumentMetaValue(value: string, maxLength: number): string {
+  return value.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, maxLength);
+}
+
 function reportDocumentStorageKey(companyId: string): string {
   return `stcr-report-document-meta:${companyId}`;
 }
@@ -100,8 +104,8 @@ function readSavedReportDocumentMeta(companyId: string): SavedReportDocumentMeta
       return null;
     }
     return {
-      documentNo: parsed.documentNo,
-      effectiveDate: parsed.effectiveDate,
+      documentNo: normalizeDocumentMetaValue(parsed.documentNo, 80),
+      effectiveDate: normalizeDocumentMetaValue(parsed.effectiveDate, 40),
     };
   } catch {
     return null;
@@ -112,8 +116,8 @@ function saveReportDocumentMeta(companyId: string, form: ReportFormState): void 
   window.localStorage.setItem(
     reportDocumentStorageKey(companyId),
     JSON.stringify({
-      documentNo: form.documentNo,
-      effectiveDate: form.effectiveDate,
+      documentNo: normalizeDocumentMetaValue(form.documentNo, 80),
+      effectiveDate: normalizeDocumentMetaValue(form.effectiveDate, 40),
     } satisfies SavedReportDocumentMeta),
   );
 }
@@ -642,10 +646,10 @@ export function ReportPage() {
       />
 
       <section className="panel report-filter report-cycle-toolbar">
-        <div>
-          <strong>{oven.name}</strong>
+        <div className="report-download-summary">
+          <strong>ดาวน์โหลดรายงาน</strong>
           <span>
-            {formatReportDateTime(cycleRange.start)} ถึง {formatReportDateTime(cycleRange.end)}
+            {oven.name} · รอบ {selectedCycle} · {formatReportDateTime(cycleRange.start)} ถึง {formatReportDateTime(cycleRange.end)}
           </span>
         </div>
 
@@ -669,7 +673,7 @@ export function ReportPage() {
                   onClick={() => setHistoricalDownloadMode("single")}
                   disabled={downloadingPdf}
                 >
-                  โหลดไฟล์เดียว
+                  PDF รอบเดียว
                 </button>
 
                 <button
@@ -678,27 +682,11 @@ export function ReportPage() {
                   onClick={() => setHistoricalDownloadMode("range")}
                   disabled={downloadingPdf}
                 >
-                  โหลดหลายรอบเป็น ZIP
+                  ZIP หลายรอบ
                 </button>
               </div>
 
-              {historicalDownloadMode === "single" ? (
-                <label className="field compact-field report-cycle-field">
-                  <span>เลือกรอบย้อนหลัง</span>
-
-                  <select
-                    value={selectedCycle}
-                    disabled={downloadingPdf}
-                    onChange={(event) => setSelectedCycle(Number(event.target.value))}
-                  >
-                    {cycleOptions.map((cycle) => (
-                      <option key={cycle} value={cycle}>
-                        รอบ {cycle}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : (
+              {historicalDownloadMode === "range" ? (
                 <>
                   <label className="field compact-field report-cycle-field">
                     <span>ตั้งแต่รอบที่</span>
@@ -736,7 +724,7 @@ export function ReportPage() {
                     </select>
                   </label>
                 </>
-              )}
+              ) : null}
 
               {historicalDownloadMode === "single" ? (
                 <button
@@ -746,7 +734,7 @@ export function ReportPage() {
                   disabled={downloadingPdf || loadingReport}
                 >
                   <FileDown size={17} />
-                  {downloadingPdf ? "กำลังโหลด..." : "ดาวน์โหลดรอบนี้"}
+                  {downloadingPdf ? "กำลังโหลด..." : `ดาวน์โหลด PDF รอบ ${selectedCycle}`}
                 </button>
               ) : (
                 <button
@@ -775,9 +763,13 @@ export function ReportPage() {
               <p className="report-history-note is-active">
                 {downloadMessage}
               </p>
+            ) : historicalDownloadMode === "single" ? (
+              <p className="report-history-note report-filename-preview">
+                ชื่อไฟล์: <strong>{createPdfFilename(company, selectedCycle, cycleRange.start)}</strong>
+              </p>
             ) : (
               <p className="report-history-note">
-                โหมดหลายรอบจะรวม PDF เป็น ZIP โดยแยก 1 ไฟล์ต่อ 1 รอบ
+                เลือกช่วงรอบที่ต้องการ ระบบจะรวม PDF เป็น ZIP โดยแยก 1 ไฟล์ต่อ 1 รอบ
               </p>
             )}
           </div>
@@ -1076,6 +1068,7 @@ function ReportFormControls({
             <span>Document No.</span>
             <input
               value={form.documentNo}
+              maxLength={80}
               readOnly={documentNoLocked}
               aria-readonly={documentNoLocked}
               onChange={(event) => update("documentNo", event.target.value)}
@@ -1086,6 +1079,7 @@ function ReportFormControls({
             <span>เริ่มใช้วันที่</span>
             <input
               value={form.effectiveDate}
+              maxLength={40}
               readOnly={documentNoLocked}
               aria-readonly={documentNoLocked}
               onChange={(event) => update("effectiveDate", event.target.value)}
@@ -1244,8 +1238,11 @@ function FwsSvgHeader({
         clipPath="url(#report-logo-frame-clip)"
       />
 
-      <SvgText x={logoW + titleW / 2} y={43} size={16} weight={800} anchor="middle">
+      <SvgText x={logoW + titleW / 2} y={32} size={15} weight={800} anchor="middle">
         รายงานการตรวจสอบอุณหภูมิเตา
+      </SvgText>
+      <SvgText x={logoW + titleW / 2} y={52} size={11.5} weight={700} anchor="middle">
+        Smoking Temperature Control Report
       </SvgText>
 
       <SvgText x={docX + docW / 2} y={17} size={10} weight={800} anchor="middle">
@@ -1973,9 +1970,11 @@ function formatReportDate(value: Date): string {
 }
 
 function createPdfFilename(company: CompanyConfig, cycle: number, start: Date): string {
-  const date = `${String(start.getDate()).padStart(2, "0")}-${String(
+  // Windows reserves the ASCII slash for paths. The fraction slash keeps the requested
+  // DD/MM/YYYY appearance while remaining a valid downloaded filename on every platform.
+  const date = `${String(start.getDate()).padStart(2, "0")}⁄${String(
     start.getMonth() + 1,
-  ).padStart(2, "0")}-${start.getFullYear()}`;
+  ).padStart(2, "0")}⁄${start.getFullYear()}`;
   return `${company.shortName}-${cycle}-${date}.pdf`;
 }
 
@@ -2011,6 +2010,8 @@ const reportPageStyles = `
     margin: 0;
     padding: 11px 14px;
     border-top: 3px solid var(--company-primary);
+    align-items: center;
+    gap: 14px;
   }
 
   .report-page .report-selection-toolbar {
@@ -2044,6 +2045,11 @@ const reportPageStyles = `
     gap: 2px;
   }
 
+  .report-download-summary {
+    flex: 0 1 430px;
+    min-width: 260px;
+  }
+
   .report-page .report-cycle-toolbar strong {
     color: var(--ink-strong);
     font-size: 14px;
@@ -2057,7 +2063,9 @@ const reportPageStyles = `
   .report-history-panel {
     display: grid;
     gap: 6px;
-    width: 100%;
+    flex: 1 1 680px;
+    width: auto;
+    min-width: 0;
   }
 
   .report-history-controls {
@@ -2066,6 +2074,7 @@ const reportPageStyles = `
     gap: 8px;
     width: 100%;
     min-width: 0;
+    justify-content: flex-end;
   }
 
   .report-history-tabs {
@@ -2092,6 +2101,12 @@ const reportPageStyles = `
     margin: 0;
     color: var(--muted);
     font-size: 11px;
+    text-align: right;
+  }
+
+  .report-filename-preview strong {
+    color: var(--ink-strong);
+    font-weight: 800;
   }
 
   .report-history-note.is-active {
@@ -2440,8 +2455,18 @@ const reportPageStyles = `
   }
 
   @media (max-width: 1180px) {
+    .report-download-summary,
+    .report-history-panel {
+      flex-basis: 100%;
+    }
+
     .report-history-controls {
       flex-wrap: wrap;
+      justify-content: flex-start;
+    }
+
+    .report-history-note {
+      text-align: left;
     }
 
     .report-page .report-selection-toolbar {

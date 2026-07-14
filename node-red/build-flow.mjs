@@ -28,6 +28,8 @@ const sensorLanes = [
 
 const endpoints = [
   ["get", "/stcr/api/health", "ตรวจสอบสถานะระบบ"],
+  ["post", "/stcr/api/auth/login", "เข้าสู่ระบบและออก Session"],
+  ["post", "/stcr/api/auth/logout", "ออกจากระบบและยกเลิก Session"],
   ["get", "/stcr/api/ovens", "ข้อมูลเตาทั้งหมด"],
   ["get", "/stcr/api/ovens/:ovenId", "รายละเอียดเตา"],
   ["get", "/stcr/api/ovens/:ovenId/history", "ข้อมูลย้อนหลัง"],
@@ -278,7 +280,10 @@ const nodes = [
     x: 560,
     y: 480,
     wires: [[responseId]],
-    libs: [{ var: "mysql", module: "mysql2/promise" }],
+    libs: [
+      { var: "mysql", module: "mysql2/promise" },
+      { var: "crypto", module: "crypto" },
+    ],
   }),
   {
     id: responseId,

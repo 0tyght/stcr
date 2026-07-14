@@ -17,11 +17,13 @@ import {
 export function LoginPage({
   onLogin,
 }: {
-  onLogin: (username: string) => void;
+  onLogin: (username: string, password: string) => Promise<void>;
 }) {
   const [username, setUsername] = useState(() => getStoredAccountId());
   const [password, setPassword] = useState("");
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => getStoredThemeMode("company"));
+  const [loginError, setLoginError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const companyId = useMemo(() => getCompanyIdFromAccount(username), [username]);
   const company = useMemo(() => getCompany(companyId), [companyId]);
@@ -34,13 +36,21 @@ export function LoginPage({
     localStorage.setItem(ACCOUNT_STORAGE_KEY, username);
   }, [companyId, themeMode, username]);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     localStorage.setItem(ACCOUNT_STORAGE_KEY, username);
     localStorage.setItem(THEME_STORAGE_KEY, themeMode);
 
-    onLogin(username);
+    setLoginError("");
+    setSubmitting(true);
+    try {
+      await onLogin(username, password);
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "เข้าสู่ระบบไม่สำเร็จ");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function toggleTheme() {
@@ -107,12 +117,15 @@ export function LoginPage({
             type="password"
             placeholder="กรอกรหัสผ่าน"
             autoComplete="current-password"
+            required
           />
         </label>
 
-        <button className="button button-primary login-simple-submit" type="submit">
+        {loginError ? <p className="login-error" role="alert">{loginError}</p> : null}
+
+        <button className="button button-primary login-simple-submit" type="submit" disabled={submitting}>
           <LogIn size={18} />
-          เข้าสู่ระบบ
+          {submitting ? "กำลังตรวจสอบ..." : "เข้าสู่ระบบ"}
         </button>
       </form>
     </main>

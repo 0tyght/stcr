@@ -11,6 +11,24 @@ if (!telemetry || typeof telemetry !== "object") {
   return null;
 }
 
+const requiredIds = ["companyId", "ovenId", "deviceId", "sensorId", "batchId"];
+const invalidId = requiredIds.some((key) =>
+  typeof telemetry[key] !== "string" ||
+  !telemetry[key].trim() ||
+  telemetry[key].length > 160 ||
+  /[\u0000-\u001f\u007f]/.test(telemetry[key])
+);
+const sequence = Number(telemetry.sequence);
+const rootState = global.get("stcrState");
+const companyState = rootState?.companies?.[telemetry.companyId];
+const knownOven = companyState?.ovens?.some((oven) => oven.id === telemetry.ovenId);
+const expectedTopic = `stcr/${telemetry.companyId}/${telemetry.ovenId}/telemetry/${telemetry.sensorKey}`;
+
+if (invalidId || !Number.isSafeInteger(sequence) || sequence < 0 || !knownOven || msg.topic !== expectedTopic) {
+  node.warn(`Dropped telemetry with invalid source identity: ${msg.topic || "unknown topic"}`);
+  return null;
+}
+
 const rule = physicalRanges[telemetry.sensorKey];
 const value = Number(telemetry.value);
 const sourceTime = Date.parse(telemetry.sourceTimestamp);
@@ -20,6 +38,14 @@ if (!rule || !Number.isFinite(value) || !Number.isFinite(sourceTime)) {
   node.warn(`Dropped malformed telemetry: ${msg.topic || "unknown topic"}`);
   return null;
 }
+
+const sequenceKey = `lastSequence:${telemetry.companyId}:${telemetry.sensorId}`;
+const lastSequence = context.get(sequenceKey);
+if (Number.isSafeInteger(lastSequence) && sequence <= lastSequence) {
+  node.warn(`Dropped replayed telemetry: ${telemetry.sensorId} seq ${sequence}`);
+  return null;
+}
+context.set(sequenceKey, sequence);
 
 let quality = "good";
 const qualityReasons = [];

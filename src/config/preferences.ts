@@ -3,7 +3,6 @@ import { accountList, DEFAULT_ACCOUNT_ID } from "./companies";
 export type ThemeMode = "dark" | "company";
 
 export const ACCOUNT_STORAGE_KEY = "stcr-account";
-export const AUTH_STORAGE_KEY = "stcr-authenticated";
 export const THEME_STORAGE_KEY = "stcr-theme-mode";
 
 export function getStoredAccountId(): string {

@@ -1,17 +1,19 @@
 # Node-RED API Contract
 
-Company data is isolated in separate source state. The frontend sends `companyId`, and each company can use a separate Node-RED URL configured in `src/config/companies.ts`.
+Company data is isolated in separate source state. Each authenticated session is bound to exactly one company. The server never uses a client-supplied company id as proof of access.
 
 Frontend ใช้ REST polling เป็นฐานก่อน โดยเรียกค่าปัจจุบันทุก `VITE_REALTIME_POLL_INTERVAL_MS` ข้อมูลทุกรายการต้องเป็น JSON และ timestamp ต้องเป็น ISO 8601 เช่น `2026-07-12T08:30:00.000+07:00`
 
 Base path ตัวอย่าง: `http://127.0.0.1:1880/stcr/api`
 
-Frontend ส่ง `companyId` query parameter ทุก request เพื่อให้ backend แยกข้อมูลบริษัท เช่น `gr` หรือ `ttn` และ backend อาจรองรับ header `X-Company-Id` เพิ่มเติมได้ เมื่อเพิ่มบริษัทใหม่ต้องเพิ่ม company id เดียวกันใน backend ด้วย
+Frontend ส่ง `Authorization: Bearer <session token>` ทุก request ส่วน `companyId` ที่ส่งมาใช้ตรวจความสอดคล้องเท่านั้น ถ้าไม่ตรงกับบริษัทใน session ระบบตอบ `403` ทันที
 
 ## Endpoint
 
 | Method | Path | หน้าที่ |
 | --- | --- | --- |
+| POST | `/auth/login` | ตรวจรหัสผ่านและออก session ที่ผูกกับบริษัท |
+| POST | `/auth/logout` | ยกเลิก session ปัจจุบัน |
 | GET | `/ovens` | สถานะและค่าล่าสุดของทุกเตา |
 | GET | `/ovens/:ovenId` | ข้อมูลเตาเดียว |
 | GET | `/ovens/:ovenId/history` | ข้อมูลกราฟตามรอบ/ช่วงเวลา |
@@ -83,3 +85,7 @@ Frontend ส่ง `companyId` query parameter ทุก request เพื่อ
 - Node-RED ต้องตอบภายใน `VITE_API_TIMEOUT_MS`
 - เปิด CORS เฉพาะ origin ที่ใช้งานจริง หรือใช้ reverse proxy ให้ frontend และ API อยู่ origin เดียวกัน
 - ไม่ใส่ credential, token หรือรหัสผ่านลง payload/frontend environment เพราะตัวแปร `VITE_*` มองเห็นได้จาก browser
+- ทุก endpoint ยกเว้น `/health`, `/auth/login` และ `OPTIONS` ต้องใช้ Bearer token
+- Session หมดอายุอัตโนมัติและถูกเก็บในหน่วยความจำ Node-RED การ restart จะบังคับให้ Login ใหม่
+- History จำกัดช่วงคำขอไม่เกิน 14 วันและผลลัพธ์ไม่เกิน 10,000 จุด
+- API จำกัดขนาด body, จำนวน request, ค่า Limit, ความยาวข้อความ และ sensor key

@@ -1,6 +1,7 @@
 import { runtimeConfig } from "../../config/runtime";
 import { getCurrentCompany } from "../../config/companies";
 import { ApiError } from "./errors";
+import { clearAuthSession, readAuthSession } from "../auth";
 
 type RequestOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
@@ -25,11 +26,13 @@ async function request(path: string, options: RequestOptions = {}, query?: URLSe
   );
 
   try {
+    const session = readAuthSession();
     const response = await fetch(createUrl(path, query), {
       ...options,
       body: options.body == null ? undefined : JSON.stringify(options.body),
       headers: {
         Accept: "application/json",
+        ...(session ? { Authorization: `Bearer ${session.token}` } : {}),
         ...(options.body == null ? {} : { "Content-Type": "application/json" }),
         ...options.headers,
       },
@@ -37,6 +40,10 @@ async function request(path: string, options: RequestOptions = {}, query?: URLSe
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        clearAuthSession();
+        window.dispatchEvent(new Event("stcr-auth-expired"));
+      }
       throw new ApiError(`Node-RED ตอบกลับด้วยสถานะ ${response.status}`, {
         status: response.status,
         code: "HTTP_ERROR",

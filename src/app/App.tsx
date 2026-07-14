@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "../components/layout/AppLayout";
 import { LoadingState } from "../components/ui/LoadingState";
@@ -6,9 +6,9 @@ import { LoginPage } from "../pages/LoginPage";
 import { AppDataProvider } from "./providers";
 import {
   ACCOUNT_STORAGE_KEY,
-  AUTH_STORAGE_KEY,
   THEME_STORAGE_KEY,
 } from "../config/preferences";
+import { login, logout, readAuthSession } from "../services/auth";
 
 const DashboardPage = lazy(() =>
   import("../pages/DashboardPage").then((module) => ({
@@ -42,18 +42,24 @@ const SettingPage = lazy(() =>
 
 export function App() {
   const [authenticated, setAuthenticated] = useState(
-    () => localStorage.getItem(AUTH_STORAGE_KEY) === "true",
+    () => readAuthSession() !== null,
   );
 
-  function handleLogin(username: string) {
-    localStorage.setItem(AUTH_STORAGE_KEY, "true");
-    localStorage.setItem(ACCOUNT_STORAGE_KEY, username);
+  useEffect(() => {
+    const expireSession = () => setAuthenticated(false);
+    window.addEventListener("stcr-auth-expired", expireSession);
+    return () => window.removeEventListener("stcr-auth-expired", expireSession);
+  }, []);
+
+  async function handleLogin(username: string, password: string) {
+    const session = await login(username, password);
+    localStorage.setItem(ACCOUNT_STORAGE_KEY, session.username);
     window.location.hash = "/";
     setAuthenticated(true);
   }
 
   function handleLogout() {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
+    void logout();
     localStorage.removeItem(ACCOUNT_STORAGE_KEY);
     localStorage.removeItem(THEME_STORAGE_KEY);
     setAuthenticated(false);
