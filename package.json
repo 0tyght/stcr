@@ -12,6 +12,8 @@
     "node-red:validate": "node node-red/validate-flow.mjs",
     "node-red:reseed-current": "node node-red/reseed-current-simulation.mjs",
     "node-red:reseed-simulation": "node node-red/reseed-current-simulation.mjs",
+    "db:backup": "powershell -ExecutionPolicy Bypass -File ./scripts/backup-database.ps1",
+    "db:secure": "powershell -ExecutionPolicy Bypass -File ./scripts/secure-test-database.ps1",
     "public:start": "powershell -ExecutionPolicy Bypass -File ./scripts/start-public-test.ps1",
     "public:stop": "powershell -ExecutionPolicy Bypass -File ./scripts/stop-public-test.ps1"
   },

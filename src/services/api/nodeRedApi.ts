@@ -6,6 +6,7 @@ import type {
   LimitMap,
   Oven,
   OvenUpdateInput,
+  ReportDocumentMeta,
   SensorKey,
   TimeSeriesPoint,
 } from "../../types";
@@ -61,6 +62,12 @@ export const nodeRedApi: AppApi = {
   getAlarms: (filter?: AlarmFilter) =>
     requestArray<Alarm>("/alarms", alarmQueryParams(filter)),
   getAuditEvents: () => requestArray<AuditEvent>("/audit-events"),
+  getReportDocumentMeta: () => requestJson<ReportDocumentMeta>("/report-document-meta"),
+  saveReportDocumentMeta: (meta: ReportDocumentMeta) =>
+    requestJson<ReportDocumentMeta>("/report-document-meta", {
+      method: "PUT",
+      body: meta,
+    }),
   saveLimits: (ovenId: string, limits: LimitMap) =>
     requestJson<Oven>(`/ovens/${encodeURIComponent(ovenId)}/limits`, {
       method: "PUT",

@@ -192,7 +192,8 @@ const reportDayCount = 10;
 const reportSlotCount = reportDayCount * timeSlots.length;
 
 const graphMinTemp = 30;
-const graphMaxTemp = 65;
+const temperatureGraphMax = 65;
+const humidityGraphMax = 100;
 
 const svgWidth = 1123;
 const svgHeight = 794;
@@ -287,6 +288,25 @@ export function ReportPage() {
   }));
 
   const reportRef = useRef<SVGSVGElement | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    void apiClient
+      .getReportDocumentMeta()
+      .then((saved) => {
+        if (!active || !saved.documentNo || !saved.effectiveDate) return;
+        setReportForm((current) => ({ ...current, ...saved }));
+        saveReportDocumentMeta(company.id, { ...defaultReportForm, ...saved });
+      })
+      .catch(() => {
+        // Local storage remains the offline fallback during public testing.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [company.id]);
 
   const cycleOptions = useMemo(() => {
     if (!oven) return [];
@@ -917,6 +937,7 @@ function ReportFormControls({
   onChange: (next: ReportFormState) => void;
 }) {
   const [documentNoLocked, setDocumentNoLocked] = useState(true);
+  const [documentSaveMessage, setDocumentSaveMessage] = useState("");
   const rubberOptions = getRubberOptions(company);
   function update<Key extends keyof ReportFormState>(key: Key, value: ReportFormState[Key]) {
     onChange({
@@ -1053,7 +1074,7 @@ function ReportFormControls({
               <input
                 type="number"
                 min={graphMinTemp}
-                max={graphMaxTemp}
+                max={temperatureGraphMax}
                 step={1}
                 value={form.showTargetLine ? form.targetTemperature : ""}
                 disabled={!form.showTargetLine}
@@ -1145,20 +1166,41 @@ function ReportFormControls({
               type="button"
               aria-pressed={!documentNoLocked}
               title={documentNoLocked ? "ปลดล็อกเพื่อแก้ไขข้อมูลเอกสาร" : "บันทึกและล็อกข้อมูลเอกสาร"}
-              onClick={() => {
+              onClick={async () => {
                 if (documentNoLocked) {
                   setDocumentNoLocked(false);
                   return;
                 }
 
                 saveReportDocumentMeta(company.id, form);
-                setDocumentNoLocked(true);
+                try {
+                  const saved = await apiClient.saveReportDocumentMeta({
+                    documentNo: normalizeDocumentMetaValue(form.documentNo, 80),
+                    effectiveDate: normalizeDocumentMetaValue(form.effectiveDate, 40),
+                  });
+                  saveReportDocumentMeta(company.id, { ...form, ...saved });
+                  onChange({ ...form, ...saved });
+                  setDocumentNoLocked(true);
+                  setDocumentSaveMessage("บันทึกข้อมูลเอกสารลงฐานข้อมูลแล้ว");
+                } catch (error) {
+                  setDocumentNoLocked(false);
+                  setDocumentSaveMessage(
+                    error instanceof Error
+                      ? `บันทึกข้อมูลเอกสารไม่สำเร็จ: ${error.message}`
+                      : "บันทึกข้อมูลเอกสารไม่สำเร็จ",
+                  );
+                }
               }}
             >
               {documentNoLocked ? <Lock size={16} /> : <Unlock size={16} />}
               {documentNoLocked ? "ปลดล็อก" : "บันทึกและล็อก"}
             </button>
           </div>
+          {documentSaveMessage ? (
+            <span className="report-document-save-message" role="status">
+              {documentSaveMessage}
+            </span>
+          ) : null}
         </section>
       </div>
     </section>
@@ -1485,14 +1527,15 @@ function FwsSvgTemperatureGrid({
   const chartRight = width;
   const cellW = chartW / reportSlotCount;
 
-  const tempToY = (value: number) => {
-    const clamped = Math.max(graphMinTemp, Math.min(graphMaxTemp, value));
-    return chartTop + ((graphMaxTemp - clamped) / (graphMaxTemp - graphMinTemp)) * chartH;
+  const graphMax = form.showHumidityLine ? humidityGraphMax : temperatureGraphMax;
+
+  const valueToY = (value: number) => {
+    const clamped = Math.max(graphMinTemp, Math.min(graphMax, value));
+    return chartTop + ((graphMax - clamped) / (graphMax - graphMinTemp)) * chartH;
   };
 
-  const humidityToY = (value: number) => {
-    return tempToY(value);
-  };
+  const tempToY = valueToY;
+  const humidityToY = valueToY;
 
   const slotToX = (index: number) => left + (index + 0.5) * cellW;
 
@@ -1526,8 +1569,9 @@ function FwsSvgTemperatureGrid({
     value: number,
     readValue: (item: ReportSlot) => number | null,
     preferAbove: boolean,
+    toY: (nextValue: number) => number = tempToY,
   ) {
-    const pointY = tempToY(value);
+    const pointY = toY(value);
     const previousValue = readValue(slots[Math.max(0, slot.index - 1)] ?? slot);
     const nextValue = readValue(slots[Math.min(slots.length - 1, slot.index + 1)] ?? slot);
     const isLocalHigh =
@@ -1662,8 +1706,8 @@ function FwsSvgTemperatureGrid({
           );
         })}
 
-      {Array.from({ length: graphMaxTemp - graphMinTemp + 1 }).map((_, index) => {
-        const temp = graphMaxTemp - index;
+      {Array.from({ length: graphMax - graphMinTemp + 1 }).map((_, index) => {
+        const temp = graphMax - index;
         const lineY = tempToY(temp);
         const isFive = temp % 5 === 0;
         const isMajor = temp === 40 || temp === 60;
@@ -1682,7 +1726,7 @@ function FwsSvgTemperatureGrid({
             {isFive ? (
               <SvgText
                 x={left - 7}
-                y={temp === graphMaxTemp ? lineY + 9.5 : temp === graphMinTemp ? lineY - 2.5 : lineY + 3.2}
+                y={temp === graphMax ? lineY + 9.5 : temp === graphMinTemp ? lineY - 2.5 : lineY + 3.2}
                 size={9.5}
                 weight={700}
                 anchor="end"
@@ -1847,6 +1891,7 @@ function FwsSvgTemperatureGrid({
           value,
           (item) => item.humidity,
           false,
+          humidityToY,
         );
         return (
           <text
@@ -1880,7 +1925,7 @@ function FwsSvgNotes({ y, form }: { y: number; form: ReportFormState }) {
       </SvgText>
 
       <SvgText x={58} y={16} size={7.3} weight={700}>
-        ** ควบคุมอุณหภูมิ: [รมควัน] 40 - 60°C, [อุ่นยาง] 35-40°C (ประเมินอุณหภูมิวันที่ 3 หลังปิดเตา 2 วัน/ เกณฑ์การรมควัน ความชื้นยาง บวกลบ 1 วัน)
+        ** ควบคุมอุณหภูมิ: [รมควัน] 40 - 60°C, [อุ่นยาง] 35-40°C   (ประเมินอุณหภูมิวันที่ 3 หลังปิดเตา 2 วัน/ เกณฑ์การรมควัน ความชื้นยาง บวกลบ 1 วัน)
       </SvgText>
 
       {/* ประเมินวันรมควัน: 3 ตัวเลือกตามแบบฟอร์มต้นฉบับ (WI-WS-06) */}
@@ -2089,15 +2134,21 @@ function buildReportSlots({
     }))
     .filter((point) => Number.isFinite(point.time) && Number.isFinite(point.value));
 
+  // The F-WS-05 columns are fixed at 08:00, 11:00, ... 05:00. Anchor the
+  // sampling dates to 08:00 local time so the printed labels and sampled data
+  // always refer to the same timestamp, even when a cycle starts mid-day.
+  const firstSlot = new Date(start);
+  firstSlot.setHours(8, 0, 0, 0);
+
   return Array.from({ length: reportSlotCount }, (_, index) => {
-    const date = new Date(start.getTime() + index * 3 * 60 * 60 * 1000);
+    const date = new Date(firstSlot.getTime() + index * 3 * 60 * 60 * 1000);
     const closestTemperature = findClosestPoint(indexedTemperaturePoints, date.getTime());
     const closestHumidity = findClosestPoint(indexedHumidityPoints, date.getTime());
 
     return {
       index,
       dayIndex: Math.floor(index / timeSlots.length),
-      timeLabel: timeSlots[index % timeSlots.length],
+      timeLabel: formatReportTime(date),
       date,
       temperature: closestTemperature ? closestTemperature.value : null,
       humidity: closestHumidity ? closestHumidity.value : null,
@@ -2640,6 +2691,13 @@ const reportPageStyles = `
   .report-page .report-document-lock.is-locked {
     border-color: color-mix(in srgb, var(--company-primary) 55%, var(--line));
     background: color-mix(in srgb, var(--company-primary) 10%, var(--surface));
+  }
+
+  .report-document-save-message {
+    display: block;
+    margin-top: 7px;
+    color: var(--muted);
+    font-size: 11px;
   }
 
   .report-page input[readonly] {

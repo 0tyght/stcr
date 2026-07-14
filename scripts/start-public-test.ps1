@@ -99,6 +99,16 @@ if (-not (Test-Port 3306)) {
 
 Import-RequiredEnvironment
 
+$backupScript = Join-Path $PSScriptRoot 'backup-database.ps1'
+$backupDir = Join-Path $root 'backups'
+$latestBackup = Get-ChildItem $backupDir -Filter 'stcr-*.sql' -ErrorAction SilentlyContinue |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 1
+if (-not $latestBackup -or $latestBackup.LastWriteTime.Date -lt (Get-Date).Date) {
+  Write-Host 'Creating the daily database backup...' -ForegroundColor DarkGray
+  & $backupScript
+}
+
 $existingNodeRed = Get-StcrProcesses 'node.exe' '*node-red*settings.production.cjs*'
 if ($existingNodeRed.Count -gt 0 -and (Test-LocalHealth)) {
   $nodeRedProcess = Get-Process -Id $existingNodeRed[0].ProcessId

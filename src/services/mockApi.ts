@@ -14,6 +14,7 @@ import type {
   LimitMap,
   Oven,
   OvenUpdateInput,
+  ReportDocumentMeta,
   SensorKey,
   TimeSeriesPoint,
 } from "../types";
@@ -46,6 +47,11 @@ let auditEvents: AuditEvent[] = [
     detail: "ระบบตรวจพบข้อมูลล่าช้าเกิน 10 นาที",
   },
 ];
+
+let reportDocumentMeta: ReportDocumentMeta = {
+  documentNo: "F-WS-05 Rev.11",
+  effectiveDate: "1-ธ.ค.-68",
+};
 
 const historicalAlarms: Alarm[] = [
   {
@@ -250,6 +256,15 @@ export const mockApi: AppApi = {
 
   async getAuditEvents(): Promise<AuditEvent[]> {
     return wait(auditEvents);
+  },
+
+  async getReportDocumentMeta(): Promise<ReportDocumentMeta> {
+    return wait(reportDocumentMeta);
+  },
+
+  async saveReportDocumentMeta(meta: ReportDocumentMeta): Promise<ReportDocumentMeta> {
+    reportDocumentMeta = { ...meta };
+    return wait(reportDocumentMeta);
   },
 
   async saveLimits(ovenId: string, limits: LimitMap): Promise<Oven> {

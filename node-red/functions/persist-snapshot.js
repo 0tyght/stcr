@@ -35,6 +35,17 @@ async function persistArchivedCycle(connection, companyId, oven, limits, cycle, 
   const backfillKey = `dbArchive:${companyId}:${oven.id}:${cycle.cycleNumber}:${cycle.firedAt}`;
   if (context.get(backfillKey)) return;
 
+  // Always repair the report boundary before deciding that an archived cycle
+  // already has enough data. Older seeded rows may share the cycle id but sit
+  // outside the official report window.
+  await connection.execute(
+    `UPDATE sensor_readings
+     SET included_in_report=FALSE,
+         cycle_phase=CASE WHEN recorded_at<? THEN 'ignition' ELSE 'cooldown' END
+     WHERE cycle_id=? AND (recorded_at<? OR recorded_at>?)`,
+    [cycle.reportStartedAt, cycleId, cycle.reportStartedAt, cycle.stoppedAt],
+  );
+
   const [existingRows] = await connection.execute(
     `SELECT COUNT(*) AS pointCount FROM sensor_readings WHERE cycle_id=? AND included_in_report=TRUE`,
     [cycleId],
@@ -43,14 +54,6 @@ async function persistArchivedCycle(connection, companyId, oven, limits, cycle, 
     completedBackfills.push(backfillKey);
     return;
   }
-
-  await connection.execute(
-    `UPDATE sensor_readings
-     SET included_in_report=FALSE,
-         cycle_phase=CASE WHEN recorded_at<? THEN 'ignition' ELSE 'cooldown' END
-     WHERE cycle_id=? AND (recorded_at<? OR recorded_at>?)`,
-    [cycle.reportStartedAt, cycleId, cycle.reportStartedAt, cycle.stoppedAt],
-  );
 
   const firedAtMs = Date.parse(cycle.firedAt);
   const startMs = Date.parse(cycle.reportStartedAt);
@@ -99,11 +102,14 @@ const persistenceLockKey = `stcrDbPersisting:${persistenceScope}`;
 if (context.get(persistenceLockKey)) return null;
 context.set(persistenceLockKey, true);
 
-let connection;
-const completedBackfills = [];
+const maxPersistenceAttempts = 3;
 
-try {
-  connection = await pool.getConnection();
+for (let attempt = 1; attempt <= maxPersistenceAttempts; attempt += 1) {
+  let connection;
+  const completedBackfills = [];
+
+  try {
+    connection = await pool.getConnection();
   await connection.query("SET time_zone = '+00:00'");
   await connection.beginTransaction();
 
@@ -314,16 +320,26 @@ try {
     }
   }
 
-  await connection.commit();
-  completedBackfills.forEach((key) => context.set(key, true));
-  node.status({ fill: "green", shape: "dot", text: `DB ${snapshot.capturedAt}` });
-} catch (error) {
-  if (connection) await connection.rollback();
-  node.status({ fill: "red", shape: "ring", text: `DB ${error.code || "error"}` });
-  node.error(`STCR database persistence failed: ${error.message}`, msg);
-} finally {
-  connection?.release();
-  context.set(persistenceLockKey, false);
+    await connection.commit();
+    completedBackfills.forEach((key) => context.set(key, true));
+    node.status({ fill: "green", shape: "dot", text: `DB ${snapshot.capturedAt}` });
+    break;
+  } catch (error) {
+    if (connection) await connection.rollback();
+    const retryable = error.code === "ER_LOCK_DEADLOCK" || error.errno === 1213;
+    if (retryable && attempt < maxPersistenceAttempts) {
+      node.warn(`Database deadlock; retrying persistence (${attempt}/${maxPersistenceAttempts})`);
+      await new Promise((resolve) => setTimeout(resolve, attempt * 250));
+      continue;
+    }
+    node.status({ fill: "red", shape: "ring", text: `DB ${error.code || "error"}` });
+    node.error(`STCR database persistence failed: ${error.message}`, msg);
+    break;
+  } finally {
+    connection?.release();
+  }
 }
+
+context.set(persistenceLockKey, false);
 
 return null;

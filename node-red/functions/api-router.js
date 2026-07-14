@@ -127,16 +127,32 @@ function authenticate() {
   return cleanupSessions()[token] || null;
 }
 
-function addAudit(state, session, action, target, detail) {
-  state.auditEvents.unshift({
-    id: `audit-${Date.now()}`,
+async function addAudit(state, session, action, target, detail) {
+  const createdAt = new Date().toISOString();
+  const auditEvent = {
+    id: `audit-${session.companyId}-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`,
     actor: session.username,
     action,
     target,
     detail,
-    createdAt: new Date().toISOString(),
-  });
+    createdAt,
+  };
+  state.auditEvents.unshift(auditEvent);
   state.auditEvents = state.auditEvents.slice(0, 100);
+
+  try {
+    const pool = getDatabasePool();
+    await pool.execute(
+      `INSERT INTO audit_events (
+         company_id, actor, action_name, target_type, target_id, detail, created_at
+       ) VALUES (?, ?, ?, 'application', ?, ?, ?)`,
+      [session.companyId, session.username, action, target, JSON.stringify({ message: detail }), createdAt],
+    );
+  } catch (error) {
+    node.warn(`Audit database persistence failed: ${error.message}`);
+  }
+
+  return auditEvent;
 }
 
 function getDatabasePool() {
@@ -161,7 +177,14 @@ function getDatabasePool() {
 async function readReportHistory(companyId, ovenId, historyQuery) {
   const conditions = ["r.company_id=?", "r.oven_id=?"];
   const values = [companyId, ovenId];
-  if (historyQuery.includeIgnition !== "true") conditions.push("r.included_in_report=TRUE");
+  if (historyQuery.includeIgnition !== "true") {
+    conditions.push(
+      "r.included_in_report=TRUE",
+      "c.report_started_at IS NOT NULL",
+      "r.recorded_at>=c.report_started_at",
+      "(c.stopped_at IS NULL OR r.recorded_at<=c.stopped_at)",
+    );
+  }
   if (historyQuery.startAt) {
     conditions.push("r.recorded_at>=?");
     values.push(historyQuery.startAt);
@@ -203,6 +226,50 @@ async function readReportHistory(companyId, ovenId, historyQuery) {
     furnaceTemp: Number(row.furnaceTemp),
     blowerTemp: Number(row.blowerTemp),
   }));
+}
+
+async function readAuditEvents(companyId) {
+  const pool = getDatabasePool();
+  const [rows] = await pool.execute(
+    `SELECT CAST(id AS CHAR) AS id, actor, action_name, target_id, detail,
+            DATE_FORMAT(created_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS createdAt
+     FROM audit_events
+     WHERE company_id=?
+     ORDER BY created_at DESC, id DESC
+     LIMIT 100`,
+    [companyId],
+  );
+
+  return rows.map((row) => {
+    let parsedDetail = row.detail;
+    if (typeof parsedDetail === "string") {
+      try {
+        parsedDetail = JSON.parse(parsedDetail);
+      } catch {
+        parsedDetail = { message: parsedDetail };
+      }
+    }
+    return {
+      id: `audit-db-${row.id}`,
+      actor: row.actor,
+      action: row.action_name,
+      target: row.target_id,
+      detail: parsedDetail?.message || "",
+      createdAt: row.createdAt,
+    };
+  });
+}
+
+async function readReportDocumentMeta(companyId) {
+  const pool = getDatabasePool();
+  const [rows] = await pool.execute(
+    `SELECT document_no AS documentNo, effective_date AS effectiveDate
+     FROM report_document_settings
+     WHERE company_id=?
+     LIMIT 1`,
+    [companyId],
+  );
+  return rows[0] || { documentNo: "", effectiveDate: "" };
 }
 
 function validHistoryQuery(historyQuery) {
@@ -326,7 +393,52 @@ if (method === "GET" && path === "/stcr/api/alarms") {
   return jsonResponse(alarms);
 }
 
-if (method === "GET" && path === "/stcr/api/audit-events") return jsonResponse(state.auditEvents);
+if (method === "GET" && path === "/stcr/api/audit-events") {
+  try {
+    return jsonResponse(await readAuditEvents(companyId));
+  } catch (error) {
+    node.warn(`Audit database read fallback: ${error.message}`);
+    return jsonResponse(state.auditEvents);
+  }
+}
+
+if (method === "GET" && path === "/stcr/api/report-document-meta") {
+  try {
+    return jsonResponse(await readReportDocumentMeta(companyId));
+  } catch (error) {
+    node.warn(`Report document metadata read failed: ${error.message}`);
+    return jsonResponse({ documentNo: "", effectiveDate: "" });
+  }
+}
+
+if (method === "PUT" && path === "/stcr/api/report-document-meta") {
+  const body = requestBody();
+  const documentNo = safeText(body?.documentNo, 80);
+  const effectiveDate = safeText(body?.effectiveDate, 40);
+  if (!documentNo || !effectiveDate) {
+    return errorResponse("ข้อมูลเอกสารไม่ถูกต้อง", 400, "INVALID_REPORT_DOCUMENT_META");
+  }
+
+  const pool = getDatabasePool();
+  await pool.execute(
+    `INSERT INTO report_document_settings (
+       company_id, document_no, effective_date, updated_by
+     ) VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       document_no=VALUES(document_no), effective_date=VALUES(effective_date),
+       updated_by=VALUES(updated_by), updated_at=CURRENT_TIMESTAMP(3)`,
+    [companyId, documentNo, effectiveDate, session.username],
+  );
+  await addAudit(
+    state,
+    session,
+    "แก้ไขข้อมูลเอกสารรายงาน",
+    documentNo,
+    `เริ่มใช้วันที่ ${effectiveDate}`,
+  );
+  persistState();
+  return jsonResponse({ documentNo, effectiveDate });
+}
 
 if (method === "POST" && path === "/stcr/api/ovens") {
   const nextNumber = Math.max(0, ...state.ovens.map((oven) => Number(oven.number) || 0)) + 1;
@@ -355,7 +467,7 @@ if (method === "POST" && path === "/stcr/api/ovens") {
   };
   state.ovens.push(oven);
   state.history[oven.id] = [];
-  addAudit(state, session, "เพิ่มเตาใหม่", oven.name, "เพิ่มเตาผ่าน Node-RED API");
+  await addAudit(state, session, "เพิ่มเตาใหม่", oven.name, "เพิ่มเตาผ่าน Node-RED API");
   persistState();
   return jsonResponse(oven, 201);
 }
@@ -365,7 +477,7 @@ if (method === "POST" && acknowledgeMatch) {
   const alarmId = decodeURIComponent(acknowledgeMatch[1]);
   if (!state.alarms.some((alarm) => alarm.id === alarmId)) return errorResponse("Alarm not found", 404, "NOT_FOUND");
   state.alarms = state.alarms.map((alarm) => alarm.id === alarmId ? { ...alarm, status: "acknowledged" } : alarm);
-  addAudit(state, session, "รับทราบ Alarm", alarmId, "รับทราบผ่านหน้าเว็บ");
+  await addAudit(state, session, "รับทราบ Alarm", alarmId, "รับทราบผ่านหน้าเว็บ");
   persistState();
   return jsonResponse(state.alarms);
 }
@@ -437,7 +549,7 @@ if (method === "PUT" && limitsMatch) {
     upper: Number(body[sensor].upper),
   }]));
   state.ovens[index] = { ...state.ovens[index], limits: normalizedLimits };
-  addAudit(state, session, "เปลี่ยนค่า Limit", state.ovens[index].name, "บันทึก Upper/Lower ผ่าน Node-RED API");
+  await addAudit(state, session, "เปลี่ยนค่า Limit", state.ovens[index].name, "บันทึก Upper/Lower ผ่าน Node-RED API");
   persistState();
   return jsonResponse(state.ovens[index]);
 }
@@ -456,7 +568,7 @@ if (ovenMatch) {
     const line = body.line === undefined ? state.ovens[index].line : safeText(body.line, 40);
     if (!name || !zone || !line) return errorResponse("ข้อมูลเตาไม่ถูกต้อง", 400, "INVALID_OVEN");
     state.ovens[index] = { ...state.ovens[index], name, zone, line };
-    addAudit(state, session, "แก้ไขข้อมูลเตา", name, "แก้ชื่อ โซน หรือไลน์ผ่าน Node-RED API");
+    await addAudit(state, session, "แก้ไขข้อมูลเตา", name, "แก้ชื่อ โซน หรือไลน์ผ่าน Node-RED API");
     persistState();
     return jsonResponse(state.ovens[index]);
   }

@@ -23,3 +23,8 @@ export type AuditEvent = {
   createdAt: string;
   detail: string;
 };
+
+export type ReportDocumentMeta = {
+  documentNo: string;
+  effectiveDate: string;
+};

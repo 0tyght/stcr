@@ -2082,8 +2082,12 @@ tbody tr:hover {
 }
 
 @media (max-width: 860px) {
+  :root {
+    --sidebar-width: 76px;
+  }
+
   body {
-    min-width: 860px;
+    min-width: 0;
   }
 
   .app-shell {
@@ -2100,11 +2104,16 @@ tbody tr:hover {
   }
 
   .brand-row {
-    justify-content: flex-start;
+    justify-content: center;
+    padding-inline: 8px;
   }
 
   .brand-row .icon-button {
     display: none !important;
+  }
+
+  .brand-text {
+    display: none;
   }
 
   .primary-nav {
@@ -2114,14 +2123,13 @@ tbody tr:hover {
   }
 
   .nav-item {
-    justify-content: flex-start;
+    justify-content: center;
     min-height: 42px;
-    padding: 0 15px;
+    padding: 0;
   }
 
   .nav-item span {
-    display: inline;
-    opacity: 1;
+    display: none;
   }
 
   .oven-nav {
@@ -2133,10 +2141,15 @@ tbody tr:hover {
   .oven-link {
     width: 100%;
     min-width: 0;
-    justify-content: flex-start;
-    padding: 0 11px;
+    justify-content: center;
+    gap: 4px;
+    padding: 0 5px;
     border-right: 0;
     border-left: 3px solid transparent;
+  }
+
+  .oven-word {
+    display: none;
   }
 
   .oven-link.active {
@@ -2148,18 +2161,24 @@ tbody tr:hover {
   }
 
   .sidebar-footer {
-    display: block;
+    display: grid;
+    place-items: center;
+    padding-inline: 4px;
     opacity: 1;
   }
 
+  .sidebar-footer span {
+    display: none;
+  }
+
   .topbar {
-    position: sticky;
+    position: fixed;
     top: 0;
   }
 
   .topbar-actions {
-    width: 100%;
-    justify-content: flex-start;
+    width: auto;
+    justify-content: flex-end;
   }
 
   .user-chip {
@@ -2184,12 +2203,9 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 
-  .summary-grid,
-  .oven-grid,
   .metrics-grid,
   .realtime-gauge-grid,
   .history-stat-grid,
-  .operation-times,
   .report-summary {
     grid-template-columns: 1fr;
   }

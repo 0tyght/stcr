@@ -6,6 +6,7 @@ import type {
   LimitMap,
   Oven,
   OvenUpdateInput,
+  ReportDocumentMeta,
   SensorKey,
   TimeSeriesPoint,
 } from "../../types";
@@ -17,6 +18,8 @@ export interface AppApi {
   getHistory(query: HistoryQuery): Promise<TimeSeriesPoint[]>;
   getAlarms(filter?: AlarmFilter): Promise<Alarm[]>;
   getAuditEvents(): Promise<AuditEvent[]>;
+  getReportDocumentMeta(): Promise<ReportDocumentMeta>;
+  saveReportDocumentMeta(meta: ReportDocumentMeta): Promise<ReportDocumentMeta>;
   saveLimits(ovenId: string, limits: LimitMap): Promise<Oven>;
   updateOven(ovenId: string, input: OvenUpdateInput): Promise<Oven>;
   addOven(): Promise<Oven>;
