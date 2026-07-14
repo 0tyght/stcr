@@ -40,6 +40,10 @@ jobs:
         run: npm run build
         env:
           GITHUB_PAGES: "true"
+          VITE_DATA_SOURCE: "node-red"
+          VITE_API_BASE_URL: "https://file-superintendent-deposits-term.trycloudflare.com/stcr/api"
+          VITE_REALTIME_POLL_INTERVAL_MS: "5000"
+          VITE_API_TIMEOUT_MS: "15000"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
