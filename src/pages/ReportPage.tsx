@@ -866,7 +866,7 @@ function ReportFormControls({
     <section className="panel report-form-controls">
       <div className="report-form-controls__header">
         <div className="report-form-controls__heading">
-          <strong>ข้อมูลเพิ่มเติมสำหรับฟอร์ม F-WS-05</strong>
+          <strong>ข้อมูลเพิ่มเติมสำหรับฟอร์ม</strong>
           <span>เลือกเฉพาะข้อมูลที่ต้องการแสดงในเอกสาร ช่องทั้งหมดไม่บังคับกรอก</span>
         </div>
 
