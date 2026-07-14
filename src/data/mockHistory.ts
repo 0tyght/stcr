@@ -57,9 +57,15 @@ function clamp(value: number, min: number, max: number): number {
 export function createHistory(query: HistoryQuery, oven: Oven): TimeSeriesPoint[] {
   const { start, end, stepMs } = getRange(query);
   const points: TimeSeriesPoint[] = [];
+  const now = Date.now();
+  const requestedEnd = end.getTime();
+  const lastUpdatedAt = Date.parse(oven.lastUpdatedAt);
+  const latestAvailableTime = requestedEnd > now
+    ? Math.min(now, Number.isFinite(lastUpdatedAt) ? lastUpdatedAt : now)
+    : requestedEnd;
   let index = 0;
 
-  for (let time = start.getTime(); time <= end.getTime(); time += stepMs) {
+  for (let time = start.getTime(); time <= latestAvailableTime; time += stepMs) {
     points.push({
       timestamp: new Date(time).toISOString(),
       chamberTemp: valueFor("chamberTemp", oven, index, 11),
