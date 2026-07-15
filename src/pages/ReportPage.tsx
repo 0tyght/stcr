@@ -1506,11 +1506,13 @@ function FwsSvgHeader({
   company: CompanyConfig;
   form: ReportFormState;
 }) {
-  const logoW = 174;
-  const docW = 205;
+  const isGr = company.id === "gr";
+  const logoW = isGr ? 158 : 174;
+  const docW = isGr ? 180 : 205;
   const titleW = width - logoW - docW;
   const docX = logoW + titleW;
   const docSplitY = 48;
+  const effectiveLabelW = isGr ? 82 : 92;
   const logoBox = company.report.logoBox;
 
   return (
@@ -1524,7 +1526,7 @@ function FwsSvgHeader({
       <line x1={logoW} y1="0" x2={logoW} y2={height} stroke="#000000" />
       <line x1={docX} y1="0" x2={docX} y2={height} stroke="#000000" />
       <line x1={docX} y1={docSplitY} x2={width} y2={docSplitY} stroke="#000000" />
-      <line x1={docX + 92} y1={docSplitY} x2={docX + 92} y2={height} stroke="#000000" />
+      <line x1={docX + effectiveLabelW} y1={docSplitY} x2={docX + effectiveLabelW} y2={height} stroke="#000000" />
 
       <image
         href={company.report.logo}
@@ -1536,10 +1538,10 @@ function FwsSvgHeader({
         clipPath="url(#report-logo-frame-clip)"
       />
 
-      <SvgText x={logoW + titleW / 2} y={32} size={15} weight={800} anchor="middle">
+      <SvgText x={logoW + titleW / 2} y={31} size={isGr ? 15.8 : 15} weight={800} anchor="middle">
         รายงานการตรวจสอบอุณหภูมิเตา
       </SvgText>
-      <SvgText x={logoW + titleW / 2} y={52} size={11.5} weight={700} anchor="middle">
+      <SvgText x={logoW + titleW / 2} y={51} size={isGr ? 11.2 : 11.5} weight={700} anchor="middle">
         Smoking Temperature Control Report
       </SvgText>
 
@@ -1549,10 +1551,10 @@ function FwsSvgHeader({
       <SvgText x={docX + docW / 2} y={40} size={11} weight={800} anchor="middle">
         {form.documentNo}
       </SvgText>
-      <SvgText x={docX + 46} y={66} size={10.5} weight={800} anchor="middle">
+      <SvgText x={docX + effectiveLabelW / 2} y={66} size={isGr ? 9.8 : 10.5} weight={800} anchor="middle">
         เริ่มใช้วันที่
       </SvgText>
-      <SvgText x={docX + 148} y={66} size={11} weight={800} anchor="middle">
+      <SvgText x={docX + effectiveLabelW + (docW - effectiveLabelW) / 2} y={66} size={11} weight={800} anchor="middle">
         {form.effectiveDate}
       </SvgText>
     </g>
@@ -2297,11 +2299,11 @@ function FwsSvgTemperatureGrid({
             transform={`rotate(-90 ${x} ${labelY})`}
             textAnchor={textAnchor}
             fontFamily="Sarabun"
-            fontSize="5.8"
+            fontSize={showFirewoodRow ? 5.3 : 5.8}
             fontWeight="bold"
             fill="#a31218"
             stroke="#ffffff"
-            strokeWidth="1.8"
+            strokeWidth={showFirewoodRow ? 1.45 : 1.8}
             strokeLinejoin="round"
             paintOrder="stroke"
           >
@@ -2341,7 +2343,7 @@ function FwsSvgTemperatureGrid({
       })}
 
       {showFirewoodRow && temperaturePath ? (
-        <path d={temperaturePath} fill="none" stroke="#d62027" strokeWidth="1.55" opacity="0.96" />
+        <path d={temperaturePath} fill="none" stroke="#d62027" strokeWidth="1.75" opacity="0.98" />
       ) : null}
 
       {showFirewoodRow
@@ -2352,7 +2354,7 @@ function FwsSvgTemperatureGrid({
                 key={`temperature-top-${slot.index}`}
                 cx={slotToX(slot.index)}
                 cy={tempToY(slot.temperature ?? graphMin)}
-                r="1.25"
+                r="1.1"
                 fill="#d62027"
               />
             ))
@@ -2589,10 +2591,10 @@ function GrSvgNotes({ y, form }: { y: number; form: ReportFormState }) {
       {form.reason ? <SvgText x={184} y={116} size={7.8}>{form.reason}</SvgText> : null}
       <SvgText x={58} y={128} size={6.8}>Reason for over heating</SvgText>
 
-      <SvgText x={464} y={139} size={8.6} weight={700}>ผู้รายงาน</SvgText>
-      <DottedLine x={512} y={139} width={155} />
-      <SvgText x={720} y={139} size={8.6} weight={700}>ผู้อนุมัติ</SvgText>
-      <DottedLine x={760} y={139} width={155} />
+      <SvgText x={420} y={139} size={8.6} weight={700}>ผู้รายงาน</SvgText>
+      <DottedLine x={468} y={139} width={185} />
+      <SvgText x={710} y={139} size={8.6} weight={700}>ผู้อนุมัติ</SvgText>
+      <DottedLine x={750} y={139} width={185} />
       </g>
     </g>
   );
