@@ -195,6 +195,22 @@ function reportFormFromCycleMeta(meta: ReportCycleMeta): Partial<ReportFormState
   };
 }
 
+function resolveReportCycleRange(
+  fallback: { start: Date; end: Date },
+  meta: ReportCycleMeta | null,
+  mode: ReportMode,
+): { start: Date; end: Date } {
+  const metaStart = meta?.reportStartedAt ? new Date(meta.reportStartedAt) : null;
+  const metaEnd = meta?.stoppedAt ? new Date(meta.stoppedAt) : null;
+  const start = metaStart && Number.isFinite(metaStart.getTime()) ? metaStart : fallback.start;
+  const endCandidate = mode === "current" && !metaEnd ? new Date() : metaEnd ?? fallback.end;
+  const end = Number.isFinite(endCandidate.getTime()) && endCandidate > start
+    ? endCandidate
+    : fallback.end;
+
+  return { start, end };
+}
+
 function normalizeDocumentMetaValue(value: string, maxLength: number): string {
   return value.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, maxLength);
 }
@@ -389,6 +405,7 @@ export function ReportPage() {
   const [downloadMessage, setDownloadMessage] = useState("");
   const [autoDownloaded, setAutoDownloaded] = useState(false);
   const [previewExpanded, setPreviewExpanded] = useState(true);
+  const [cycleMeta, setCycleMeta] = useState<ReportCycleMeta | null>(null);
   const [reportForm, setReportForm] = useState<ReportFormState>(() => ({
     ...getReportFormDefaults(company),
     ...resolveDocumentMeta(company, readSavedReportDocumentMeta(company.id)),
@@ -467,6 +484,7 @@ export function ReportPage() {
   useEffect(() => {
     if (!oven || selectedCycle == null) return;
     let active = true;
+    setCycleMeta(null);
     setReportForm((current) => ({
       ...current,
       rubberType: "",
@@ -481,7 +499,10 @@ export function ReportPage() {
     void apiClient
       .getReportCycleMeta(oven.id, selectedCycle)
       .then((meta) => {
-        if (active) setReportForm((current) => ({ ...current, ...reportFormFromCycleMeta(meta) }));
+        if (active) {
+          setCycleMeta(meta);
+          setReportForm((current) => ({ ...current, ...reportFormFromCycleMeta(meta) }));
+        }
       })
       .catch(() => undefined);
 
@@ -492,8 +513,8 @@ export function ReportPage() {
 
   const cycleRange = useMemo(() => {
     if (!oven || selectedCycle == null) return null;
-    return getCycleRange(oven, mode, selectedCycle);
-  }, [mode, oven, selectedCycle]);
+    return resolveReportCycleRange(getCycleRange(oven, mode, selectedCycle), cycleMeta, mode);
+  }, [cycleMeta, mode, oven, selectedCycle]);
 
   const loadReport = useCallback(async () => {
     if (!oven || !cycleRange || selectedCycle == null) return;
@@ -552,9 +573,16 @@ export function ReportPage() {
       }
 
       const safeCycle = clampReportCycleNumber(cycle, oven, mode);
-      const range = getCycleRange(oven, mode, safeCycle);
+      const nextMeta = await apiClient.getReportCycleMeta(oven.id, safeCycle);
+      const range = resolveReportCycleRange(
+        getCycleRange(oven, mode, safeCycle),
+        nextMeta,
+        mode,
+      );
 
       setSelectedCycle(safeCycle);
+      setCycleMeta(nextMeta);
+      setReportForm((current) => ({ ...current, ...reportFormFromCycleMeta(nextMeta) }));
 
       const nextPoints = await apiClient.getHistory({
         ovenId: oven.id,
@@ -587,7 +615,7 @@ export function ReportPage() {
       if (!oven || selectedCycle == null) return;
 
       const safeCycle = clampReportCycleNumber(selectedCycle, oven, mode);
-      const range = getCycleRange(oven, mode, safeCycle);
+      const range = cycleRange ?? getCycleRange(oven, mode, safeCycle);
       const filename = createPdfFilename(company, safeCycle, range.start);
 
       const fileHandle = chooseLocation
@@ -629,7 +657,7 @@ export function ReportPage() {
         setDownloadingPdf(false);
       }
     },
-    [company, mode, oven, reportForm, selectedCycle],
+    [company, cycleRange, mode, oven, reportForm, selectedCycle],
   );
 
   const downloadHistoricalRangeZip = useCallback(async () => {
@@ -987,6 +1015,7 @@ export function ReportPage() {
           oven={oven}
           cycle={selectedCycle}
           cycleRange={cycleRange}
+          cycleMeta={cycleMeta}
           slots={reportSlots}
           company={company}
           form={reportForm}
@@ -1371,6 +1400,7 @@ function FwsSvgReport({
   oven,
   cycle,
   cycleRange,
+  cycleMeta,
   slots,
   company,
   form,
@@ -1379,6 +1409,7 @@ function FwsSvgReport({
   oven: Oven;
   cycle: number;
   cycleRange: { start: Date; end: Date };
+  cycleMeta: ReportCycleMeta | null;
   slots: ReportSlot[];
   company: CompanyConfig;
   form: ReportFormState;
@@ -1434,6 +1465,7 @@ function FwsSvgReport({
           oven={oven}
           cycle={cycle}
           cycleRange={cycleRange}
+          cycleMeta={cycleMeta}
           company={company}
           form={form}
         />
@@ -1590,6 +1622,7 @@ function FwsSvgMeta({
   oven,
   cycle,
   cycleRange,
+  cycleMeta,
   company,
   form,
 }: {
@@ -1599,6 +1632,7 @@ function FwsSvgMeta({
   oven: Oven;
   cycle: number;
   cycleRange: { start: Date; end: Date };
+  cycleMeta: ReportCycleMeta | null;
   company: CompanyConfig;
   form: ReportFormState;
 }) {
@@ -1611,6 +1645,7 @@ function FwsSvgMeta({
         oven={oven}
         cycle={cycle}
         cycleRange={cycleRange}
+        cycleMeta={cycleMeta}
         form={form}
       />
     );
@@ -1739,6 +1774,7 @@ function GrSvgMeta({
   oven,
   cycle,
   cycleRange,
+  cycleMeta,
   form,
 }: {
   y: number;
@@ -1747,9 +1783,10 @@ function GrSvgMeta({
   oven: Oven;
   cycle: number;
   cycleRange: { start: Date; end: Date };
+  cycleMeta: ReportCycleMeta | null;
   form: ReportFormState;
 }) {
-  const firedAt = new Date(oven.firedAt || cycleRange.start);
+  const firedAt = new Date(cycleMeta?.firedAt || oven.firedAt || cycleRange.start);
 
   return (
     <g transform={`translate(0 ${y})`}>
@@ -1835,11 +1872,13 @@ function FwsSvgTemperatureGrid({
   const tempHeaderH = showFirewoodRow ? 0 : 26;
 
   const chartTop = dayH + timeH + tickRowH + tempHeaderH;
+  const graphTopGap = showFirewoodRow ? 20 : 0;
+  const plotTop = chartTop + graphTopGap;
   const firewoodRowH = showFirewoodRow ? 38 : 0;
   const smokedConditionRowH = showFirewoodRow ? 26 : 36;
   const footerRowsH = firewoodRowH + smokedConditionRowH;
-  const chartH = height - chartTop - footerRowsH;
-  const chartBottom = chartTop + chartH;
+  const chartH = height - plotTop - footerRowsH;
+  const chartBottom = plotTop + chartH;
   const firewoodRowBottom = showFirewoodRow ? chartBottom + firewoodRowH : chartBottom;
   const chartW = width - left;
   const chartRight = width;
@@ -1853,7 +1892,7 @@ function FwsSvgTemperatureGrid({
 
   const valueToY = (value: number) => {
     const clamped = Math.max(graphMin, Math.min(graphMax, value));
-    return chartTop + ((graphMax - clamped) / (graphMax - graphMin)) * chartH;
+    return plotTop + ((graphMax - clamped) / (graphMax - graphMin)) * chartH;
   };
 
   const tempToY = valueToY;
@@ -1902,7 +1941,7 @@ function FwsSvgTemperatureGrid({
       previousValue !== null && nextValue !== null && value <= previousValue && value <= nextValue;
 
     let placeAbove = preferAbove;
-    if (pointY - chartTop < 24) placeAbove = false;
+    if (pointY - plotTop < 24) placeAbove = false;
     else if (chartBottom - pointY < 24) placeAbove = true;
     else if (isLocalHigh) placeAbove = true;
     else if (isLocalLow) placeAbove = false;
@@ -1958,13 +1997,18 @@ function FwsSvgTemperatureGrid({
       </SvgText>
       <SvgText
         x={28}
-        y={showFirewoodRow ? chartTop + 17 : dayH + timeH + tickRowH + tempHeaderH / 2 + 4}
+        y={showFirewoodRow ? chartTop + 8 : dayH + timeH + tickRowH + tempHeaderH / 2 + 4}
         size={showFirewoodRow ? 8.2 : 10.5}
         weight={700}
         anchor="middle"
       >
         อุณหภูมิ
       </SvgText>
+      {showFirewoodRow ? (
+        <SvgText x={28} y={chartTop + 17} size={6.7} anchor="middle">
+          Temperature
+        </SvgText>
+      ) : null}
       {showFirewoodRow ? (
         <>
           <SvgText x={30} y={chartBottom + 17} size={8.2} weight={700} anchor="middle">ไม้ฟืน (ก.ก.)</SvgText>
@@ -2061,7 +2105,7 @@ function FwsSvgTemperatureGrid({
         return (
           <g key={`temp-${temp}`}>
             <line
-              x1={left}
+              x1={showFirewoodRow ? left - 10 : left}
               y1={lineY}
               x2={chartRight}
               y2={lineY}
@@ -2072,7 +2116,7 @@ function FwsSvgTemperatureGrid({
 
             {showLabel ? (
               <SvgText
-                x={left - 7}
+                x={showFirewoodRow ? left - 14 : left - 7}
                 y={temp === graphMax ? lineY + 9.5 : temp === graphMin ? lineY - 2.5 : lineY + 3.2}
                 size={9.5}
                 weight={isGuide ? 800 : 700}

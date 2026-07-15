@@ -30,6 +30,9 @@ export type ReportDocumentMeta = {
 };
 
 export type ReportCycleMeta = {
+  firedAt?: string;
+  reportStartedAt?: string | null;
+  stoppedAt?: string | null;
   rubberType: string | null;
   smokingPeriodStatus: "under" | "over" | "notReached" | null;
   temperatureControlStatus: "underControl" | "outOfControl" | null;

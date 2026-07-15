@@ -20,6 +20,7 @@ import type {
   TimeSeriesPoint,
 } from "../types";
 import { buildLimitAlarms, isStale } from "../utils/limits";
+import { getHistoricalCycleRange } from "../utils/reportCycle";
 import { sensorByKey } from "../utils/sensors";
 import { DEFAULT_ACCOUNT_ID, getCurrentCompany } from "../config/companies";
 import { ACCOUNT_STORAGE_KEY, getStoredAccountId } from "../config/preferences";
@@ -267,8 +268,16 @@ export const mockApi: AppApi = {
     reportDocumentMeta = { ...meta };
     return wait(reportDocumentMeta);
   },
-  async getReportCycleMeta(): Promise<ReportCycleMeta> {
+  async getReportCycleMeta(ovenId: string, cycleNumber: number): Promise<ReportCycleMeta> {
+    const oven = getOvenOrThrow(ovenId);
+    const isCurrentCycle = cycleNumber === oven.cycleCount;
+    const fallbackRange = getHistoricalCycleRange(oven, cycleNumber);
     return wait({
+      firedAt: isCurrentCycle ? oven.firedAt ?? fallbackRange.start.toISOString() : fallbackRange.start.toISOString(),
+      reportStartedAt: isCurrentCycle
+        ? oven.reportStartedAt ?? oven.startedAt ?? fallbackRange.start.toISOString()
+        : fallbackRange.start.toISOString(),
+      stoppedAt: isCurrentCycle ? oven.stoppedAt ?? null : fallbackRange.end.toISOString(),
       rubberType: null,
       smokingPeriodStatus: null,
       temperatureControlStatus: null,

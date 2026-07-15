@@ -36,6 +36,7 @@ const endpoints = [
   ["get", "/stcr/api/ovens/:ovenId", "รายละเอียดเตา"],
   ["get", "/stcr/api/ovens/:ovenId/history", "ข้อมูลย้อนหลัง"],
   ["get", "/stcr/api/ovens/:ovenId/export.csv", "ส่งออกไฟล์ CSV"],
+  ["get", "/stcr/api/ovens/:ovenId/cycles/:cycleNumber/report-meta", "ข้อมูลรอบรายงาน"],
   ["get", "/stcr/api/alarms", "รายการแจ้งเตือน"],
   ["get", "/stcr/api/audit-events", "ประวัติการใช้งาน"],
   ["get", "/stcr/api/report-document-meta", "อ่านข้อมูลเอกสารรายงาน"],

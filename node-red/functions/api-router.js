@@ -807,7 +807,12 @@ if (method === "GET" && reportMetaMatch) {
   }
   const pool = getDatabasePool();
   const [rows] = await pool.execute(
-    `SELECT rubber_type AS rubberType, smoking_period_status AS smokingPeriodStatus,
+    `SELECT DATE_FORMAT(fired_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS firedAt,
+            CASE WHEN report_started_at IS NULL THEN NULL
+                 ELSE DATE_FORMAT(report_started_at, '%Y-%m-%dT%H:%i:%s.%fZ') END AS reportStartedAt,
+            CASE WHEN stopped_at IS NULL THEN NULL
+                 ELSE DATE_FORMAT(stopped_at, '%Y-%m-%dT%H:%i:%s.%fZ') END AS stoppedAt,
+            rubber_type AS rubberType, smoking_period_status AS smokingPeriodStatus,
             temperature_control_status AS temperatureControlStatus, report_reason AS reason,
             input_weight_kg AS inputNetWeightKg, output_weight_kg AS outputNetWeightKg,
             firewood_weight_kg AS firewoodWeightKg
