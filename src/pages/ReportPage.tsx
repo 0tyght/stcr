@@ -135,10 +135,11 @@ function getReportTemplate(_company: CompanyConfig): ReportTemplateConfig {
 
 function getReportFormDefaults(company: CompanyConfig): ReportFormState {
   const template = getReportTemplate(company);
+  const documentTemplate = company.id === "gr" ? grReportTemplate : template;
   return {
     ...defaultReportForm,
-    documentNo: template.defaultDocumentNo,
-    effectiveDate: template.defaultEffectiveDate,
+    documentNo: documentTemplate.defaultDocumentNo,
+    effectiveDate: documentTemplate.defaultEffectiveDate,
   };
 }
 
@@ -148,10 +149,10 @@ function resolveDocumentMeta(
 ): SavedReportDocumentMeta | null {
   if (!saved) return null;
 
-  if (company.id === "gr" && saved.documentNo === grReportTemplate.defaultDocumentNo) {
+  if (company.id === "gr" && saved.documentNo === defaultReportTemplate.defaultDocumentNo) {
     return {
-      documentNo: defaultReportTemplate.defaultDocumentNo,
-      effectiveDate: defaultReportTemplate.defaultEffectiveDate,
+      documentNo: grReportTemplate.defaultDocumentNo,
+      effectiveDate: grReportTemplate.defaultEffectiveDate,
     };
   }
 
@@ -269,8 +270,10 @@ const smokingPeriodOptions: Array<{
   },
 ];
 
-function getSmokingPeriodOptions(_company: CompanyConfig) {
-  return smokingPeriodOptions;
+function getSmokingPeriodOptions(company: CompanyConfig) {
+  return company.id === "gr"
+    ? smokingPeriodOptions.filter((option) => option.value !== "notReached")
+    : smokingPeriodOptions;
 }
 
 const temperatureControlOptions: Array<{
@@ -1443,7 +1446,7 @@ function FwsSvgReport({
           template={template}
         />
 
-        <FwsSvgNotes y={noteY} form={form} template={template} />
+        <FwsSvgNotes y={noteY} form={form} template={template} company={company} />
       </g>
 
       <SvgText x={8} y={779} size={8}>
@@ -1473,6 +1476,9 @@ function FwsSvgHeader({
   const titleW = width - logoW - docW;
   const docX = logoW + titleW;
   const logoBox = company.report.logoBox;
+  const grDocumentMatch = form.documentNo.match(/^(.*?)\s+(R\d+)$/i);
+  const grDocumentCode = grDocumentMatch?.[1] || form.documentNo;
+  const grRevision = grDocumentMatch?.[2] || "R07";
 
   return (
     <g>
@@ -1485,7 +1491,9 @@ function FwsSvgHeader({
       <line x1={logoW} y1="0" x2={logoW} y2={height} stroke="#000000" />
       <line x1={docX} y1="0" x2={docX} y2={height} stroke="#000000" />
       <line x1={docX} y1={height / 2} x2={width} y2={height / 2} stroke="#000000" />
-      <line x1={docX + 92} y1={height / 2} x2={docX + 92} y2={height} stroke="#000000" />
+      {company.id !== "gr" ? (
+        <line x1={docX + 92} y1={height / 2} x2={docX + 92} y2={height} stroke="#000000" />
+      ) : null}
 
       <image
         href={company.report.logo}
@@ -1504,19 +1512,31 @@ function FwsSvgHeader({
         Smoking Temperature Control Report
       </SvgText>
 
-      <SvgText x={docX + docW / 2} y={17} size={10} weight={800} anchor="middle">
-        Document No.
-      </SvgText>
-      <SvgText x={docX + docW / 2} y={34} size={11} weight={800} anchor="middle">
-        {form.documentNo}
-      </SvgText>
-
-      <SvgText x={docX + 46} y={59} size={10.5} weight={800} anchor="middle">
-        เริ่มใช้วันที่
-      </SvgText>
-      <SvgText x={docX + 148} y={59} size={11} weight={800} anchor="middle">
-        {form.effectiveDate}
-      </SvgText>
+      {company.id === "gr" ? (
+        <>
+          <SvgText x={docX + docW / 2} y={25} size={11} weight={800} anchor="middle">
+            {grDocumentCode}
+          </SvgText>
+          <SvgText x={docX + docW / 2} y={61} size={10.5} weight={800} anchor="middle">
+            {grRevision} เริ่มใช้ {form.effectiveDate}
+          </SvgText>
+        </>
+      ) : (
+        <>
+          <SvgText x={docX + docW / 2} y={17} size={10} weight={800} anchor="middle">
+            Document No.
+          </SvgText>
+          <SvgText x={docX + docW / 2} y={34} size={11} weight={800} anchor="middle">
+            {form.documentNo}
+          </SvgText>
+          <SvgText x={docX + 46} y={59} size={10.5} weight={800} anchor="middle">
+            เริ่มใช้วันที่
+          </SvgText>
+          <SvgText x={docX + 148} y={59} size={11} weight={800} anchor="middle">
+            {form.effectiveDate}
+          </SvgText>
+        </>
+      )}
     </g>
   );
 }
@@ -2238,11 +2258,17 @@ function FwsSvgNotes({
   y,
   form,
   template,
+  company,
 }: {
   y: number;
   form: ReportFormState;
   template: ReportTemplateConfig;
+  company: CompanyConfig;
 }) {
+  if (company.id === "gr") {
+    return <GrSvgNotes y={y} form={form} />;
+  }
+
   if (template.showFirewoodWeight) {
     return <GrSvgNotes y={y} form={form} />;
   }
