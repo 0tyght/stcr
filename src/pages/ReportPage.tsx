@@ -1422,7 +1422,7 @@ function FwsSvgReport({
           width={mainW}
           height={mainH}
           fill="#ffffff"
-          stroke={company.id === "gr" ? "none" : "#000000"}
+          stroke="#000000"
           strokeWidth="1"
         />
 
@@ -1547,31 +1547,42 @@ function GrSvgHeader({
   const documentMatch = form.documentNo.match(/^(.*?)\s+(R\d+)$/i);
   const documentCode = documentMatch?.[1] || form.documentNo;
   const revision = documentMatch?.[2] || "R07";
-  const docX = width - 145;
+  const logoW = 174;
+  const docW = 205;
+  const titleW = width - logoW - docW;
+  const docX = logoW + titleW;
 
   return (
     <g>
+      <defs>
+        <clipPath id="gr-report-logo-frame-clip">
+          <rect x="1" y="1" width={logoW - 2} height={height - 2} />
+        </clipPath>
+      </defs>
+      <rect x="0" y="0" width={width} height={height} fill="#ffffff" stroke="#000000" strokeWidth="0.9" />
+      <line x1={logoW} y1="0" x2={logoW} y2={height} stroke="#000000" strokeWidth="0.9" />
+      <line x1={docX} y1="0" x2={docX} y2={height} stroke="#000000" strokeWidth="0.9" />
+      <line x1={docX} y1={height / 2} x2={width} y2={height / 2} stroke="#000000" strokeWidth="0.8" />
       <image
         href={company.report.logo}
-        x={300}
-        y={8}
-        width={66}
-        height={56}
+        x={34}
+        y={4}
+        width={106}
+        height={67}
         preserveAspectRatio="xMidYMid meet"
+        clipPath="url(#gr-report-logo-frame-clip)"
       />
-      <SvgText x={555} y={29} size={17} weight={700} anchor="middle">
+      <SvgText x={logoW + titleW / 2} y={31} size={16} weight={800} anchor="middle">
         รายงานเช็คอุณหภูมิเตา
       </SvgText>
-      <SvgText x={555} y={51} size={14.5} weight={700} anchor="middle">
+      <SvgText x={logoW + titleW / 2} y={52} size={12.2} weight={700} anchor="middle">
         Smoking Temperature Control Report
       </SvgText>
 
-      <rect x={docX} y={4} width={145} height={51} fill="#ffffff" stroke="#000000" strokeWidth={0.8} />
-      <line x1={docX} y1={28} x2={width} y2={28} stroke="#000000" strokeWidth={0.65} />
-      <SvgText x={docX + 72.5} y={20} size={10} weight={800} anchor="middle">
+      <SvgText x={docX + docW / 2} y={24} size={11} weight={800} anchor="middle">
         {documentCode}
       </SvgText>
-      <SvgText x={docX + 72.5} y={45} size={9.6} weight={800} anchor="middle">
+      <SvgText x={docX + docW / 2} y={61} size={10.5} weight={800} anchor="middle">
         {revision} เริ่มใช้ {form.effectiveDate}
       </SvgText>
     </g>
@@ -1601,6 +1612,8 @@ function FwsSvgMeta({
     return (
       <GrSvgMeta
         y={y}
+        width={width}
+        height={height}
         oven={oven}
         cycle={cycle}
         cycleRange={cycleRange}
@@ -1727,12 +1740,16 @@ function FwsSvgMeta({
 
 function GrSvgMeta({
   y,
+  width,
+  height,
   oven,
   cycle,
   cycleRange,
   form,
 }: {
   y: number;
+  width: number;
+  height: number;
   oven: Oven;
   cycle: number;
   cycleRange: { start: Date; end: Date };
@@ -1742,47 +1759,48 @@ function GrSvgMeta({
 
   return (
     <g transform={`translate(0 ${y})`}>
-      <SvgText x={12} y={15} size={9.2}>เตา No.</SvgText>
-      <DottedLine x={51} y={15} width={78} />
-      <SvgText x={90} y={12} size={9.4} weight={800} anchor="middle">{oven.number}</SvgText>
+      <rect x="0" y="0" width={width} height={height} fill="#ffffff" stroke="#000000" strokeWidth="0.8" />
+      <SvgText x={14} y={18} size={10.5} weight={700}>เตา No.</SvgText>
+      <DottedLine x={51} y={18} width={78} />
+      <SvgText x={90} y={15} size={10.5} weight={800} anchor="middle">{oven.number}</SvgText>
 
-      <SvgText x={12} y={34} size={8.5}>ชนิดยาง</SvgText>
-      <SvgText x={12} y={45} size={6.8}>Type of rubber</SvgText>
+      <SvgText x={14} y={40} size={10.2} weight={700}>ชนิดยาง</SvgText>
+      <SvgText x={14} y={55} size={7.8}>Type of rubber</SvgText>
       {grRubberOptions.map((item, index) => {
         const x = 82 + index * 58;
         return (
           <g key={item.value}>
-            <FwsCheckbox x={x} y={25} size={9} checked={form.rubberType === item.value} />
-            <SvgText x={x + 4.5} y={47} size={6.6} anchor="middle">{item.label}</SvgText>
+            <FwsCheckbox x={x} y={28} size={11} checked={form.rubberType === item.value} />
+            <SvgText x={x + 5.5} y={59} size={7.5} anchor="middle">{item.label}</SvgText>
           </g>
         );
       })}
 
-      <SvgText x={315} y={15} size={8.7}>เข้าเตาวันที่</SvgText>
-      <DottedLine x={367} y={15} width={105} />
-      <SvgText x={419} y={12} size={8.5} anchor="middle">{formatReportDate(cycleRange.start)}</SvgText>
-      <SvgText x={487} y={15} size={8.7}>ออกเตาวันที่</SvgText>
-      <DottedLine x={541} y={15} width={105} />
-      <SvgText x={593} y={12} size={8.5} anchor="middle">{formatReportDate(cycleRange.end)}</SvgText>
+      <SvgText x={315} y={18} size={10.2} weight={700}>เข้าเตาวันที่</SvgText>
+      <DottedLine x={367} y={18} width={105} />
+      <SvgText x={419} y={15} size={9.8} weight={700} anchor="middle">{formatReportDate(cycleRange.start)}</SvgText>
+      <SvgText x={487} y={18} size={10.2} weight={700}>ออกเตาวันที่</SvgText>
+      <DottedLine x={541} y={18} width={105} />
+      <SvgText x={593} y={15} size={9.8} weight={700} anchor="middle">{formatReportDate(cycleRange.end)}</SvgText>
 
-      <SvgText x={315} y={37} size={8.7}>ปริมาณน้ำหนักยางเข้าเตา (ก.ก.) :</SvgText>
-      <DottedLine x={458} y={37} width={188} />
-      {form.inputNetWeight ? <SvgText x={552} y={34} size={8.8} weight={700} anchor="middle">{form.inputNetWeight}</SvgText> : null}
-      <SvgText x={315} y={59} size={8.7}>ปริมาณน้ำหนักยางออกเตา (ก.ก.) :</SvgText>
-      <DottedLine x={458} y={59} width={188} />
-      {form.outputNetWeight ? <SvgText x={552} y={56} size={8.8} weight={700} anchor="middle">{form.outputNetWeight}</SvgText> : null}
+      <SvgText x={315} y={41} size={9.8} weight={700}>ปริมาณน้ำหนักยางเข้าเตา (ก.ก.) :</SvgText>
+      <DottedLine x={458} y={41} width={188} />
+      {form.inputNetWeight ? <SvgText x={552} y={38} size={9.5} weight={700} anchor="middle">{form.inputNetWeight}</SvgText> : null}
+      <SvgText x={315} y={64} size={9.8} weight={700}>ปริมาณน้ำหนักยางออกเตา (ก.ก.) :</SvgText>
+      <DottedLine x={458} y={64} width={188} />
+      {form.outputNetWeight ? <SvgText x={552} y={61} size={9.5} weight={700} anchor="middle">{form.outputNetWeight}</SvgText> : null}
 
-      <SvgText x={770} y={15} size={8.7}>เวลาเริ่มใส่ยางเข้าเตา</SvgText>
-      <DottedLine x={871} y={15} width={84} />
-      <SvgText x={913} y={12} size={8.5} anchor="middle">{formatReportTime(cycleRange.start)}</SvgText>
-      <SvgText x={962} y={15} size={8.7}>น.</SvgText>
-      <SvgText x={770} y={37} size={8.7}>เวลาปิดเตา (ติดไฟ)</SvgText>
-      <DottedLine x={858} y={37} width={97} />
-      <SvgText x={906} y={34} size={8.5} anchor="middle">{formatReportTime(firedAt)}</SvgText>
-      <SvgText x={962} y={37} size={8.7}>น.</SvgText>
-      <SvgText x={770} y={59} size={8.7}>อบรอบที่</SvgText>
-      <DottedLine x={817} y={59} width={72} />
-      <SvgText x={853} y={56} size={8.8} weight={800} anchor="middle">{cycle}</SvgText>
+      <SvgText x={740} y={18} size={9.8} weight={700}>เวลาเริ่มใส่ยางเข้าเตา</SvgText>
+      <DottedLine x={871} y={18} width={84} />
+      <SvgText x={913} y={15} size={9.8} weight={700} anchor="middle">{formatReportTime(cycleRange.start)}</SvgText>
+      <SvgText x={962} y={18} size={9.5}>น.</SvgText>
+      <SvgText x={740} y={41} size={9.8} weight={700}>เวลาปิดเตา (ติดไฟ)</SvgText>
+      <DottedLine x={858} y={41} width={97} />
+      <SvgText x={906} y={38} size={9.8} weight={700} anchor="middle">{formatReportTime(firedAt)}</SvgText>
+      <SvgText x={962} y={41} size={9.5}>น.</SvgText>
+      <SvgText x={740} y={64} size={9.8} weight={700}>อบรอบที่</SvgText>
+      <DottedLine x={817} y={64} width={72} />
+      <SvgText x={853} y={61} size={10.2} weight={800} anchor="middle">{cycle}</SvgText>
     </g>
   );
 }
