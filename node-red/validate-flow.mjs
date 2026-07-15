@@ -15,6 +15,8 @@ const persistenceSource = `${simulationModelSource}\n${persistenceBody}`;
 const gatewaySource = await readFile(join(root, "functions", "sensor-gateway.js"), "utf8");
 const processingSource = await readFile(join(root, "functions", "signal-processing.js"), "utf8");
 const aggregatorSource = await readFile(join(root, "functions", "telemetry-aggregator.js"), "utf8");
+const httpPublisherSource = await readFile(join(root, "functions", "http-telemetry-publisher.js"), "utf8");
+const schemaSource = await readFile(join(root, "..", "database", "schema.sql"), "utf8");
 const reseedSource = await readFile(join(root, "reseed-current-simulation.mjs"), "utf8");
 const { simulationSensorValues, simulationWoodLoadingPeriod } = new Function(
   `${simulationModelSource}\nreturn { simulationSensorValues, simulationWoodLoadingPeriod };`,
@@ -29,7 +31,8 @@ const globalApi = {
   get: (key) => context.get(key),
   set: (key, value) => context.set(key, value),
 };
-const node = { status: () => undefined, warn: () => undefined };
+const nodeWarnings = [];
+const node = { status: () => undefined, warn: (message) => nodeWarnings.push(String(message)) };
 
 const runSimulator = new Function("msg", "flow", "global", "node", simulatorSource);
 const telemetryOutputs = runSimulator({ payload: Date.now() }, flow, globalApi, node);
@@ -142,23 +145,88 @@ const contextApi = {
 };
 const testPassword = "contract-test-password";
 const testSalt = Buffer.from("00112233445566778899aabbccddeeff", "hex");
-const testHash = crypto.pbkdf2Sync(testPassword, testSalt, 100000, 32, "sha256").toString("hex");
-const authUsers = JSON.stringify({
-  gr_dev_admin: {
-    companyId: "gr",
-    passwordHash: `pbkdf2$sha256$100000$${testSalt.toString("hex")}$${testHash}`,
-  },
-  ttn_dev_admin: {
-    companyId: "ttn",
-    passwordHash: `pbkdf2$sha256$100000$${testSalt.toString("hex")}$${testHash}`,
-  },
-});
+const testHash = crypto.argon2Sync("argon2id", {
+  message: testPassword,
+  nonce: testSalt,
+  parallelism: 1,
+  tagLength: 32,
+  memory: 19456,
+  passes: 2,
+}).toString("hex");
+const encodedTestHash = `argon2id$v=19$m=19456,t=2,p=1$${testSalt.toString("hex")}$${testHash}`;
+const ingestPepper = "contract-test-api-key-pepper-32-characters";
+const grIngestKey = "stcr_gr_contract_test_key_abcdefghijklmnopqrstuvwxyz012345";
+const grIngestHash = crypto.createHmac("sha256", ingestPepper).update(grIngestKey).digest("hex");
+const databaseUsers = {
+  gr_dev_admin: { id: 1, companyId: "gr", username: "gr_dev_admin" },
+  ttn_dev_admin: { id: 2, companyId: "ttn", username: "ttn_dev_admin" },
+};
 const envValues = new Map([
-  ["STCR_AUTH_USERS_JSON", authUsers],
   ["STCR_ALLOWED_ORIGINS", "http://127.0.0.1:5173"],
+  ["STCR_API_KEY_PEPPER", ingestPepper],
+  ["STCR_DB_PASSWORD", "contract-test-database-password"],
 ]);
 const env = { get: (key) => envValues.get(key) };
-const mysql = { createPool: () => { throw new Error("Database disabled in contract test"); } };
+const mockConnection = {
+  beginTransaction: async () => {},
+  commit: async () => {},
+  rollback: async () => {},
+  release: () => {},
+  execute: async (sql, params) => {
+    if (/SELECT id FROM ovens/.test(sql)) {
+      return [params[0] === "gr" && params[1] === "oven-18" ? [{ id: "oven-18" }] : []];
+    }
+    if (/SELECT id, state FROM oven_cycles/.test(sql)) return [[{ id: 83, state: "recording" }]];
+    return [{ affectedRows: 1 }];
+  },
+};
+const mockPool = {
+  execute: async (sql, params = []) => {
+    if (/FROM users u/.test(sql)) {
+      const user = databaseUsers[params[0]];
+      return [user ? [{
+        ...user,
+        displayName: user.username,
+        passwordHash: encodedTestHash,
+        passwordAlgorithm: "argon2id",
+        status: "active",
+        failedLoginCount: 0,
+        lockedUntil: null,
+        roleCodes: "admin",
+      }] : []];
+    }
+    if (/SELECT id FROM users/.test(sql)) {
+      const user = Object.values(databaseUsers).find((item) => item.id === params[0]);
+      return [user && user.companyId === params[1] && user.username === params[2] ? [{ id: user.id }] : []];
+    }
+    if (/FROM api_keys/.test(sql)) {
+      return [params[0] === "gr" && params[1] === grIngestKey.slice(0, 16)
+        ? [{ id: 10, companyId: "gr", allowedOvenId: null, keyHash: grIngestHash }]
+        : []];
+    }
+    if (/FROM oven_cycles/.test(sql)) {
+      return [params[0] === "gr" && params[1] === "oven-18" && params[2] === 83
+        ? [{
+          rubberType: "latex",
+          smokingPeriodStatus: "under",
+          temperatureControlStatus: "underControl",
+          reason: null,
+          inputNetWeightKg: "12500.000",
+          outputNetWeightKg: "8100.000",
+          firewoodWeightKg: "2400.000",
+        }]
+        : []];
+    }
+    if (/UPDATE users/.test(sql)) return [{ affectedRows: 1 }];
+    if (/UPDATE oven_cycles/.test(sql)) {
+      return [{ affectedRows: params[7] === "gr" && params[8] === "oven-18" ? 1 : 0 }];
+    }
+    throw new Error("Database fallback in contract test");
+  },
+  query: async () => { throw new Error("Database history fallback in contract test"); },
+  getConnection: async () => mockConnection,
+};
+const mysql = { createPool: () => mockPool };
 const runRouter = new AsyncFunction(
   "msg", "flow", "global", "node", "context", "env", "mysql", "crypto", routerSource,
 );
@@ -208,6 +276,90 @@ const tenantEscape = await callRouter(
 );
 assert.equal(tenantEscape.statusCode, 403, "Authenticated GR user must not access TTN");
 
+const telemetryReadings = [
+  ["chamberTemp", 56.2, "C"],
+  ["humidity", 70.1, "%"],
+  ["furnaceTemp", 500, "C"],
+  ["blowerTemp", 365, "C"],
+].map(([sensorKey, value, unit], index) => ({
+  sensorKey,
+  sensorId: `gr-oven-18-${sensorKey}`,
+  sequence: 100 + index,
+  value,
+  rawValue: value,
+  unit,
+  quality: "good",
+  qualityReasons: [],
+  sourceTimestamp: new Date().toISOString(),
+}));
+const acceptedTelemetry = await callRouter({
+  req: { method: "POST", path: "/stcr/api/telemetry", query: {}, headers: { "x-api-key": grIngestKey } },
+  payload: {
+    companyId: "gr",
+    ovenId: "oven-18",
+    batchId: "contract-batch-1",
+    deviceId: "gr-oven-18-gateway",
+    readings: telemetryReadings,
+  },
+});
+assert.equal(acceptedTelemetry.statusCode, 202, nodeWarnings.at(-1));
+assert.equal(acceptedTelemetry.payload.companyId, "gr");
+
+const crossCompanyTelemetry = await callRouter({
+  req: { method: "POST", path: "/stcr/api/telemetry", query: {}, headers: { "x-api-key": grIngestKey } },
+  payload: {
+    companyId: "ttn",
+    ovenId: "oven-1",
+    batchId: "contract-batch-cross-company",
+    deviceId: "ttn-oven-1-gateway",
+    readings: telemetryReadings.map((reading) => ({ ...reading, sensorId: reading.sensorId.replace("gr-oven-18", "ttn-oven-1") })),
+  },
+});
+assert.equal(crossCompanyTelemetry.statusCode, 401, "GR API key must not ingest TTN telemetry");
+
+const savedReportMeta = await callRouter({
+  req: {
+    method: "PUT",
+    path: "/stcr/api/ovens/oven-18/cycles/83/report-meta",
+    query: {},
+    headers: grAuthHeaders,
+  },
+  payload: {
+    rubberType: "latex",
+    smokingPeriodStatus: "under",
+    temperatureControlStatus: "underControl",
+    reason: null,
+    inputNetWeightKg: 12500,
+    outputNetWeightKg: 8100,
+    firewoodWeightKg: 2400,
+  },
+});
+assert.equal(savedReportMeta.statusCode, 200);
+assert.equal(savedReportMeta.payload.ok, true);
+
+const loadedReportMeta = await callRouter({
+  req: {
+    method: "GET",
+    path: "/stcr/api/ovens/oven-18/cycles/83/report-meta",
+    query: {},
+    headers: grAuthHeaders,
+  },
+});
+assert.equal(loadedReportMeta.statusCode, 200);
+assert.equal(loadedReportMeta.payload.rubberType, "latex");
+assert.equal(loadedReportMeta.payload.firewoodWeightKg, 2400);
+
+const crossCompanyReportMeta = await callRouter({
+  req: {
+    method: "PUT",
+    path: "/stcr/api/ovens/oven-1/cycles/83/report-meta",
+    query: {},
+    headers: grAuthHeaders,
+  },
+  payload: { rubberType: "latex" },
+});
+assert.equal(crossCompanyReportMeta.statusCode, 404, "GR session must not update a TTN oven cycle");
+
 const history = await callRouter(
   {
     req: {
@@ -228,8 +380,10 @@ const requiredPaths = [
   "/stcr/api/health",
   "/stcr/api/auth/login",
   "/stcr/api/auth/logout",
+  "/stcr/api/telemetry",
   "/stcr/api/ovens",
   "/stcr/api/ovens/:ovenId/history",
+  "/stcr/api/ovens/:ovenId/cycles/:cycleNumber/report-meta",
   "/stcr/api/alarms",
 ];
 const flowPaths = new Set(flows.filter((item) => item.type === "http in").map((item) => item.url));
@@ -254,6 +408,8 @@ assert.deepEqual(apiRouterNode.libs, [
   { var: "mysql", module: "mysql2/promise" },
   { var: "crypto", module: "crypto" },
 ]);
+assert.equal(flows.filter((item) => /stcr-(gr|ttn)-http-publisher/.test(item.id || "")).length, 2);
+assert.equal(flows.filter((item) => /stcr-(gr|ttn)-http-request/.test(item.id || "")).length, 2);
 assert.match(persistenceSource, /INSERT INTO sensor_readings/);
 assert.match(persistenceSource, /included_in_report/);
 assert.match(persistenceSource, /INSERT INTO telemetry_events/);
@@ -263,6 +419,18 @@ assert.match(persistenceSource, /persistArchivedCycle/);
 assert.match(persistenceSource, /dbArchive:/);
 assert.match(persistenceSource, /SET time_zone = '\+00:00'/);
 assert.match(routerSource, /includeIgnition/);
+assert.match(routerSource, /argon2Sync\("argon2id"/);
+assert.match(routerSource, /FROM api_keys/);
+assert.match(routerSource, /apiKey\.startsWith\(`stcr_\$\{companyId\}_`\)/);
+assert.match(routerSource, /WHERE company_id=\? AND id=\?/);
+assert.match(httpPublisherSource, /60 \* 1000/);
+assert.match(httpPublisherSource, /STCR_GR_INGEST_API_KEY/);
+assert.match(httpPublisherSource, /STCR_TTN_INGEST_API_KEY/);
+assert.match(schemaSource, /CREATE TABLE IF NOT EXISTS users/);
+assert.match(schemaSource, /CREATE TABLE IF NOT EXISTS api_keys/);
+assert.match(schemaSource, /firewood_weight_kg DECIMAL\(12,3\)/);
+assert.match(routerSource, /WHERE company_id=\? AND oven_id=\? AND cycle_number=\?/);
+assert.match(schemaSource, /'gr', 'F01-05-05 R07', '22\/06\/67'/);
 assert.equal(flows.filter((item) => /stcr-(gr|ttn)-.+-gateway/.test(item.id || "")).length, 8);
 assert.equal(flows.filter((item) => /stcr-(gr|ttn)-.+-processor/.test(item.id || "")).length, 8);
 assert.equal(flows.filter((item) => /stcr-(gr|ttn)-aggregator/.test(item.id || "")).length, 2);

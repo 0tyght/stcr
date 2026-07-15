@@ -3,11 +3,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   applyCompanyTheme,
-  getCompanyIdFromAccount,
 } from "../../config/companies";
 import {
   ACCOUNT_STORAGE_KEY,
   getStoredAccountId,
+  getStoredCompanyId,
   getStoredThemeMode,
   THEME_STORAGE_KEY,
   type ThemeMode,
@@ -69,7 +69,7 @@ export function Topbar({ onLogout }: TopbarProps) {
     return getStoredThemeMode();
   });
 
-  const companyId = useMemo(() => getCompanyIdFromAccount(account), [account]);
+  const companyId = getStoredCompanyId();
   const breadcrumbs = useMemo(() => buildBreadcrumbs(location.pathname), [location.pathname]);
 
   useEffect(() => {

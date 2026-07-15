@@ -7,6 +7,7 @@ import type {
   Oven,
   OvenUpdateInput,
   ReportDocumentMeta,
+  ReportCycleMeta,
   SensorKey,
   TimeSeriesPoint,
 } from "../../types";
@@ -20,6 +21,8 @@ export interface AppApi {
   getAuditEvents(): Promise<AuditEvent[]>;
   getReportDocumentMeta(): Promise<ReportDocumentMeta>;
   saveReportDocumentMeta(meta: ReportDocumentMeta): Promise<ReportDocumentMeta>;
+  getReportCycleMeta(ovenId: string, cycleNumber: number): Promise<ReportCycleMeta>;
+  saveReportCycleMeta(ovenId: string, cycleNumber: number, meta: ReportCycleMeta): Promise<void>;
   saveLimits(ovenId: string, limits: LimitMap): Promise<Oven>;
   updateOven(ovenId: string, input: OvenUpdateInput): Promise<Oven>;
   addOven(): Promise<Oven>;

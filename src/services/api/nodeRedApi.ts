@@ -7,6 +7,7 @@ import type {
   Oven,
   OvenUpdateInput,
   ReportDocumentMeta,
+  ReportCycleMeta,
   SensorKey,
   TimeSeriesPoint,
 } from "../../types";
@@ -68,6 +69,15 @@ export const nodeRedApi: AppApi = {
       method: "PUT",
       body: meta,
     }),
+  getReportCycleMeta: (ovenId: string, cycleNumber: number) =>
+    requestJson<ReportCycleMeta>(
+      `/ovens/${encodeURIComponent(ovenId)}/cycles/${cycleNumber}/report-meta`,
+    ),
+  saveReportCycleMeta: (ovenId: string, cycleNumber: number, meta: ReportCycleMeta) =>
+    requestJson<void>(
+      `/ovens/${encodeURIComponent(ovenId)}/cycles/${cycleNumber}/report-meta`,
+      { method: "PUT", body: meta },
+    ),
   saveLimits: (ovenId: string, limits: LimitMap) =>
     requestJson<Oven>(`/ovens/${encodeURIComponent(ovenId)}/limits`, {
       method: "PUT",

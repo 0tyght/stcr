@@ -1,3 +1,5 @@
+if (String(env.get("STCR_HTTP_INGEST_ENABLED") || "false").toLowerCase() === "true") return null;
+
 const config = {
   host: env.get("STCR_DB_HOST") || "127.0.0.1",
   port: Number(env.get("STCR_DB_PORT") || 3306),

@@ -12,6 +12,7 @@ const persistence = `${simulationModel}\n${persistenceBody}`;
 const sensorGateway = await readFile(join(root, "functions", "sensor-gateway.js"), "utf8");
 const signalProcessing = await readFile(join(root, "functions", "signal-processing.js"), "utf8");
 const telemetryAggregator = await readFile(join(root, "functions", "telemetry-aggregator.js"), "utf8");
+const httpTelemetryPublisher = await readFile(join(root, "functions", "http-telemetry-publisher.js"), "utf8");
 
 const fieldTabId = "stcr-field-tab";
 const grTabId = "stcr-gr-pipeline-tab";
@@ -30,6 +31,7 @@ const endpoints = [
   ["get", "/stcr/api/health", "ตรวจสอบสถานะระบบ"],
   ["post", "/stcr/api/auth/login", "เข้าสู่ระบบและออก Session"],
   ["post", "/stcr/api/auth/logout", "ออกจากระบบและยกเลิก Session"],
+  ["post", "/stcr/api/telemetry", "รับข้อมูล IoT ด้วย API Key"],
   ["get", "/stcr/api/ovens", "ข้อมูลเตาทั้งหมด"],
   ["get", "/stcr/api/ovens/:ovenId", "รายละเอียดเตา"],
   ["get", "/stcr/api/ovens/:ovenId/history", "ข้อมูลย้อนหลัง"],
@@ -38,6 +40,7 @@ const endpoints = [
   ["get", "/stcr/api/audit-events", "ประวัติการใช้งาน"],
   ["get", "/stcr/api/report-document-meta", "อ่านข้อมูลเอกสารรายงาน"],
   ["put", "/stcr/api/report-document-meta", "บันทึกข้อมูลเอกสารรายงาน"],
+  ["put", "/stcr/api/ovens/:ovenId/cycles/:cycleNumber/report-meta", "บันทึกข้อมูลรอบรายงาน"],
   ["put", "/stcr/api/ovens/:ovenId/limits", "บันทึกค่าขอบเขต"],
   ["patch", "/stcr/api/ovens/:ovenId", "แก้ไขข้อมูลเตา"],
   ["post", "/stcr/api/ovens", "เพิ่มเตา"],
@@ -67,6 +70,8 @@ function functionNode({ id, z, name, func, x, y, wires, libs = [] }) {
 function companyPipeline(companyId, tabId, sourceLabel) {
   const aggregatorId = `stcr-${companyId}-aggregator`;
   const persistOutId = `stcr-${companyId}-persist-out`;
+  const publisherId = `stcr-${companyId}-http-publisher`;
+  const httpRequestId = `stcr-${companyId}-http-request`;
   const nodes = [
     {
       id: `stcr-${companyId}-note`,
@@ -126,8 +131,37 @@ function companyPipeline(companyId, tabId, sourceLabel) {
       func: telemetryAggregator,
       x: 1010,
       y: 280,
-      wires: [[persistOutId]],
+      wires: [[persistOutId, publisherId]],
     }),
+    functionNode({
+      id: publisherId,
+      z: tabId,
+      name: `${sourceLabel}: ส่ง HTTP POST ทุก 1 นาที`,
+      func: httpTelemetryPublisher,
+      x: 1040,
+      y: 390,
+      wires: [[httpRequestId]],
+    }),
+    {
+      id: httpRequestId,
+      type: "http request",
+      z: tabId,
+      name: `${sourceLabel}: ส่งข้อมูลพร้อม API Key`,
+      method: "use",
+      ret: "obj",
+      paytoqs: "ignore",
+      url: "",
+      tls: "",
+      persist: false,
+      proxy: "",
+      insecureHTTPParser: false,
+      authType: "",
+      senderr: false,
+      headers: [],
+      x: 1340,
+      y: 390,
+      wires: [[]],
+    },
     {
       id: persistOutId,
       type: "link out",

@@ -1,5 +1,6 @@
 import { runtimeConfig } from "../config/runtime";
 import { getCompany, getCompanyIdFromAccount } from "../config/companies";
+import { COMPANY_STORAGE_KEY } from "../config/preferences";
 import { ApiError } from "./api/errors";
 
 const AUTH_SESSION_KEY = "stcr-auth-session";
@@ -9,6 +10,7 @@ export type AuthSession = {
   username: string;
   companyId: string;
   expiresAt: string;
+  roles?: string[];
 };
 
 function isSession(value: unknown): value is AuthSession {
@@ -38,6 +40,7 @@ export function readAuthSession(): AuthSession | null {
 
 export function saveAuthSession(session: AuthSession): void {
   window.sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
+  window.localStorage.setItem(COMPANY_STORAGE_KEY, session.companyId);
 }
 
 export function clearAuthSession(): void {
@@ -60,8 +63,7 @@ export async function login(username: string, password: string): Promise<AuthSes
     throw new ApiError("กรุณากรอกรหัสผ่าน", { code: "PASSWORD_REQUIRED" });
   }
 
-  const company = getCompany(getCompanyIdFromAccount(username));
-  const apiBaseUrl = (company.data.apiBaseUrl || runtimeConfig.apiBaseUrl).replace(/\/+$/, "");
+  const apiBaseUrl = runtimeConfig.apiBaseUrl.replace(/\/+$/, "");
   const response = await fetch(`${apiBaseUrl}/auth/login`, {
     method: "POST",
     headers: { Accept: "application/json", "Content-Type": "application/json" },

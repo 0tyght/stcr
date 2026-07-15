@@ -28,3 +28,13 @@ export type ReportDocumentMeta = {
   documentNo: string;
   effectiveDate: string;
 };
+
+export type ReportCycleMeta = {
+  rubberType: string | null;
+  smokingPeriodStatus: "under" | "over" | "notReached" | null;
+  temperatureControlStatus: "underControl" | "outOfControl" | null;
+  reason: string | null;
+  inputNetWeightKg: number | null;
+  outputNetWeightKg: number | null;
+  firewoodWeightKg: number | null;
+};

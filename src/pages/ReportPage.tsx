@@ -20,7 +20,7 @@ import {
   createLandscapePdfBlobFromSvg,
   downloadBlob,
 } from "../services/pdfExport";
-import type { Oven, SensorKey, TimeSeriesPoint } from "../types";
+import type { Oven, ReportCycleMeta, SensorKey, TimeSeriesPoint } from "../types";
 import { clampCycleStart, getHistoricalCycleRange, REPORT_CYCLE_MS } from "../utils/reportCycle";
 import { allSensorKeys } from "../utils/sensors";
 
@@ -64,6 +64,7 @@ type ReportFormState = {
   reason: string;
   inputNetWeight: string;
   outputNetWeight: string;
+  firewoodWeight: string;
   documentNo: string;
   effectiveDate: string;
   targetTemperature: number;
@@ -78,6 +79,7 @@ const defaultReportForm: ReportFormState = {
   reason: "",
   inputNetWeight: "",
   outputNetWeight: "",
+  firewoodWeight: "",
   documentNo: "F-WS-05 Rev.11",
   effectiveDate: "1-ธ.ค.-68",
   targetTemperature: 45,
@@ -85,14 +87,119 @@ const defaultReportForm: ReportFormState = {
   showHumidityLine: false,
 };
 
+type ReportTemplateConfig = {
+  timeSlots: string[];
+  intervalHours: number;
+  dayCount: number;
+  graphMin: number;
+  graphMax: number;
+  guideTemperatures: number[];
+  smokingLower: number;
+  smokingUpper: number;
+  defaultDocumentNo: string;
+  defaultEffectiveDate: string;
+  showFirewoodWeight: boolean;
+};
+
+const defaultReportTemplate: ReportTemplateConfig = {
+  timeSlots: ["08.00", "11.00", "14.00", "17.00", "20.00", "23.00", "02.00", "05.00"],
+  intervalHours: 3,
+  dayCount: 10,
+  graphMin: 30,
+  graphMax: 65,
+  guideTemperatures: [40, 60],
+  smokingLower: 40,
+  smokingUpper: 60,
+  defaultDocumentNo: "F-WS-05 Rev.11",
+  defaultEffectiveDate: "1-ธ.ค.-68",
+  showFirewoodWeight: false,
+};
+
+const grReportTemplate: ReportTemplateConfig = {
+  ...defaultReportTemplate,
+  timeSlots: ["08.00", "12.00", "16.00", "20.00", "24.00", "04.00"],
+  intervalHours: 4,
+  graphMin: 30,
+  graphMax: 62,
+  guideTemperatures: [30, 35, 55],
+  smokingLower: 35,
+  smokingUpper: 55,
+  defaultDocumentNo: "F01-05-05 R07",
+  defaultEffectiveDate: "22/06/67",
+  showFirewoodWeight: true,
+};
+
+function getReportTemplate(company: CompanyConfig): ReportTemplateConfig {
+  return company.id === "gr" ? grReportTemplate : defaultReportTemplate;
+}
+
+function getReportFormDefaults(company: CompanyConfig): ReportFormState {
+  const template = getReportTemplate(company);
+  return {
+    ...defaultReportForm,
+    documentNo: template.defaultDocumentNo,
+    effectiveDate: template.defaultEffectiveDate,
+  };
+}
+
+function resolveDocumentMeta(
+  company: CompanyConfig,
+  saved: SavedReportDocumentMeta | null,
+): SavedReportDocumentMeta | null {
+  if (!saved) return null;
+
+  if (
+    company.id === "gr" &&
+    saved.documentNo === defaultReportTemplate.defaultDocumentNo
+  ) {
+    return {
+      documentNo: grReportTemplate.defaultDocumentNo,
+      effectiveDate: grReportTemplate.defaultEffectiveDate,
+    };
+  }
+
+  return saved;
+}
+
 type SavedReportDocumentMeta = Pick<ReportFormState, "documentNo" | "effectiveDate">;
+
+function reportCycleMetaFromForm(form: ReportFormState): ReportCycleMeta {
+  const optionalNumber = (value: string): number | null => {
+    if (!value.trim()) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+  };
+
+  return {
+    rubberType: form.rubberType || null,
+    smokingPeriodStatus: form.smokingPeriodStatus || null,
+    temperatureControlStatus: form.temperatureControlStatus || null,
+    reason: form.reason.trim() || null,
+    inputNetWeightKg: optionalNumber(form.inputNetWeight),
+    outputNetWeightKg: optionalNumber(form.outputNetWeight),
+    firewoodWeightKg: optionalNumber(form.firewoodWeight),
+  };
+}
+
+function reportFormFromCycleMeta(meta: ReportCycleMeta): Partial<ReportFormState> {
+  const optionalText = (value: number | null): string => value == null ? "" : String(value);
+  return {
+    rubberType: (meta.rubberType || "") as RubberType,
+    smokingPeriodStatus: meta.smokingPeriodStatus || "",
+    temperatureControlStatus: meta.temperatureControlStatus || "",
+    reason: meta.reason || "",
+    inputNetWeight: optionalText(meta.inputNetWeightKg),
+    outputNetWeight: optionalText(meta.outputNetWeightKg),
+    firewoodWeight: optionalText(meta.firewoodWeightKg),
+  };
+}
 
 function normalizeDocumentMetaValue(value: string, maxLength: number): string {
   return value.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, maxLength);
 }
 
 function reportDocumentStorageKey(companyId: string): string {
-  return `stcr-report-document-meta:${companyId}`;
+  return `stcr-report-document-meta:v2:${companyId}`;
 }
 
 function readSavedReportDocumentMeta(companyId: string): SavedReportDocumentMeta | null {
@@ -165,6 +272,12 @@ const smokingPeriodOptions: Array<{
   },
 ];
 
+function getSmokingPeriodOptions(company: CompanyConfig) {
+  return company.id === "gr"
+    ? smokingPeriodOptions.filter((option) => option.value !== "notReached")
+    : smokingPeriodOptions;
+}
+
 const temperatureControlOptions: Array<{
   value: Exclude<TemperatureControlStatus, "">;
   label: string;
@@ -186,13 +299,6 @@ type ReportSlot = {
 
 const reportSensors: SensorKey[] = ["chamberTemp", "humidity", "furnaceTemp", "blowerTemp"];
 
-const timeSlots = ["08.00", "11.00", "14.00", "17.00", "20.00", "23.00", "02.00", "05.00"];
-
-const reportDayCount = 10;
-const reportSlotCount = reportDayCount * timeSlots.length;
-
-const graphMinTemp = 30;
-const temperatureGraphMax = 65;
 const humidityGraphMax = 100;
 
 const svgWidth = 1123;
@@ -283,8 +389,8 @@ export function ReportPage() {
   const [autoDownloaded, setAutoDownloaded] = useState(false);
   const [previewExpanded, setPreviewExpanded] = useState(true);
   const [reportForm, setReportForm] = useState<ReportFormState>(() => ({
-    ...defaultReportForm,
-    ...readSavedReportDocumentMeta(company.id),
+    ...getReportFormDefaults(company),
+    ...resolveDocumentMeta(company, readSavedReportDocumentMeta(company.id)),
   }));
 
   const reportRef = useRef<SVGSVGElement | null>(null);
@@ -296,8 +402,10 @@ export function ReportPage() {
       .getReportDocumentMeta()
       .then((saved) => {
         if (!active || !saved.documentNo || !saved.effectiveDate) return;
-        setReportForm((current) => ({ ...current, ...saved }));
-        saveReportDocumentMeta(company.id, { ...defaultReportForm, ...saved });
+        const resolved = resolveDocumentMeta(company, saved);
+        if (!resolved) return;
+        setReportForm((current) => ({ ...current, ...resolved }));
+        saveReportDocumentMeta(company.id, { ...getReportFormDefaults(company), ...resolved });
       })
       .catch(() => {
         // Local storage remains the offline fallback during public testing.
@@ -355,6 +463,32 @@ export function ReportPage() {
     setHistoricalDownloadMode("single");
   }, [mode, oven?.id, requestedCycle]);
 
+  useEffect(() => {
+    if (!oven || selectedCycle == null) return;
+    let active = true;
+    setReportForm((current) => ({
+      ...current,
+      rubberType: "",
+      smokingPeriodStatus: "",
+      temperatureControlStatus: "",
+      reason: "",
+      inputNetWeight: "",
+      outputNetWeight: "",
+      firewoodWeight: "",
+    }));
+
+    void apiClient
+      .getReportCycleMeta(oven.id, selectedCycle)
+      .then((meta) => {
+        if (active) setReportForm((current) => ({ ...current, ...reportFormFromCycleMeta(meta) }));
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, [oven?.id, selectedCycle]);
+
   const cycleRange = useMemo(() => {
     if (!oven || selectedCycle == null) return null;
     return getCycleRange(oven, mode, selectedCycle);
@@ -406,8 +540,9 @@ export function ReportPage() {
       start: cycleRange.start,
       upper: oven.limits.chamberTemp.upper,
       lower: oven.limits.chamberTemp.lower,
+      template: getReportTemplate(company),
     });
-  }, [cycleRange, oven, points]);
+  }, [company, cycleRange, oven, points]);
 
   const renderCycleAndCreatePdfBlob = useCallback(
     async (cycle: number): Promise<{ blob: Blob; filename: string }> => {
@@ -466,6 +601,12 @@ export function ReportPage() {
       try {
         setSelectedCycle(safeCycle);
 
+        await apiClient.saveReportCycleMeta(
+          oven.id,
+          safeCycle,
+          reportCycleMetaFromForm(reportForm),
+        );
+
         const nextPoints = await apiClient.getHistory({
           ovenId: oven.id,
           preset: "custom",
@@ -487,7 +628,7 @@ export function ReportPage() {
         setDownloadingPdf(false);
       }
     },
-    [company, mode, oven, selectedCycle],
+    [company, mode, oven, reportForm, selectedCycle],
   );
 
   const downloadHistoricalRangeZip = useCallback(async () => {
@@ -939,6 +1080,8 @@ function ReportFormControls({
   const [documentNoLocked, setDocumentNoLocked] = useState(true);
   const [documentSaveMessage, setDocumentSaveMessage] = useState("");
   const rubberOptions = getRubberOptions(company);
+  const visibleSmokingPeriodOptions = getSmokingPeriodOptions(company);
+  const template = getReportTemplate(company);
   function update<Key extends keyof ReportFormState>(key: Key, value: ReportFormState[Key]) {
     onChange({
       ...form,
@@ -960,7 +1103,7 @@ function ReportFormControls({
           onClick={() => {
             if (!window.confirm("ต้องการล้างข้อมูลในฟอร์มทั้งหมดหรือไม่?")) return;
             onChange({
-              ...defaultReportForm,
+              ...getReportFormDefaults(company),
               documentNo: form.documentNo,
               effectiveDate: form.effectiveDate,
               targetTemperature: form.targetTemperature,
@@ -999,7 +1142,7 @@ function ReportFormControls({
           <legend>ประเมินวันรมควัน <span>/ Smoking period</span></legend>
 
           <div className="report-choice-list">
-            {smokingPeriodOptions.map((option) => (
+            {visibleSmokingPeriodOptions.map((option) => (
               <label key={option.value} className="report-choice report-choice--option">
                 <input
                   type="radio"
@@ -1039,6 +1182,7 @@ function ReportFormControls({
           </div>
         </fieldset>
 
+        {company.id !== "gr" ? (
         <fieldset className="report-form-group report-form-group--target">
           <legend>ข้อมูลที่แสดงในกราฟ</legend>
 
@@ -1073,8 +1217,8 @@ function ReportFormControls({
               <span>ค่าเป้าหมาย (°C)</span>
               <input
                 type="number"
-                min={graphMinTemp}
-                max={temperatureGraphMax}
+                min={template.graphMin}
+                max={template.graphMax}
                 step={1}
                 value={form.showTargetLine ? form.targetTemperature : ""}
                 disabled={!form.showTargetLine}
@@ -1084,13 +1228,14 @@ function ReportFormControls({
             </label>
           </div>
         </fieldset>
+        ) : null}
       </div>
 
       <div className="report-form-details">
         <section className="report-detail-card report-cycle-detail-card">
           <div className="report-detail-card__heading">
             <strong>รายละเอียดรอบอบ</strong>
-            <span>บันทึกสาเหตุและน้ำหนักสุทธิของยาง</span>
+            <span>บันทึกสาเหตุ น้ำหนักสุทธิของยาง และน้ำหนักไม้ฟืน</span>
           </div>
 
           <div className="report-cycle-fields">
@@ -1128,6 +1273,21 @@ function ReportFormControls({
                 placeholder="กิโลกรัม"
               />
             </label>
+
+            {template.showFirewoodWeight ? (
+              <label className="field compact-field report-form-field">
+                <span>น้ำหนักไม้ฟืน</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={form.firewoodWeight}
+                  onChange={(event) => update("firewoodWeight", event.target.value)}
+                  placeholder="กิโลกรัม"
+                />
+              </label>
+            ) : null}
           </div>
         </section>
 
@@ -1226,6 +1386,7 @@ function FwsSvgReport({
 }) {
   const upper = oven.limits.chamberTemp.upper;
   const lower = oven.limits.chamberTemp.lower;
+  const template = getReportTemplate(company);
 
   const mainX = 25;
   const mainY = 15;
@@ -1237,7 +1398,7 @@ function FwsSvgReport({
   const metaH = 78;
   const graphY = metaY + metaH;
   const graphH = 445;
-  const noteY = graphY + graphH + 18;
+  const noteY = graphY + graphH + 8;
 
   return (
     <svg
@@ -1255,7 +1416,15 @@ function FwsSvgReport({
       <rect x="0" y="0" width={svgWidth} height={svgHeight} fill="#ffffff" />
 
       <g transform={`translate(${mainX} ${mainY})`}>
-        <rect x="0" y="0" width={mainW} height={mainH} fill="#ffffff" stroke="#000000" strokeWidth="1" />
+        <rect
+          x="0"
+          y="0"
+          width={mainW}
+          height={mainH}
+          fill="#ffffff"
+          stroke={company.id === "gr" ? "none" : "#000000"}
+          strokeWidth="1"
+        />
 
         <FwsSvgHeader width={mainW} height={headerH} company={company} form={form} />
 
@@ -1278,18 +1447,20 @@ function FwsSvgReport({
           upper={upper}
           lower={lower}
           form={form}
+          template={template}
         />
 
-        <FwsSvgNotes y={noteY} form={form} />
+        <FwsSvgNotes y={noteY} form={form} template={template} />
       </g>
 
-      <SvgText x={8} y={779} size={8}>
+      {company.id !== "gr" ? <><SvgText x={8} y={779} size={8}>
         {form.documentNo} รายงานการตรวจสอบอุณหภูมิเตา
       </SvgText>
 
       <SvgText x={1096} y={779} size={8} anchor="end">
-        Effective Date : 1 Dec 2025
+        Effective Date : {form.effectiveDate}
       </SvgText>
+      </> : null}
     </svg>
   );
 }
@@ -1305,6 +1476,10 @@ function FwsSvgHeader({
   company: CompanyConfig;
   form: ReportFormState;
 }) {
+  if (company.id === "gr") {
+    return <GrSvgHeader width={width} height={height} company={company} form={form} />;
+  }
+
   const logoW = 174;
   const docW = 205;
   const titleW = width - logoW - docW;
@@ -1358,6 +1533,51 @@ function FwsSvgHeader({
   );
 }
 
+function GrSvgHeader({
+  width,
+  height,
+  company,
+  form,
+}: {
+  width: number;
+  height: number;
+  company: CompanyConfig;
+  form: ReportFormState;
+}) {
+  const documentMatch = form.documentNo.match(/^(.*?)\s+(R\d+)$/i);
+  const documentCode = documentMatch?.[1] || form.documentNo;
+  const revision = documentMatch?.[2] || "R07";
+  const docX = width - 145;
+
+  return (
+    <g>
+      <image
+        href={company.report.logo}
+        x={300}
+        y={8}
+        width={66}
+        height={56}
+        preserveAspectRatio="xMidYMid meet"
+      />
+      <SvgText x={555} y={29} size={17} weight={700} anchor="middle">
+        รายงานเช็คอุณหภูมิเตา
+      </SvgText>
+      <SvgText x={555} y={51} size={14.5} weight={700} anchor="middle">
+        Smoking Temperature Control Report
+      </SvgText>
+
+      <rect x={docX} y={4} width={145} height={51} fill="#ffffff" stroke="#000000" strokeWidth={0.8} />
+      <line x1={docX} y1={28} x2={width} y2={28} stroke="#000000" strokeWidth={0.65} />
+      <SvgText x={docX + 72.5} y={20} size={10} weight={800} anchor="middle">
+        {documentCode}
+      </SvgText>
+      <SvgText x={docX + 72.5} y={45} size={9.6} weight={800} anchor="middle">
+        {revision} เริ่มใช้ {form.effectiveDate}
+      </SvgText>
+    </g>
+  );
+}
+
 function FwsSvgMeta({
   y,
   width,
@@ -1377,6 +1597,18 @@ function FwsSvgMeta({
   company: CompanyConfig;
   form: ReportFormState;
 }) {
+  if (company.id === "gr") {
+    return (
+      <GrSvgMeta
+        y={y}
+        oven={oven}
+        cycle={cycle}
+        cycleRange={cycleRange}
+        form={form}
+      />
+    );
+  }
+
   const rubberOptions = getRubberOptions(company);
 
   return (
@@ -1493,6 +1725,68 @@ function FwsSvgMeta({
   );
 }
 
+function GrSvgMeta({
+  y,
+  oven,
+  cycle,
+  cycleRange,
+  form,
+}: {
+  y: number;
+  oven: Oven;
+  cycle: number;
+  cycleRange: { start: Date; end: Date };
+  form: ReportFormState;
+}) {
+  const firedAt = new Date(oven.firedAt || cycleRange.start);
+
+  return (
+    <g transform={`translate(0 ${y})`}>
+      <SvgText x={12} y={15} size={9.2}>เตา No.</SvgText>
+      <DottedLine x={51} y={15} width={78} />
+      <SvgText x={90} y={12} size={9.4} weight={800} anchor="middle">{oven.number}</SvgText>
+
+      <SvgText x={12} y={34} size={8.5}>ชนิดยาง</SvgText>
+      <SvgText x={12} y={45} size={6.8}>Type of rubber</SvgText>
+      {grRubberOptions.map((item, index) => {
+        const x = 82 + index * 58;
+        return (
+          <g key={item.value}>
+            <FwsCheckbox x={x} y={25} size={9} checked={form.rubberType === item.value} />
+            <SvgText x={x + 4.5} y={47} size={6.6} anchor="middle">{item.label}</SvgText>
+          </g>
+        );
+      })}
+
+      <SvgText x={315} y={15} size={8.7}>เข้าเตาวันที่</SvgText>
+      <DottedLine x={367} y={15} width={105} />
+      <SvgText x={419} y={12} size={8.5} anchor="middle">{formatReportDate(cycleRange.start)}</SvgText>
+      <SvgText x={487} y={15} size={8.7}>ออกเตาวันที่</SvgText>
+      <DottedLine x={541} y={15} width={105} />
+      <SvgText x={593} y={12} size={8.5} anchor="middle">{formatReportDate(cycleRange.end)}</SvgText>
+
+      <SvgText x={315} y={37} size={8.7}>ปริมาณน้ำหนักยางเข้าเตา (ก.ก.) :</SvgText>
+      <DottedLine x={458} y={37} width={188} />
+      {form.inputNetWeight ? <SvgText x={552} y={34} size={8.8} weight={700} anchor="middle">{form.inputNetWeight}</SvgText> : null}
+      <SvgText x={315} y={59} size={8.7}>ปริมาณน้ำหนักยางออกเตา (ก.ก.) :</SvgText>
+      <DottedLine x={458} y={59} width={188} />
+      {form.outputNetWeight ? <SvgText x={552} y={56} size={8.8} weight={700} anchor="middle">{form.outputNetWeight}</SvgText> : null}
+
+      <SvgText x={770} y={15} size={8.7}>เวลาเริ่มใส่ยางเข้าเตา</SvgText>
+      <DottedLine x={871} y={15} width={84} />
+      <SvgText x={913} y={12} size={8.5} anchor="middle">{formatReportTime(cycleRange.start)}</SvgText>
+      <SvgText x={962} y={15} size={8.7}>น.</SvgText>
+      <SvgText x={770} y={37} size={8.7}>เวลาปิดเตา (ติดไฟ)</SvgText>
+      <DottedLine x={858} y={37} width={97} />
+      <SvgText x={906} y={34} size={8.5} anchor="middle">{formatReportTime(firedAt)}</SvgText>
+      <SvgText x={962} y={37} size={8.7}>น.</SvgText>
+      <SvgText x={770} y={59} size={8.7}>อบรอบที่</SvgText>
+      <DottedLine x={817} y={59} width={72} />
+      <SvgText x={853} y={56} size={8.8} weight={800} anchor="middle">{cycle}</SvgText>
+    </g>
+  );
+}
+
 function FwsSvgTemperatureGrid({
   y,
   width,
@@ -1501,6 +1795,7 @@ function FwsSvgTemperatureGrid({
   upper,
   lower,
   form,
+  template,
 }: {
   y: number;
   width: number;
@@ -1509,29 +1804,35 @@ function FwsSvgTemperatureGrid({
   upper: number;
   lower: number;
   form: ReportFormState;
+  template: ReportTemplateConfig;
 }) {
+  const isGr = template.showFirewoodWeight;
   const left = 58;
-  const dayH = 29;
+  const dayH = isGr ? 27 : 29;
 
   // ลดเฉพาะความสูงช่องเวลา แต่คงแถวว่างระหว่าง "เวลา" กับ "อุณหภูมิ"
-  const timeH = 38;
-  const tickRowH = 13;
-  const tempHeaderH = 26;
+  const timeH = isGr ? 25 : 38;
+  const tickRowH = isGr ? 0 : 13;
+  const tempHeaderH = isGr ? 0 : 26;
 
   // เพิ่มพื้นที่กราฟจากส่วนของช่องเวลาที่ลดลง
   // โดยคงตำแหน่งส่วนล่างของตารางไว้เท่าเดิม
   const chartTop = dayH + timeH + tickRowH + tempHeaderH;
-  const chartH = 303;
+  const chartH = isGr ? 352 : 303;
   const chartBottom = chartTop + chartH;
   const chartW = width - left;
   const chartRight = width;
+  const reportSlotCount = slots.length;
+  const slotsPerDay = template.timeSlots.length;
   const cellW = chartW / reportSlotCount;
 
-  const graphMax = form.showHumidityLine ? humidityGraphMax : temperatureGraphMax;
+  const graphMin = template.graphMin;
+  const showHumidity = !isGr && form.showHumidityLine;
+  const graphMax = showHumidity ? humidityGraphMax : template.graphMax;
 
   const valueToY = (value: number) => {
-    const clamped = Math.max(graphMinTemp, Math.min(graphMax, value));
-    return chartTop + ((graphMax - clamped) / (graphMax - graphMinTemp)) * chartH;
+    const clamped = Math.max(graphMin, Math.min(graphMax, value));
+    return chartTop + ((graphMax - clamped) / (graphMax - graphMin)) * chartH;
   };
 
   const tempToY = valueToY;
@@ -1544,23 +1845,23 @@ function FwsSvgTemperatureGrid({
       .filter((slot) => slot.temperature !== null)
       .map((slot) => ({
         x: slotToX(slot.index),
-        y: tempToY(slot.temperature ?? graphMinTemp),
+        y: tempToY(slot.temperature ?? graphMin),
       })),
   );
 
-  const humidityPath = form.showHumidityLine
+  const humidityPath = showHumidity
     ? buildLinePath(
         slots
           .filter((slot) => slot.humidity !== null)
           .map((slot) => ({
             x: slotToX(slot.index),
-            y: humidityToY(slot.humidity ?? graphMinTemp),
+            y: humidityToY(slot.humidity ?? graphMin),
           })),
       )
     : "";
 
   const temperatureLabels = slots.filter((slot) => slot.temperature !== null);
-  const humidityLabels = form.showHumidityLine
+  const humidityLabels = showHumidity
     ? slots.filter((slot) => slot.humidity !== null)
     : [];
 
@@ -1594,7 +1895,7 @@ function FwsSvgTemperatureGrid({
     } as const;
   }
 
-  const targetPath = form.showTargetLine
+  const targetPath = !isGr && form.showTargetLine
     ? buildLinePath(
         slots.map((slot) => ({
           x: slotToX(slot.index),
@@ -1610,14 +1911,16 @@ function FwsSvgTemperatureGrid({
       <line x1={left} y1="0" x2={left} y2={height} stroke="#000000" strokeWidth="0.9" />
       <line x1="0" y1={dayH} x2={width} y2={dayH} stroke="#000000" strokeWidth="0.8" />
       <line x1="0" y1={dayH + timeH} x2={width} y2={dayH + timeH} stroke="#000000" strokeWidth="0.8" />
-      <line
-        x1="0"
-        y1={dayH + timeH + tickRowH}
-        x2={width}
-        y2={dayH + timeH + tickRowH}
-        stroke="#000000"
-        strokeWidth="0.8"
-      />
+      {!isGr ? (
+        <line
+          x1="0"
+          y1={dayH + timeH + tickRowH}
+          x2={width}
+          y2={dayH + timeH + tickRowH}
+          stroke="#000000"
+          strokeWidth="0.8"
+        />
+      ) : null}
       <line x1="0" y1={chartTop} x2={width} y2={chartTop} stroke="#000000" strokeWidth="0.9" />
       <line x1="0" y1={chartBottom} x2={width} y2={chartBottom} stroke="#000000" strokeWidth="0.8" />
 
@@ -1627,20 +1930,28 @@ function FwsSvgTemperatureGrid({
       <SvgText x={22} y={dayH + timeH / 2 + 4} size={11} weight={700} anchor="middle">
         เวลา
       </SvgText>
-      <SvgText x={28} y={dayH + timeH + tickRowH + tempHeaderH / 2 + 4} size={10.5} weight={700} anchor="middle">
+      <SvgText x={28} y={isGr ? chartTop + 17 : dayH + timeH + tickRowH + tempHeaderH / 2 + 4} size={isGr ? 8.2 : 10.5} weight={700} anchor="middle">
         อุณหภูมิ
       </SvgText>
-      <SvgText x={30} y={chartBottom + 18} size={10.5} weight={700} anchor="middle">
-        สภาพยาง
+      <SvgText x={30} y={chartBottom + 15} size={isGr ? 8.2 : 10.5} weight={700} anchor="middle">
+        {isGr ? "ไม้ฟืน (ก.ก.)" : "สภาพยาง"}
       </SvgText>
+      {isGr ? <SvgText x={30} y={chartBottom + 27} size={6.8} anchor="middle">Firewood</SvgText> : null}
 
-      {Array.from({ length: reportDayCount }).map((_, dayIndex) => {
-        const x = left + dayIndex * timeSlots.length * cellW;
-        const w = timeSlots.length * cellW;
+      {Array.from({ length: template.dayCount }).map((_, dayIndex) => {
+        const x = left + dayIndex * slotsPerDay * cellW;
+        const w = slotsPerDay * cellW;
 
         return (
           <g key={`day-${dayIndex}`}>
-            <line x1={x} y1="0" x2={x} y2={height} stroke="#000000" strokeWidth="1.0" />
+            {isGr ? (
+              <>
+                <line x1={x - 1.2} y1="0" x2={x - 1.2} y2={height} stroke="#000000" strokeWidth="0.75" />
+                <line x1={x + 1.2} y1="0" x2={x + 1.2} y2={height} stroke="#000000" strokeWidth="0.75" />
+              </>
+            ) : (
+              <line x1={x} y1="0" x2={x} y2={height} stroke="#000000" strokeWidth="1.0" />
+            )}
             <SvgText x={x + w / 2} y={19} size={10} weight={700} anchor="middle">
               ({dayIndex + 1})
             </SvgText>
@@ -1651,7 +1962,7 @@ function FwsSvgTemperatureGrid({
 
       {slots.map((slot) => {
         const x = left + slot.index * cellW;
-        const isDayStart = slot.index % timeSlots.length === 0;
+        const isDayStart = slot.index % slotsPerDay === 0;
 
         if (isDayStart) {
           return null;
@@ -1685,7 +1996,7 @@ function FwsSvgTemperatureGrid({
       })}
 
       {slots
-        .filter((slot) => slot.index % timeSlots.length === 0)
+        .filter((slot) => slot.index % slotsPerDay === 0)
         .map((slot) => {
           const x = left + slot.index * cellW;
 
@@ -1706,11 +2017,12 @@ function FwsSvgTemperatureGrid({
           );
         })}
 
-      {Array.from({ length: graphMax - graphMinTemp + 1 }).map((_, index) => {
+      {Array.from({ length: graphMax - graphMin + 1 }).map((_, index) => {
         const temp = graphMax - index;
         const lineY = tempToY(temp);
         const isFive = temp % 5 === 0;
-        const isMajor = temp === 40 || temp === 60;
+        const isGuide = template.guideTemperatures.includes(temp);
+        const showLabel = isFive || isGuide || temp === graphMax || temp === graphMin;
 
         return (
           <g key={`temp-${temp}`}>
@@ -1720,15 +2032,15 @@ function FwsSvgTemperatureGrid({
               x2={chartRight}
               y2={lineY}
               stroke="#000000"
-              strokeWidth={isMajor ? 0.9 : isFive ? 0.58 : 0.26}
+              strokeWidth={isGuide ? (isGr ? 1.25 : 1.05) : isFive ? (isGr ? 0.62 : 0.58) : 0.26}
             />
 
-            {isFive ? (
+            {showLabel ? (
               <SvgText
                 x={left - 7}
-                y={temp === graphMax ? lineY + 9.5 : temp === graphMinTemp ? lineY - 2.5 : lineY + 3.2}
+                y={temp === graphMax ? lineY + 9.5 : temp === graphMin ? lineY - 2.5 : lineY + 3.2}
                 size={9.5}
-                weight={700}
+                weight={isGuide ? 800 : 700}
                 anchor="end"
               >
                 {temp}
@@ -1740,6 +2052,7 @@ function FwsSvgTemperatureGrid({
 
       {Array.from({ length: reportSlotCount + 1 }).map((_, index) => {
         const x = left + index * cellW;
+        if (isGr && index % slotsPerDay === 0) return null;
         return (
           <line
             key={`chart-v-${index}`}
@@ -1748,14 +2061,14 @@ function FwsSvgTemperatureGrid({
             x2={x}
             y2={chartBottom}
             stroke="#000000"
-            strokeWidth={index % timeSlots.length === 0 ? 0.85 : 0.26}
+            strokeWidth={index % slotsPerDay === 0 ? 0.85 : 0.26}
           />
         );
       })}
 
-      {(() => {
+      {!isGr ? (() => {
         const bx = 20;
-        const by = (tempToY(60) + tempToY(40)) / 2;
+        const by = (tempToY(template.smokingUpper) + tempToY(template.smokingLower)) / 2;
         return (
           <text
             x={bx}
@@ -1770,11 +2083,11 @@ function FwsSvgTemperatureGrid({
             รมควัน
           </text>
         );
-      })()}
+      })() : null}
 
-      {(() => {
+      {!isGr ? (() => {
         const bx = 24;
-        const by = (tempToY(40) + tempToY(30)) / 2;
+        const by = (tempToY(template.smokingLower) + tempToY(template.graphMin)) / 2;
         return (
           <text
             x={bx}
@@ -1789,10 +2102,14 @@ function FwsSvgTemperatureGrid({
             อุ่น
           </text>
         );
-      })()}
+      })() : null}
 
-      <line x1="0" y1={tempToY(60)} x2="28" y2={tempToY(60)} stroke="#000000" strokeWidth="0.8" />
-      <line x1="0" y1={tempToY(40)} x2="28" y2={tempToY(40)} stroke="#000000" strokeWidth="0.8" />
+      {!isGr ? (
+        <>
+          <line x1="0" y1={tempToY(template.smokingUpper)} x2="28" y2={tempToY(template.smokingUpper)} stroke="#000000" strokeWidth="0.8" />
+          <line x1="0" y1={tempToY(template.smokingLower)} x2="28" y2={tempToY(template.smokingLower)} stroke="#000000" strokeWidth="0.8" />
+        </>
+      ) : null}
 
       <g
         data-control-upper-y={tempToY(upper).toFixed(2)}
@@ -1800,6 +2117,7 @@ function FwsSvgTemperatureGrid({
       />
 
       <g aria-label="คำอธิบายสีกราฟ">
+        {!isGr ? <>
         <rect x={left + 4} y={chartTop + 4} width={form.showHumidityLine ? 154 : 82} height="16" rx="3" fill="#ffffff" opacity="0.9" />
         <line x1={left + 10} y1={chartTop + 12} x2={left + 28} y2={chartTop + 12} stroke="#d62027" strokeWidth="2" />
         <circle cx={left + 19} cy={chartTop + 12} r="1.5" fill="#d62027" />
@@ -1815,6 +2133,7 @@ function FwsSvgTemperatureGrid({
             </SvgText>
           </>
         ) : null}
+        </> : null}
       </g>
 
       {targetPath ? (
@@ -1835,28 +2154,34 @@ function FwsSvgTemperatureGrid({
           <circle
             key={`temperature-${slot.index}`}
             cx={slotToX(slot.index)}
-            cy={tempToY(slot.temperature ?? graphMinTemp)}
+            cy={tempToY(slot.temperature ?? graphMin)}
             r="1.25"
             fill="#d62027"
           />
         ))}
 
-      {form.showHumidityLine
+      {showHumidity
         ? slots
             .filter((slot) => slot.humidity !== null)
             .map((slot) => (
               <circle
                 key={`humidity-${slot.index}`}
                 cx={slotToX(slot.index)}
-                cy={humidityToY(slot.humidity ?? graphMinTemp)}
+                cy={humidityToY(slot.humidity ?? graphMin)}
                 r="1.25"
                 fill="#f59e0b"
               />
             ))
         : null}
 
+      {isGr && form.firewoodWeight ? (
+        <SvgText x={left + cellW / 2} y={chartBottom + 24} size={8.2} weight={700} anchor="middle">
+          {form.firewoodWeight}
+        </SvgText>
+      ) : null}
+
       {temperatureLabels.map((slot) => {
-        const value = slot.temperature ?? graphMinTemp;
+        const value = slot.temperature ?? graphMin;
         const { x, labelY, textAnchor } = getLabelPosition(
           slot,
           value,
@@ -1885,7 +2210,7 @@ function FwsSvgTemperatureGrid({
       })}
 
       {humidityLabels.map((slot) => {
-        const value = slot.humidity ?? graphMinTemp;
+        const value = slot.humidity ?? graphMin;
         const { x, labelY, textAnchor } = getLabelPosition(
           slot,
           value,
@@ -1917,16 +2242,46 @@ function FwsSvgTemperatureGrid({
   );
 }
 
-function FwsSvgNotes({ y, form }: { y: number; form: ReportFormState }) {
+function FwsSvgNotes({
+  y,
+  form,
+  template,
+}: {
+  y: number;
+  form: ReportFormState;
+  template: ReportTemplateConfig;
+}) {
+  if (template.showFirewoodWeight) {
+    return <GrSvgNotes y={y} form={form} />;
+  }
+
   return (
     <g transform={`translate(0 ${y})`}>
-      <SvgText x={58} y={0} size={7.4} weight={700}>
-        * ✕ ไม่สุก (ปากกาสีน้ำเงิน) / ✓ สุก (ปากกาสีแดง)   Ø ยางสุกแล้วยังไม่ออกเตา (อุ่นใช้ปากกาสีแดง) / เกณฑ์ประเมินวันรมยาง ต้องใช้ระยะเวลาการรมควันตามที่ WI กำหนด (WI-WS-06)
-      </SvgText>
+      {template.showFirewoodWeight ? (
+        <>
+          <SvgText x={58} y={0} size={8.8} weight={800}>
+            น้ำหนักไม้ฟืน
+          </SvgText>
+          <DottedLine x={132} y={0} width={145} />
+          {form.firewoodWeight ? (
+            <SvgText x={204} y={-3} size={9} weight={800} anchor="middle">
+              {form.firewoodWeight}
+            </SvgText>
+          ) : null}
+          <SvgText x={284} y={0} size={8.8} weight={700}>
+            กก.
+          </SvgText>
+        </>
+      ) : null}
 
-      <SvgText x={58} y={16} size={7.3} weight={700}>
-        ** ควบคุมอุณหภูมิ: [รมควัน] 40 - 60°C, [อุ่นยาง] 35-40°C   (ประเมินอุณหภูมิวันที่ 3 หลังปิดเตา 2 วัน/ เกณฑ์การรมควัน ความชื้นยาง บวกลบ 1 วัน)
-      </SvgText>
+      <g transform={`translate(0 ${template.showFirewoodWeight ? 14 : 0})`}>
+        <SvgText x={58} y={0} size={7.4} weight={700}>
+          * ✕ ไม่สุก (ปากกาสีน้ำเงิน) / ✓ สุก (ปากกาสีแดง)   Ø ยางสุกแล้วยังไม่ออกเตา (อุ่นใช้ปากกาสีแดง) / เกณฑ์ประเมินวันรมยาง ต้องใช้ระยะเวลาการรมควันตามที่ WI กำหนด (WI-WS-06)
+        </SvgText>
+
+        <SvgText x={58} y={16} size={7.3} weight={700}>
+          ** ควบคุมอุณหภูมิ: [รมควัน] {template.smokingLower} - {template.smokingUpper}°C, [อุ่นยาง] {template.graphMin}-{template.smokingLower}°C   (ประเมินอุณหภูมิวันที่ 3 หลังปิดเตา 2 วัน/ เกณฑ์การรมควัน ความชื้นยาง บวกลบ 1 วัน)
+        </SvgText>
 
       {/* ประเมินวันรมควัน: 3 ตัวเลือกตามแบบฟอร์มต้นฉบับ (WI-WS-06) */}
       <SvgText x={58} y={40} size={8.8} weight={700}>
@@ -2012,6 +2367,94 @@ function FwsSvgNotes({ y, form }: { y: number; form: ReportFormState }) {
       </SvgText>
 
       <DottedLine x={740} y={116} width={245} />
+      </g>
+    </g>
+  );
+}
+
+function GrSvgNotes({ y, form }: { y: number; form: ReportFormState }) {
+  const smokingOver = form.smokingPeriodStatus === "over";
+
+  return (
+    <g transform={`translate(0 ${y})`} aria-label="ส่วนท้ายรายงาน GR">
+      <g display="none">
+      <SvgText x={58} y={0} size={8.4} weight={800}>
+        น้ำหนักไม้ฟืน
+      </SvgText>
+      <DottedLine x={126} y={0} width={130} />
+      {form.firewoodWeight ? (
+        <SvgText x={191} y={-3} size={8.6} weight={800} anchor="middle">
+          {form.firewoodWeight}
+        </SvgText>
+      ) : null}
+      <SvgText x={264} y={0} size={8.4} weight={700}>
+        กก.
+      </SvgText>
+
+      </g>
+      <g transform="translate(0 -9)">
+      <SvgText x={58} y={17} size={8.1} weight={700}>
+        * สภาพลูกยาง
+      </SvgText>
+      <SvgText x={138} y={17} size={10} weight={800}>X</SvgText>
+      <SvgText x={151} y={17} size={8.1}>ไม่สุก</SvgText>
+      <path
+        d="M 205 13 L 209 17 L 216 8"
+        fill="none"
+        stroke="#000000"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <SvgText x={221} y={17} size={8.1}>สุก</SvgText>
+      <circle cx={271} cy={13} r={7} fill="none" stroke="#000000" strokeWidth={0.9} />
+      <line x1={266} y1={18} x2={276} y2={8} stroke="#000000" strokeWidth={0.9} />
+      <SvgText x={284} y={17} size={8.1}>
+        ยางสุกแล้ว ยังไม่ออกเตา (อุ่น) / เกณฑ์การประเมินวันรมยาง ต้องใช้ระยะการรมควันไม่เกิน 5 วัน ยกเว้นยางที่สุกแล้ว
+      </SvgText>
+
+      <SvgText x={58} y={27} size={6.8}>Smoked condition</SvgText>
+      <SvgText x={138} y={27} size={6.8}>Undone</SvgText>
+      <SvgText x={205} y={27} size={6.8}>Done</SvgText>
+      <SvgText x={271} y={27} size={6.8}>Done, but still have to be kept in the smoking room</SvgText>
+
+      <SvgText x={58} y={42} size={8.1} weight={700}>
+        ** อุณหภูมิเตา ตั้งแต่วันที่ 3 จนถึงวันที่ยางสุก ห้ามใส่อุณหภูมิต่ำกว่า 40 องศา และห้ามเกิน 55 องศา
+      </SvgText>
+      <SvgText x={58} y={52} size={6.8}>
+        After the 3rd day of smoking, control the temperature between 40 - 55°C.
+      </SvgText>
+
+      <SvgText x={58} y={70} size={8.2} weight={700}>ประเมินวันรมควัน</SvgText>
+      <SvgText x={58} y={79} size={6.8}>Smoking period</SvgText>
+      <FwsCheckbox x={166} y={60} size={10} checked={form.smokingPeriodStatus === "under"} />
+      <SvgText x={181} y={70} size={8.1}>อยู่ในเกณฑ์</SvgText>
+      <SvgText x={181} y={79} size={6.8}>Under period</SvgText>
+      <FwsCheckbox x={262} y={60} size={10} checked={smokingOver} />
+      <SvgText x={277} y={70} size={8.1}>
+        เกินเกณฑ์ (เกณฑ์การรมควัน = ความชื้นยาง บวกลบ 1 วัน)
+      </SvgText>
+      <SvgText x={277} y={79} size={6.8}>Over period (+/- 1 day)</SvgText>
+
+      <SvgText x={58} y={96} size={8.2} weight={700}>อุณหภูมิ</SvgText>
+      <SvgText x={58} y={105} size={6.8}>Temperature</SvgText>
+      <FwsCheckbox x={166} y={86} size={10} checked={form.temperatureControlStatus === "underControl"} />
+      <SvgText x={181} y={96} size={8.1}>อยู่ในค่าควบคุม</SvgText>
+      <SvgText x={181} y={105} size={6.8}>Under Control</SvgText>
+      <FwsCheckbox x={307} y={86} size={10} checked={form.temperatureControlStatus === "outOfControl"} />
+      <SvgText x={322} y={96} size={8.1}>ไม่อยู่ในค่าควบคุม</SvgText>
+      <SvgText x={322} y={105} size={6.8}>Out of Control</SvgText>
+
+      <SvgText x={58} y={119} size={8.2} weight={700}>สาเหตุอุณหภูมิเกิน เพราะ</SvgText>
+      <DottedLine x={178} y={119} width={850} />
+      {form.reason ? <SvgText x={184} y={116} size={7.8}>{form.reason}</SvgText> : null}
+      <SvgText x={58} y={128} size={6.8}>Reason for over heating</SvgText>
+
+      <SvgText x={464} y={139} size={8.6} weight={700}>ผู้รายงาน</SvgText>
+      <DottedLine x={512} y={139} width={155} />
+      <SvgText x={720} y={139} size={8.6} weight={700}>ผู้อนุมัติ</SvgText>
+      <DottedLine x={760} y={139} width={155} />
+      </g>
     </g>
   );
 }
@@ -2114,11 +2557,13 @@ function buildReportSlots({
   start,
   upper,
   lower,
+  template,
 }: {
   points: TimeSeriesPoint[];
   start: Date;
   upper: number;
   lower: number;
+  template: ReportTemplateConfig;
 }): ReportSlot[] {
   const target = Math.round((upper + lower) / 2);
   const indexedTemperaturePoints = points
@@ -2134,21 +2579,21 @@ function buildReportSlots({
     }))
     .filter((point) => Number.isFinite(point.time) && Number.isFinite(point.value));
 
-  // The F-WS-05 columns are fixed at 08:00, 11:00, ... 05:00. Anchor the
-  // sampling dates to 08:00 local time so the printed labels and sampled data
-  // always refer to the same timestamp, even when a cycle starts mid-day.
+  // Anchor each company schedule at 08:00 local time so printed labels and
+  // sampled data always refer to the same timestamp when a cycle starts mid-day.
   const firstSlot = new Date(start);
   firstSlot.setHours(8, 0, 0, 0);
+  const reportSlotCount = template.dayCount * template.timeSlots.length;
 
   return Array.from({ length: reportSlotCount }, (_, index) => {
-    const date = new Date(firstSlot.getTime() + index * 3 * 60 * 60 * 1000);
+    const date = new Date(firstSlot.getTime() + index * template.intervalHours * 60 * 60 * 1000);
     const closestTemperature = findClosestPoint(indexedTemperaturePoints, date.getTime());
     const closestHumidity = findClosestPoint(indexedHumidityPoints, date.getTime());
 
     return {
       index,
-      dayIndex: Math.floor(index / timeSlots.length),
-      timeLabel: formatReportTime(date),
+      dayIndex: Math.floor(index / template.timeSlots.length),
+      timeLabel: template.timeSlots[index % template.timeSlots.length],
       date,
       temperature: closestTemperature ? closestTemperature.value : null,
       humidity: closestHumidity ? closestHumidity.value : null,
@@ -2666,7 +3111,7 @@ const reportPageStyles = `
 
   .report-cycle-fields {
     display: grid;
-    grid-template-columns: minmax(210px, 1.25fr) repeat(2, minmax(155px, 0.8fr));
+    grid-template-columns: minmax(210px, 1.25fr) repeat(3, minmax(135px, 0.8fr));
     gap: 9px;
     align-items: end;
   }

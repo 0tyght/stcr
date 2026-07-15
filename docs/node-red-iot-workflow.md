@@ -3,7 +3,7 @@
 ## Runtime path
 
 ```text
-5-second device tick
+5-second device tick / real field sensor input
   -> independent chamber / humidity / furnace / blower telemetry topics
   -> company-specific field gateway
   -> physical range, unit and timestamp validation
@@ -12,6 +12,8 @@
   -> exponential moving average (display stability)
   -> batch correlation by batchId + sequence
   -> complete oven snapshot
+  -> one HTTP POST per oven every 1 minute with a company API Key
+  -> companyId + ovenId ownership validation
   -> MariaDB transaction
   -> 10-minute chart buckets
   -> REST API / dashboard / reports
@@ -47,7 +49,7 @@ Signal processing follows this order:
 3. Apply an exponential moving average with a sensor-specific coefficient.
 4. Keep quality reasons and every intermediate value in the telemetry envelope.
 
-Raw 5-second values are retained in `telemetry_events`. Filtered, synchronized oven snapshots are stored in `sensor_readings`. Dashboard gauges use the latest filtered snapshot and still update every 5 seconds. Six-day realtime and historical charts query 10-minute arithmetic-mean buckets, so both modes have the same readable density without discarding raw evidence. Alarm reconciliation marks database records as resolved when they are no longer active, including after a Node-RED restart.
+The simulator still produces raw values every 5 seconds so filtering behaves like field equipment. In HTTP-ingestion mode, Node-RED publishes the latest complete snapshot for each oven once per minute. These one-minute samples are retained in `telemetry_events` and `sensor_readings`. Six-day realtime and historical charts query 10-minute arithmetic-mean buckets, so both modes have the same readable density without discarding the stored one-minute evidence. Alarm reconciliation marks database records as resolved when they are no longer active, including after a Node-RED restart.
 
 ## Production replacement
 

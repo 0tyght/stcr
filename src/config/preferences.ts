@@ -1,13 +1,18 @@
-import { accountList, DEFAULT_ACCOUNT_ID } from "./companies";
+import { companies, DEFAULT_ACCOUNT_ID, DEFAULT_COMPANY_ID, type CompanyId } from "./companies";
 
 export type ThemeMode = "dark" | "company";
 
 export const ACCOUNT_STORAGE_KEY = "stcr-account";
+export const COMPANY_STORAGE_KEY = "stcr-company-id";
 export const THEME_STORAGE_KEY = "stcr-theme-mode";
 
 export function getStoredAccountId(): string {
-  const saved = localStorage.getItem(ACCOUNT_STORAGE_KEY);
-  return accountList.some((account) => account.id === saved) ? saved ?? DEFAULT_ACCOUNT_ID : DEFAULT_ACCOUNT_ID;
+  return localStorage.getItem(ACCOUNT_STORAGE_KEY)?.trim() || DEFAULT_ACCOUNT_ID;
+}
+
+export function getStoredCompanyId(): CompanyId {
+  const saved = localStorage.getItem(COMPANY_STORAGE_KEY);
+  return saved && saved in companies ? saved as CompanyId : DEFAULT_COMPANY_ID;
 }
 
 export function getStoredThemeMode(defaultMode: ThemeMode = "dark"): ThemeMode {

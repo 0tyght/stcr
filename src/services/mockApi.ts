@@ -14,6 +14,7 @@ import type {
   LimitMap,
   Oven,
   OvenUpdateInput,
+  ReportCycleMeta,
   ReportDocumentMeta,
   SensorKey,
   TimeSeriesPoint,
@@ -265,6 +266,20 @@ export const mockApi: AppApi = {
   async saveReportDocumentMeta(meta: ReportDocumentMeta): Promise<ReportDocumentMeta> {
     reportDocumentMeta = { ...meta };
     return wait(reportDocumentMeta);
+  },
+  async getReportCycleMeta(): Promise<ReportCycleMeta> {
+    return wait({
+      rubberType: null,
+      smokingPeriodStatus: null,
+      temperatureControlStatus: null,
+      reason: null,
+      inputNetWeightKg: null,
+      outputNetWeightKg: null,
+      firewoodWeightKg: null,
+    });
+  },
+  async saveReportCycleMeta(): Promise<void> {
+    await wait(undefined);
   },
 
   async saveLimits(ovenId: string, limits: LimitMap): Promise<Oven> {

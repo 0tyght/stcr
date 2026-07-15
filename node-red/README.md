@@ -24,12 +24,14 @@ Each company has four visible sensor lanes. Every lane passes through gateway va
 
 ## Run or import
 
-1. Run `node node-red/hash-password.mjs` once for each account and keep the generated passwords securely.
-2. Set `STCR_AUTH_USERS_JSON`, `STCR_ALLOWED_ORIGINS`, and database environment variables before starting Node-RED. See `.env.example`.
-3. Open Node-RED at `http://127.0.0.1:1880`.
-4. Import `node-red/flows.json` only when the deployed flow is older than this file.
-5. Select full-flow import and press Deploy.
-6. Check `http://127.0.0.1:1880/stcr/api/health`. The public health response intentionally does not reveal company names.
+1. Apply the latest MySQL migration.
+2. Run `node node-red/create-user.mjs` for each account and execute the generated SQL. The password is shown once; MySQL receives only its Argon2id hash.
+3. Set `STCR_API_KEY_PEPPER`, then run `node node-red/create-api-key.mjs` separately for GR and TTN. Execute the generated SQL and put each plaintext key only in the corresponding Node-RED secret environment.
+4. Set `STCR_HTTP_INGEST_ENABLED=true`, exact `STCR_ALLOWED_ORIGINS`, and database environment variables before starting Node-RED. See `.env.example`.
+5. Open Node-RED at `http://127.0.0.1:1880`.
+6. Import `node-red/flows.json` only when the deployed flow is older than this file.
+7. Select full-flow import and press Deploy.
+8. Check `http://127.0.0.1:1880/stcr/api/health`. The public health response intentionally does not reveal company names.
 
 The flow uses standard Node-RED nodes and Function nodes. No additional palette package is required.
 
@@ -46,7 +48,8 @@ The web application uses Node-RED when `VITE_DATA_SOURCE=node-red` is configured
 
 ## Security boundary
 
-- `STCR_AUTH_USERS_JSON` stores PBKDF2 password hashes and maps each account to `gr` or `ttn`.
+- MySQL stores usernames, Argon2id password hashes, company ownership, roles and account status. Password plaintext is never persisted.
+- MySQL stores only HMAC hashes of API keys. Plaintext API keys and `STCR_API_KEY_PEPPER` remain in Ubuntu/Node-RED secrets outside Git.
 - CORS defaults allow local Vite/preview only. Set the exact production origins; wildcard origins are rejected.
 - API sessions use opaque Bearer tokens, expire after 8 hours by default, and are invalidated when Node-RED restarts.
 - Enable `adminAuth`, HTTPS, `credentialSecret`, a protected reverse proxy, explicit host binding, and firewall rules in the production Node-RED `settings.js`. These runtime settings are machine-owned and are intentionally not committed here. Do not add `httpNodeAuth` Basic authentication on top of this API without redesigning the Authorization header, because the application already uses Bearer tokens.

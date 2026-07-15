@@ -4,11 +4,11 @@ import {
   accountList,
   applyCompanyTheme,
   getCompany,
-  getCompanyIdFromAccount,
 } from "../config/companies";
 import {
   ACCOUNT_STORAGE_KEY,
   getStoredAccountId,
+  getStoredCompanyId,
   getStoredThemeMode,
   THEME_STORAGE_KEY,
   type ThemeMode,
@@ -27,7 +27,7 @@ export function LoginPage({
   const [submitting, setSubmitting] = useState(false);
   const passwordRequired = runtimeConfig.dataSource === "node-red";
 
-  const companyId = useMemo(() => getCompanyIdFromAccount(username), [username]);
+  const companyId = getStoredCompanyId();
   const company = useMemo(() => getCompany(companyId), [companyId]);
 
   useEffect(() => {
@@ -99,16 +99,28 @@ export function LoginPage({
 
         <label>
           <span>ผู้ใช้</span>
-          <select
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-          >
-            {accountList.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.label}
-              </option>
-            ))}
-          </select>
+          {passwordRequired ? (
+            <input
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              type="text"
+              autoComplete="username"
+              maxLength={80}
+              required
+              placeholder="กรอกชื่อผู้ใช้"
+            />
+          ) : (
+            <select
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+            >
+              {accountList.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.label}
+                </option>
+              ))}
+            </select>
+          )}
         </label>
 
         <label>

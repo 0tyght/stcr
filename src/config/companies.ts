@@ -186,7 +186,7 @@ export function getCompanyIdFromAccount(accountId: string | null | undefined): C
 
 export function getCurrentCompany(): CompanyConfig {
   if (typeof window === "undefined") return companies[DEFAULT_COMPANY_ID];
-  return getCompany(getCompanyIdFromAccount(localStorage.getItem("stcr-account")));
+  return getCompany(localStorage.getItem("stcr-company-id"));
 }
 
 export function applyCompanyTheme(companyId: CompanyId): void {
