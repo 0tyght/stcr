@@ -1874,7 +1874,7 @@ function FwsSvgTemperatureGrid({
   const tempHeaderH = showFirewoodRow ? 0 : 26;
 
   const chartTop = dayH + timeH + tickRowH + tempHeaderH;
-  const graphTopGap = showFirewoodRow ? 20 : 0;
+  const graphTopGap = showFirewoodRow ? 30 : 0;
   const plotTop = chartTop + graphTopGap;
   const firewoodRowH = showFirewoodRow ? 38 : 0;
   const smokedConditionRowH = showFirewoodRow ? 26 : 36;
@@ -2107,7 +2107,7 @@ function FwsSvgTemperatureGrid({
         return (
           <g key={`temp-${temp}`}>
             <line
-              x1={showFirewoodRow ? left - 10 : left}
+              x1={showFirewoodRow ? left - 7 : left}
               y1={lineY}
               x2={chartRight}
               y2={lineY}
@@ -2118,7 +2118,7 @@ function FwsSvgTemperatureGrid({
 
             {showLabel ? (
               <SvgText
-                x={showFirewoodRow ? left - 14 : left - 7}
+                x={showFirewoodRow ? left - 15 : left - 7}
                 y={temp === graphMax ? lineY + 9.5 : temp === graphMin ? lineY - 2.5 : lineY + 3.2}
                 size={9.5}
                 weight={isGuide ? 800 : 700}
