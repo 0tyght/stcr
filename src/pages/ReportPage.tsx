@@ -121,8 +121,14 @@ const grReportTemplate: ReportTemplateConfig = {
   ...defaultReportTemplate,
   timeSlots: ["08.00", "12.00", "16.00", "20.00", "24.00", "04.00"],
   intervalHours: 4,
+  graphMin: 30,
+  graphMax: 62,
+  guideTemperatures: [30, 35, 55],
+  smokingLower: 35,
+  smokingUpper: 55,
   defaultDocumentNo: "F01-05-05 R07",
   defaultEffectiveDate: "22/06/67",
+  showFirewoodWeight: true,
   doubleDayBoundaries: true,
 };
 
@@ -1472,6 +1478,7 @@ function FwsSvgHeader({
   const docW = 205;
   const titleW = width - logoW - docW;
   const docX = logoW + titleW;
+  const docSplitY = 48;
   const logoBox = company.report.logoBox;
 
   return (
@@ -1484,8 +1491,8 @@ function FwsSvgHeader({
       <rect x="0" y="0" width={width} height={height} fill="#ffffff" stroke="#000000" />
       <line x1={logoW} y1="0" x2={logoW} y2={height} stroke="#000000" />
       <line x1={docX} y1="0" x2={docX} y2={height} stroke="#000000" />
-      <line x1={docX} y1={height / 2} x2={width} y2={height / 2} stroke="#000000" />
-      <line x1={docX + 92} y1={height / 2} x2={docX + 92} y2={height} stroke="#000000" />
+      <line x1={docX} y1={docSplitY} x2={width} y2={docSplitY} stroke="#000000" />
+      <line x1={docX + 92} y1={docSplitY} x2={docX + 92} y2={height} stroke="#000000" />
 
       <image
         href={company.report.logo}
@@ -1504,16 +1511,16 @@ function FwsSvgHeader({
         Smoking Temperature Control Report
       </SvgText>
 
-      <SvgText x={docX + docW / 2} y={17} size={10} weight={800} anchor="middle">
+      <SvgText x={docX + docW / 2} y={18} size={10} weight={800} anchor="middle">
         Document No.
       </SvgText>
-      <SvgText x={docX + docW / 2} y={34} size={11} weight={800} anchor="middle">
+      <SvgText x={docX + docW / 2} y={40} size={11} weight={800} anchor="middle">
         {form.documentNo}
       </SvgText>
-      <SvgText x={docX + 46} y={59} size={10.5} weight={800} anchor="middle">
+      <SvgText x={docX + 46} y={66} size={10.5} weight={800} anchor="middle">
         เริ่มใช้วันที่
       </SvgText>
-      <SvgText x={docX + 148} y={59} size={11} weight={800} anchor="middle">
+      <SvgText x={docX + 148} y={66} size={11} weight={800} anchor="middle">
         {form.effectiveDate}
       </SvgText>
     </g>
@@ -1797,21 +1804,20 @@ function FwsSvgTemperatureGrid({
   form: ReportFormState;
   template: ReportTemplateConfig;
 }) {
-  const isGr = template.showFirewoodWeight;
+  const showFirewoodRow = template.showFirewoodWeight;
   const doubleDayBoundaries = template.doubleDayBoundaries;
   const left = 58;
-  const dayH = isGr ? 27 : 29;
+  const dayH = 29;
 
-  // ลดเฉพาะความสูงช่องเวลา แต่คงแถวว่างระหว่าง "เวลา" กับ "อุณหภูมิ"
-  const timeH = isGr ? 25 : 38;
-  const tickRowH = isGr ? 0 : 13;
-  const tempHeaderH = isGr ? 0 : 26;
+  const timeH = 38;
+  const tickRowH = 13;
+  const tempHeaderH = 26;
 
-  // เพิ่มพื้นที่กราฟจากส่วนของช่องเวลาที่ลดลง
-  // โดยคงตำแหน่งส่วนล่างของตารางไว้เท่าเดิม
   const chartTop = dayH + timeH + tickRowH + tempHeaderH;
-  const chartH = isGr ? 352 : 303;
+  const footerRowsH = showFirewoodRow ? 58 : 36;
+  const chartH = height - chartTop - footerRowsH;
   const chartBottom = chartTop + chartH;
+  const firewoodRowBottom = showFirewoodRow ? chartBottom + footerRowsH / 2 : chartBottom;
   const chartW = width - left;
   const chartRight = width;
   const reportSlotCount = slots.length;
@@ -1819,7 +1825,7 @@ function FwsSvgTemperatureGrid({
   const cellW = chartW / reportSlotCount;
 
   const graphMin = template.graphMin;
-  const showHumidity = !isGr && form.showHumidityLine;
+  const showHumidity = !showFirewoodRow && form.showHumidityLine;
   const graphMax = showHumidity ? humidityGraphMax : template.graphMax;
 
   const valueToY = (value: number) => {
@@ -1887,7 +1893,7 @@ function FwsSvgTemperatureGrid({
     } as const;
   }
 
-  const targetPath = !isGr && form.showTargetLine
+  const targetPath = !showFirewoodRow && form.showTargetLine
     ? buildLinePath(
         slots.map((slot) => ({
           x: slotToX(slot.index),
@@ -1903,18 +1909,19 @@ function FwsSvgTemperatureGrid({
       <line x1={left} y1="0" x2={left} y2={height} stroke="#000000" strokeWidth="0.9" />
       <line x1="0" y1={dayH} x2={width} y2={dayH} stroke="#000000" strokeWidth="0.8" />
       <line x1="0" y1={dayH + timeH} x2={width} y2={dayH + timeH} stroke="#000000" strokeWidth="0.8" />
-      {!isGr ? (
-        <line
-          x1="0"
-          y1={dayH + timeH + tickRowH}
-          x2={width}
-          y2={dayH + timeH + tickRowH}
-          stroke="#000000"
-          strokeWidth="0.8"
-        />
-      ) : null}
+      <line
+        x1="0"
+        y1={dayH + timeH + tickRowH}
+        x2={width}
+        y2={dayH + timeH + tickRowH}
+        stroke="#000000"
+        strokeWidth="0.8"
+      />
       <line x1="0" y1={chartTop} x2={width} y2={chartTop} stroke="#000000" strokeWidth="0.9" />
       <line x1="0" y1={chartBottom} x2={width} y2={chartBottom} stroke="#000000" strokeWidth="0.8" />
+      {showFirewoodRow ? (
+        <line x1="0" y1={firewoodRowBottom} x2={width} y2={firewoodRowBottom} stroke="#000000" strokeWidth="0.8" />
+      ) : null}
 
       <SvgText x={22} y={19} size={11} weight={700} anchor="middle">
         วัน
@@ -1922,13 +1929,19 @@ function FwsSvgTemperatureGrid({
       <SvgText x={22} y={dayH + timeH / 2 + 4} size={11} weight={700} anchor="middle">
         เวลา
       </SvgText>
-      <SvgText x={28} y={isGr ? chartTop + 17 : dayH + timeH + tickRowH + tempHeaderH / 2 + 4} size={isGr ? 8.2 : 10.5} weight={700} anchor="middle">
+      <SvgText x={28} y={dayH + timeH + tickRowH + tempHeaderH / 2 + 4} size={10.5} weight={700} anchor="middle">
         อุณหภูมิ
       </SvgText>
-      <SvgText x={30} y={chartBottom + 15} size={isGr ? 8.2 : 10.5} weight={700} anchor="middle">
-        {isGr ? "ไม้ฟืน (ก.ก.)" : "สภาพยาง"}
-      </SvgText>
-      {isGr ? <SvgText x={30} y={chartBottom + 27} size={6.8} anchor="middle">Firewood</SvgText> : null}
+      {showFirewoodRow ? (
+        <>
+          <SvgText x={30} y={chartBottom + 13} size={8.2} weight={700} anchor="middle">ไม้ฟืน (ก.ก.)</SvgText>
+          <SvgText x={30} y={chartBottom + 24} size={6.8} anchor="middle">Firewood</SvgText>
+          <SvgText x={30} y={firewoodRowBottom + 13} size={8.2} weight={700} anchor="middle">สภาพยาง</SvgText>
+          <SvgText x={30} y={firewoodRowBottom + 24} size={6.8} anchor="middle">Smoked condition</SvgText>
+        </>
+      ) : (
+        <SvgText x={30} y={chartBottom + 15} size={10.5} weight={700} anchor="middle">สภาพยาง</SvgText>
+      )}
 
       {Array.from({ length: template.dayCount }).map((_, dayIndex) => {
         const x = left + dayIndex * slotsPerDay * cellW;
@@ -1963,7 +1976,8 @@ function FwsSvgTemperatureGrid({
               x2={x}
               y2={height}
               stroke="#000000"
-              strokeWidth="0.38"
+              strokeWidth="0.34"
+              strokeDasharray="1 1.5"
             />
 
             <text
@@ -2009,7 +2023,7 @@ function FwsSvgTemperatureGrid({
         const lineY = tempToY(temp);
         const isFive = temp % 5 === 0;
         const isGuide = template.guideTemperatures.includes(temp);
-        const showLabel = isFive || isGuide || temp === graphMax || temp === graphMin;
+        const showLabel = isFive || isGuide;
 
         return (
           <g key={`temp-${temp}`}>
@@ -2019,7 +2033,8 @@ function FwsSvgTemperatureGrid({
               x2={chartRight}
               y2={lineY}
               stroke="#000000"
-              strokeWidth={isGuide ? (isGr ? 1.25 : 1.05) : isFive ? (isGr ? 0.62 : 0.58) : 0.26}
+              strokeWidth={isGuide ? 1.25 : isFive ? 0.62 : 0.3}
+              strokeDasharray={isGuide || isFive ? undefined : "1 1.5"}
             />
 
             {showLabel ? (
@@ -2037,23 +2052,7 @@ function FwsSvgTemperatureGrid({
         );
       })}
 
-      {Array.from({ length: reportSlotCount + 1 }).map((_, index) => {
-        const x = left + index * cellW;
-        if (doubleDayBoundaries && index % slotsPerDay === 0) return null;
-        return (
-          <line
-            key={`chart-v-${index}`}
-            x1={x}
-            y1={chartTop}
-            x2={x}
-            y2={chartBottom}
-            stroke="#000000"
-            strokeWidth={index % slotsPerDay === 0 ? 0.85 : 0.26}
-          />
-        );
-      })}
-
-      {!isGr ? (() => {
+      {!showFirewoodRow ? (() => {
         const bx = 20;
         const by = (tempToY(template.smokingUpper) + tempToY(template.smokingLower)) / 2;
         return (
@@ -2072,7 +2071,7 @@ function FwsSvgTemperatureGrid({
         );
       })() : null}
 
-      {!isGr ? (() => {
+      {!showFirewoodRow ? (() => {
         const bx = 24;
         const by = (tempToY(template.smokingLower) + tempToY(template.graphMin)) / 2;
         return (
@@ -2091,7 +2090,7 @@ function FwsSvgTemperatureGrid({
         );
       })() : null}
 
-      {!isGr ? (
+      {!showFirewoodRow ? (
         <>
           <line x1="0" y1={tempToY(template.smokingUpper)} x2="28" y2={tempToY(template.smokingUpper)} stroke="#000000" strokeWidth="0.8" />
           <line x1="0" y1={tempToY(template.smokingLower)} x2="28" y2={tempToY(template.smokingLower)} stroke="#000000" strokeWidth="0.8" />
@@ -2104,7 +2103,7 @@ function FwsSvgTemperatureGrid({
       />
 
       <g aria-label="คำอธิบายสีกราฟ">
-        {!isGr ? <>
+        {!showFirewoodRow ? <>
         <rect x={left + 4} y={chartTop + 4} width={form.showHumidityLine ? 154 : 82} height="16" rx="3" fill="#ffffff" opacity="0.9" />
         <line x1={left + 10} y1={chartTop + 12} x2={left + 28} y2={chartTop + 12} stroke="#d62027" strokeWidth="2" />
         <circle cx={left + 19} cy={chartTop + 12} r="1.5" fill="#d62027" />
@@ -2161,8 +2160,8 @@ function FwsSvgTemperatureGrid({
             ))
         : null}
 
-      {isGr && form.firewoodWeight ? (
-        <SvgText x={left + cellW / 2} y={chartBottom + 24} size={8.2} weight={700} anchor="middle">
+      {showFirewoodRow && form.firewoodWeight ? (
+        <SvgText x={left + cellW / 2} y={chartBottom + 19} size={8.2} weight={700} anchor="middle">
           {form.firewoodWeight}
         </SvgText>
       ) : null}
@@ -2425,7 +2424,13 @@ function GrSvgNotes({ y, form }: { y: number; form: ReportFormState }) {
       <SvgText x={58} y={17} size={8.1} weight={700}>
         * สภาพลูกยาง
       </SvgText>
-      <SvgText x={138} y={17} size={10} weight={800}>X</SvgText>
+      <path
+        d="M 135 8 L 143 18 M 143 8 L 135 18"
+        fill="none"
+        stroke="#000000"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
       <SvgText x={151} y={17} size={8.1}>ไม่สุก</SvgText>
       <path
         d="M 205 13 L 209 17 L 216 8"
@@ -2437,7 +2442,14 @@ function GrSvgNotes({ y, form }: { y: number; form: ReportFormState }) {
       />
       <SvgText x={221} y={17} size={8.1}>สุก</SvgText>
       <circle cx={271} cy={13} r={7} fill="none" stroke="#000000" strokeWidth={0.9} />
-      <line x1={266} y1={18} x2={276} y2={8} stroke="#000000" strokeWidth={0.9} />
+      <path
+        d="M 266 13 L 270 17 L 277 8"
+        fill="none"
+        stroke="#000000"
+        strokeWidth="1.35"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
       <SvgText x={284} y={17} size={8.1}>
         ยางสุกแล้ว ยังไม่ออกเตา (อุ่น) / เกณฑ์การประเมินวันรมยาง ต้องใช้ระยะการรมควันไม่เกิน 5 วัน ยกเว้นยางที่สุกแล้ว
       </SvgText>
