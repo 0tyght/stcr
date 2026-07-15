@@ -1427,7 +1427,7 @@ function FwsSvgReport({
   const metaY = headerH;
   const metaH = 78;
   const graphY = metaY + metaH;
-  const graphH = 445;
+  const graphH = company.id === "gr" ? 430 : 445;
   const noteY = graphY + graphH + 8;
 
   return (
