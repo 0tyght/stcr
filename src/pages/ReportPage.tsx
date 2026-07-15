@@ -1809,15 +1809,17 @@ function FwsSvgTemperatureGrid({
   const left = 58;
   const dayH = 29;
 
-  const timeH = 38;
-  const tickRowH = 13;
-  const tempHeaderH = 26;
+  const timeH = showFirewoodRow ? 27 : 38;
+  const tickRowH = showFirewoodRow ? 0 : 13;
+  const tempHeaderH = showFirewoodRow ? 0 : 26;
 
   const chartTop = dayH + timeH + tickRowH + tempHeaderH;
-  const footerRowsH = showFirewoodRow ? 58 : 36;
+  const firewoodRowH = showFirewoodRow ? 38 : 0;
+  const smokedConditionRowH = showFirewoodRow ? 26 : 36;
+  const footerRowsH = firewoodRowH + smokedConditionRowH;
   const chartH = height - chartTop - footerRowsH;
   const chartBottom = chartTop + chartH;
-  const firewoodRowBottom = showFirewoodRow ? chartBottom + footerRowsH / 2 : chartBottom;
+  const firewoodRowBottom = showFirewoodRow ? chartBottom + firewoodRowH : chartBottom;
   const chartW = width - left;
   const chartRight = width;
   const reportSlotCount = slots.length;
@@ -1909,14 +1911,16 @@ function FwsSvgTemperatureGrid({
       <line x1={left} y1="0" x2={left} y2={height} stroke="#000000" strokeWidth="0.9" />
       <line x1="0" y1={dayH} x2={width} y2={dayH} stroke="#000000" strokeWidth="0.8" />
       <line x1="0" y1={dayH + timeH} x2={width} y2={dayH + timeH} stroke="#000000" strokeWidth="0.8" />
-      <line
-        x1="0"
-        y1={dayH + timeH + tickRowH}
-        x2={width}
-        y2={dayH + timeH + tickRowH}
-        stroke="#000000"
-        strokeWidth="0.8"
-      />
+      {tickRowH > 0 ? (
+        <line
+          x1="0"
+          y1={dayH + timeH + tickRowH}
+          x2={width}
+          y2={dayH + timeH + tickRowH}
+          stroke="#000000"
+          strokeWidth="0.8"
+        />
+      ) : null}
       <line x1="0" y1={chartTop} x2={width} y2={chartTop} stroke="#000000" strokeWidth="0.9" />
       <line x1="0" y1={chartBottom} x2={width} y2={chartBottom} stroke="#000000" strokeWidth="0.8" />
       {showFirewoodRow ? (
@@ -1929,15 +1933,21 @@ function FwsSvgTemperatureGrid({
       <SvgText x={22} y={dayH + timeH / 2 + 4} size={11} weight={700} anchor="middle">
         เวลา
       </SvgText>
-      <SvgText x={28} y={dayH + timeH + tickRowH + tempHeaderH / 2 + 4} size={10.5} weight={700} anchor="middle">
+      <SvgText
+        x={28}
+        y={showFirewoodRow ? chartTop + 17 : dayH + timeH + tickRowH + tempHeaderH / 2 + 4}
+        size={showFirewoodRow ? 8.2 : 10.5}
+        weight={700}
+        anchor="middle"
+      >
         อุณหภูมิ
       </SvgText>
       {showFirewoodRow ? (
         <>
-          <SvgText x={30} y={chartBottom + 13} size={8.2} weight={700} anchor="middle">ไม้ฟืน (ก.ก.)</SvgText>
-          <SvgText x={30} y={chartBottom + 24} size={6.8} anchor="middle">Firewood</SvgText>
-          <SvgText x={30} y={firewoodRowBottom + 13} size={8.2} weight={700} anchor="middle">สภาพยาง</SvgText>
-          <SvgText x={30} y={firewoodRowBottom + 24} size={6.8} anchor="middle">Smoked condition</SvgText>
+          <SvgText x={30} y={chartBottom + 17} size={8.2} weight={700} anchor="middle">ไม้ฟืน (ก.ก.)</SvgText>
+          <SvgText x={30} y={chartBottom + 29} size={6.8} anchor="middle">Firewood</SvgText>
+          <SvgText x={30} y={firewoodRowBottom + 12} size={8.2} weight={700} anchor="middle">สภาพยาง</SvgText>
+          <SvgText x={30} y={firewoodRowBottom + 22} size={6.8} anchor="middle">Smoked condition</SvgText>
         </>
       ) : (
         <SvgText x={30} y={chartBottom + 15} size={10.5} weight={700} anchor="middle">สภาพยาง</SvgText>
@@ -2161,7 +2171,7 @@ function FwsSvgTemperatureGrid({
         : null}
 
       {showFirewoodRow && form.firewoodWeight ? (
-        <SvgText x={left + cellW / 2} y={chartBottom + 19} size={8.2} weight={700} anchor="middle">
+        <SvgText x={left + cellW / 2} y={chartBottom + 23} size={8.2} weight={700} anchor="middle">
           {form.firewoodWeight}
         </SvgText>
       ) : null}
@@ -2636,11 +2646,16 @@ function buildReportSlots({
       dayIndex: Math.floor(index / template.timeSlots.length),
       timeLabel: template.timeSlots[index % template.timeSlots.length],
       date,
-      temperature: closestTemperature ? closestTemperature.value : null,
-      humidity: closestHumidity ? closestHumidity.value : null,
+      // Plot the exact same one-decimal value that is printed beside the point.
+      temperature: closestTemperature ? roundReportValue(closestTemperature.value) : null,
+      humidity: closestHumidity ? roundReportValue(closestHumidity.value) : null,
       target,
     };
   });
+}
+
+function roundReportValue(value: number): number {
+  return Math.round(value * 10) / 10;
 }
 
 function findClosestPoint(
