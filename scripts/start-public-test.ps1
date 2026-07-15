@@ -44,7 +44,7 @@ function Stop-StcrProcesses {
 }
 
 function Import-RequiredEnvironment {
-  $keys = @(
+  $requiredKeys = @(
     'STCR_DB_HOST',
     'STCR_DB_PORT',
     'STCR_DB_USER',
@@ -54,19 +54,37 @@ function Import-RequiredEnvironment {
     'STCR_SESSION_TTL_MINUTES',
     'STCR_TRUST_PROXY',
     'STCR_NODE_RED_CREDENTIAL_SECRET',
-    'STCR_API_KEY_PEPPER',
-    'STCR_GR_INGEST_API_KEY',
-    'STCR_TTN_INGEST_API_KEY',
-    'STCR_HTTP_INGEST_ENABLED',
-    'STCR_INGEST_URL'
+    'STCR_API_KEY_PEPPER'
   )
 
-  foreach ($key in $keys) {
+  foreach ($key in $requiredKeys) {
     $value = [Environment]::GetEnvironmentVariable($key, 'User')
     if (-not $value) {
       throw "Missing Windows user environment variable: $key"
     }
     Set-Item -Path "Env:$key" -Value $value
+  }
+
+  if ($env:STCR_API_KEY_PEPPER.Length -lt 32) {
+    throw 'STCR_API_KEY_PEPPER must contain at least 32 characters'
+  }
+
+  $httpIngestEnabled = [Environment]::GetEnvironmentVariable('STCR_HTTP_INGEST_ENABLED', 'User')
+  if (-not $httpIngestEnabled) { $httpIngestEnabled = 'false' }
+  Set-Item -Path 'Env:STCR_HTTP_INGEST_ENABLED' -Value $httpIngestEnabled
+
+  $ingestUrl = [Environment]::GetEnvironmentVariable('STCR_INGEST_URL', 'User')
+  if (-not $ingestUrl) { $ingestUrl = 'http://127.0.0.1:1880/stcr/api/telemetry' }
+  Set-Item -Path 'Env:STCR_INGEST_URL' -Value $ingestUrl
+
+  if ($httpIngestEnabled -eq 'true') {
+    foreach ($key in @('STCR_GR_INGEST_API_KEY', 'STCR_TTN_INGEST_API_KEY')) {
+      $value = [Environment]::GetEnvironmentVariable($key, 'User')
+      if (-not $value) {
+        throw "Missing Windows user environment variable while HTTP ingest is enabled: $key"
+      }
+      Set-Item -Path "Env:$key" -Value $value
+    }
   }
 }
 
