@@ -456,7 +456,7 @@ export function ReportPage() {
     const fallbackCycle = mode === "current" ? oven.cycleCount : getDefaultHistoricalCycle(oven);
     const cycle =
       Number.isFinite(requestedCycle) && requestedCycle > 0 ? requestedCycle : fallbackCycle;
-    const safeCycle = clampCycleNumber(cycle, oven);
+    const safeCycle = clampReportCycleNumber(cycle, oven, mode);
 
     setSelectedCycle(safeCycle);
     setRangeFromCycle(safeCycle);
@@ -551,7 +551,7 @@ export function ReportPage() {
         throw new Error("ยังไม่พบข้อมูลเตาหรือพื้นที่รายงาน");
       }
 
-      const safeCycle = clampCycleNumber(cycle, oven);
+      const safeCycle = clampReportCycleNumber(cycle, oven, mode);
       const range = getCycleRange(oven, mode, safeCycle);
 
       setSelectedCycle(safeCycle);
@@ -586,7 +586,7 @@ export function ReportPage() {
     async (chooseLocation = false) => {
       if (!oven || selectedCycle == null) return;
 
-      const safeCycle = clampCycleNumber(selectedCycle, oven);
+      const safeCycle = clampReportCycleNumber(selectedCycle, oven, mode);
       const range = getCycleRange(oven, mode, safeCycle);
       const filename = createPdfFilename(company, safeCycle, range.start);
 
@@ -1806,7 +1806,7 @@ function FwsSvgTemperatureGrid({
 }) {
   const showFirewoodRow = template.showFirewoodWeight;
   const doubleDayBoundaries = template.doubleDayBoundaries;
-  const left = 58;
+  const left = showFirewoodRow ? 78 : 58;
   const dayH = 29;
 
   const timeH = showFirewoodRow ? 27 : 38;
@@ -1921,7 +1921,9 @@ function FwsSvgTemperatureGrid({
           strokeWidth="0.8"
         />
       ) : null}
-      <line x1="0" y1={chartTop} x2={width} y2={chartTop} stroke="#000000" strokeWidth="0.9" />
+      {!showFirewoodRow ? (
+        <line x1="0" y1={chartTop} x2={width} y2={chartTop} stroke="#000000" strokeWidth="0.9" />
+      ) : null}
       <line x1="0" y1={chartBottom} x2={width} y2={chartBottom} stroke="#000000" strokeWidth="0.8" />
       {showFirewoodRow ? (
         <line x1="0" y1={firewoodRowBottom} x2={width} y2={firewoodRowBottom} stroke="#000000" strokeWidth="0.8" />
@@ -2043,7 +2045,7 @@ function FwsSvgTemperatureGrid({
               x2={chartRight}
               y2={lineY}
               stroke="#000000"
-              strokeWidth={isGuide ? 1.25 : isFive ? 0.62 : 0.3}
+              strokeWidth={isGuide ? (showFirewoodRow ? 1.8 : 1.05) : isFive ? 0.62 : 0.3}
               strokeDasharray={isGuide || isFive ? undefined : "1 1.5"}
             />
 
@@ -2132,11 +2134,47 @@ function FwsSvgTemperatureGrid({
         </> : null}
       </g>
 
+      {doubleDayBoundaries
+        ? Array.from({ length: template.dayCount - 1 }, (_, index) => {
+            const dayBoundary = index + 1;
+            const x = left + dayBoundary * slotsPerDay * cellW;
+            const gap = 2.4;
+
+            return (
+              <g key={`double-day-boundary-${dayBoundary}`} aria-hidden="true">
+                <rect
+                  x={x - gap / 2}
+                  y="0"
+                  width={gap}
+                  height={height}
+                  fill="#ffffff"
+                />
+                <line
+                  x1={x - gap / 2}
+                  y1="0"
+                  x2={x - gap / 2}
+                  y2={height}
+                  stroke="#000000"
+                  strokeWidth="0.75"
+                />
+                <line
+                  x1={x + gap / 2}
+                  y1="0"
+                  x2={x + gap / 2}
+                  y2={height}
+                  stroke="#000000"
+                  strokeWidth="0.75"
+                />
+              </g>
+            );
+          })
+        : null}
+
       {targetPath ? (
         <path d={targetPath} fill="none" stroke="#0f4c81" strokeWidth="1.35" opacity="0.9" />
       ) : null}
 
-      {temperaturePath ? (
+      {temperaturePath && !showFirewoodRow ? (
         <path d={temperaturePath} fill="none" stroke="#d62027" strokeWidth="1.55" opacity="0.96" />
       ) : null}
 
@@ -2144,17 +2182,19 @@ function FwsSvgTemperatureGrid({
         <path d={humidityPath} fill="none" stroke="#f59e0b" strokeWidth="1.55" opacity="0.96" />
       ) : null}
 
-      {slots
-        .filter((slot) => slot.temperature !== null)
-        .map((slot) => (
-          <circle
-            key={`temperature-${slot.index}`}
-            cx={slotToX(slot.index)}
-            cy={tempToY(slot.temperature ?? graphMin)}
-            r="1.25"
-            fill="#d62027"
-          />
-        ))}
+      {!showFirewoodRow
+        ? slots
+            .filter((slot) => slot.temperature !== null)
+            .map((slot) => (
+              <circle
+                key={`temperature-${slot.index}`}
+                cx={slotToX(slot.index)}
+                cy={tempToY(slot.temperature ?? graphMin)}
+                r="1.25"
+                fill="#d62027"
+              />
+            ))
+        : null}
 
       {showHumidity
         ? slots
@@ -2235,41 +2275,24 @@ function FwsSvgTemperatureGrid({
         );
       })}
 
-      {doubleDayBoundaries
-        ? Array.from({ length: template.dayCount - 1 }, (_, index) => {
-            const dayBoundary = index + 1;
-            const x = left + dayBoundary * slotsPerDay * cellW;
-            const gap = 2.4;
+      {showFirewoodRow && temperaturePath ? (
+        <path d={temperaturePath} fill="none" stroke="#d62027" strokeWidth="1.55" opacity="0.96" />
+      ) : null}
 
-            return (
-              <g key={`double-day-boundary-${dayBoundary}`} aria-hidden="true">
-                <rect
-                  x={x - gap / 2}
-                  y="0"
-                  width={gap}
-                  height={height}
-                  fill="#ffffff"
-                />
-                <line
-                  x1={x - gap / 2}
-                  y1="0"
-                  x2={x - gap / 2}
-                  y2={height}
-                  stroke="#000000"
-                  strokeWidth="0.75"
-                />
-                <line
-                  x1={x + gap / 2}
-                  y1="0"
-                  x2={x + gap / 2}
-                  y2={height}
-                  stroke="#000000"
-                  strokeWidth="0.75"
-                />
-              </g>
-            );
-          })
+      {showFirewoodRow
+        ? slots
+            .filter((slot) => slot.temperature !== null)
+            .map((slot) => (
+              <circle
+                key={`temperature-top-${slot.index}`}
+                cx={slotToX(slot.index)}
+                cy={tempToY(slot.temperature ?? graphMin)}
+                r="1.25"
+                fill="#d62027"
+              />
+            ))
         : null}
+
     </g>
   );
 }
@@ -2692,6 +2715,12 @@ function buildLinePath(points: Array<{ x: number; y: number }>): string {
 function clampCycleNumber(cycle: number, oven: Oven): number {
   const latest = Math.max(oven.cycleCount, 1);
   return Math.min(Math.max(1, Math.round(cycle)), latest);
+}
+
+function clampReportCycleNumber(cycle: number, oven: Oven, mode: ReportMode): number {
+  const safeCycle = clampCycleNumber(cycle, oven);
+  if (mode === "current") return safeCycle;
+  return Math.min(safeCycle, getDefaultHistoricalCycle(oven));
 }
 
 function getCycleRangeList(from: number, to: number, oven: Oven): number[] {
