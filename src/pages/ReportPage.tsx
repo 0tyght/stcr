@@ -129,8 +129,8 @@ const grReportTemplate: ReportTemplateConfig = {
   showFirewoodWeight: true,
 };
 
-function getReportTemplate(company: CompanyConfig): ReportTemplateConfig {
-  return company.id === "gr" ? grReportTemplate : defaultReportTemplate;
+function getReportTemplate(_company: CompanyConfig): ReportTemplateConfig {
+  return defaultReportTemplate;
 }
 
 function getReportFormDefaults(company: CompanyConfig): ReportFormState {
@@ -148,13 +148,10 @@ function resolveDocumentMeta(
 ): SavedReportDocumentMeta | null {
   if (!saved) return null;
 
-  if (
-    company.id === "gr" &&
-    saved.documentNo === defaultReportTemplate.defaultDocumentNo
-  ) {
+  if (company.id === "gr" && saved.documentNo === grReportTemplate.defaultDocumentNo) {
     return {
-      documentNo: grReportTemplate.defaultDocumentNo,
-      effectiveDate: grReportTemplate.defaultEffectiveDate,
+      documentNo: defaultReportTemplate.defaultDocumentNo,
+      effectiveDate: defaultReportTemplate.defaultEffectiveDate,
     };
   }
 
@@ -272,10 +269,8 @@ const smokingPeriodOptions: Array<{
   },
 ];
 
-function getSmokingPeriodOptions(company: CompanyConfig) {
-  return company.id === "gr"
-    ? smokingPeriodOptions.filter((option) => option.value !== "notReached")
-    : smokingPeriodOptions;
+function getSmokingPeriodOptions(_company: CompanyConfig) {
+  return smokingPeriodOptions;
 }
 
 const temperatureControlOptions: Array<{
@@ -1182,7 +1177,6 @@ function ReportFormControls({
           </div>
         </fieldset>
 
-        {company.id !== "gr" ? (
         <fieldset className="report-form-group report-form-group--target">
           <legend>ข้อมูลที่แสดงในกราฟ</legend>
 
@@ -1228,7 +1222,6 @@ function ReportFormControls({
             </label>
           </div>
         </fieldset>
-        ) : null}
       </div>
 
       <div className="report-form-details">
@@ -1453,14 +1446,13 @@ function FwsSvgReport({
         <FwsSvgNotes y={noteY} form={form} template={template} />
       </g>
 
-      {company.id !== "gr" ? <><SvgText x={8} y={779} size={8}>
+      <SvgText x={8} y={779} size={8}>
         {form.documentNo} รายงานการตรวจสอบอุณหภูมิเตา
       </SvgText>
 
       <SvgText x={1096} y={779} size={8} anchor="end">
         Effective Date : {form.effectiveDate}
       </SvgText>
-      </> : null}
     </svg>
   );
 }
@@ -1476,10 +1468,6 @@ function FwsSvgHeader({
   company: CompanyConfig;
   form: ReportFormState;
 }) {
-  if (company.id === "gr") {
-    return <GrSvgHeader width={width} height={height} company={company} form={form} />;
-  }
-
   const logoW = 174;
   const docW = 205;
   const titleW = width - logoW - docW;
@@ -1608,20 +1596,6 @@ function FwsSvgMeta({
   company: CompanyConfig;
   form: ReportFormState;
 }) {
-  if (company.id === "gr") {
-    return (
-      <GrSvgMeta
-        y={y}
-        width={width}
-        height={height}
-        oven={oven}
-        cycle={cycle}
-        cycleRange={cycleRange}
-        form={form}
-      />
-    );
-  }
-
   const rubberOptions = getRubberOptions(company);
 
   return (
