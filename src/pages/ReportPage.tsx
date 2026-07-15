@@ -580,7 +580,7 @@ export function ReportPage() {
   );
 
   const downloadSelectedPdf = useCallback(
-    async (chooseLocation = true) => {
+    async (chooseLocation = false) => {
       if (!oven || selectedCycle == null) return;
 
       const safeCycle = clampCycleNumber(selectedCycle, oven);
@@ -1476,9 +1476,6 @@ function FwsSvgHeader({
   const titleW = width - logoW - docW;
   const docX = logoW + titleW;
   const logoBox = company.report.logoBox;
-  const grDocumentMatch = form.documentNo.match(/^(.*?)\s+(R\d+)$/i);
-  const grDocumentCode = grDocumentMatch?.[1] || form.documentNo;
-  const grRevision = grDocumentMatch?.[2] || "R07";
 
   return (
     <g>
@@ -1491,9 +1488,7 @@ function FwsSvgHeader({
       <line x1={logoW} y1="0" x2={logoW} y2={height} stroke="#000000" />
       <line x1={docX} y1="0" x2={docX} y2={height} stroke="#000000" />
       <line x1={docX} y1={height / 2} x2={width} y2={height / 2} stroke="#000000" />
-      {company.id !== "gr" ? (
-        <line x1={docX + 92} y1={height / 2} x2={docX + 92} y2={height} stroke="#000000" />
-      ) : null}
+      <line x1={docX + 92} y1={height / 2} x2={docX + 92} y2={height} stroke="#000000" />
 
       <image
         href={company.report.logo}
@@ -1512,31 +1507,18 @@ function FwsSvgHeader({
         Smoking Temperature Control Report
       </SvgText>
 
-      {company.id === "gr" ? (
-        <>
-          <SvgText x={docX + docW / 2} y={25} size={11} weight={800} anchor="middle">
-            {grDocumentCode}
-          </SvgText>
-          <SvgText x={docX + docW / 2} y={61} size={10.5} weight={800} anchor="middle">
-            {grRevision} เริ่มใช้ {form.effectiveDate}
-          </SvgText>
-        </>
-      ) : (
-        <>
-          <SvgText x={docX + docW / 2} y={17} size={10} weight={800} anchor="middle">
-            Document No.
-          </SvgText>
-          <SvgText x={docX + docW / 2} y={34} size={11} weight={800} anchor="middle">
-            {form.documentNo}
-          </SvgText>
-          <SvgText x={docX + 46} y={59} size={10.5} weight={800} anchor="middle">
-            เริ่มใช้วันที่
-          </SvgText>
-          <SvgText x={docX + 148} y={59} size={11} weight={800} anchor="middle">
-            {form.effectiveDate}
-          </SvgText>
-        </>
-      )}
+      <SvgText x={docX + docW / 2} y={17} size={10} weight={800} anchor="middle">
+        Document No.
+      </SvgText>
+      <SvgText x={docX + docW / 2} y={34} size={11} weight={800} anchor="middle">
+        {form.documentNo}
+      </SvgText>
+      <SvgText x={docX + 46} y={59} size={10.5} weight={800} anchor="middle">
+        เริ่มใช้วันที่
+      </SvgText>
+      <SvgText x={docX + 148} y={59} size={11} weight={800} anchor="middle">
+        {form.effectiveDate}
+      </SvgText>
     </g>
   );
 }
