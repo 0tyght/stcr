@@ -99,6 +99,7 @@ type ReportTemplateConfig = {
   defaultDocumentNo: string;
   defaultEffectiveDate: string;
   showFirewoodWeight: boolean;
+  doubleDayBoundaries: boolean;
 };
 
 const defaultReportTemplate: ReportTemplateConfig = {
@@ -113,24 +114,20 @@ const defaultReportTemplate: ReportTemplateConfig = {
   defaultDocumentNo: "F-WS-05 Rev.11",
   defaultEffectiveDate: "1-ธ.ค.-68",
   showFirewoodWeight: false,
+  doubleDayBoundaries: false,
 };
 
 const grReportTemplate: ReportTemplateConfig = {
   ...defaultReportTemplate,
   timeSlots: ["08.00", "12.00", "16.00", "20.00", "24.00", "04.00"],
   intervalHours: 4,
-  graphMin: 30,
-  graphMax: 62,
-  guideTemperatures: [30, 35, 55],
-  smokingLower: 35,
-  smokingUpper: 55,
   defaultDocumentNo: "F01-05-05 R07",
   defaultEffectiveDate: "22/06/67",
-  showFirewoodWeight: true,
+  doubleDayBoundaries: true,
 };
 
-function getReportTemplate(_company: CompanyConfig): ReportTemplateConfig {
-  return defaultReportTemplate;
+function getReportTemplate(company: CompanyConfig): ReportTemplateConfig {
+  return company.id === "gr" ? grReportTemplate : defaultReportTemplate;
 }
 
 function getReportFormDefaults(company: CompanyConfig): ReportFormState {
@@ -1801,6 +1798,7 @@ function FwsSvgTemperatureGrid({
   template: ReportTemplateConfig;
 }) {
   const isGr = template.showFirewoodWeight;
+  const doubleDayBoundaries = template.doubleDayBoundaries;
   const left = 58;
   const dayH = isGr ? 27 : 29;
 
@@ -1938,14 +1936,9 @@ function FwsSvgTemperatureGrid({
 
         return (
           <g key={`day-${dayIndex}`}>
-            {isGr ? (
-              <>
-                <line x1={x - 1.2} y1="0" x2={x - 1.2} y2={height} stroke="#000000" strokeWidth="0.75" />
-                <line x1={x + 1.2} y1="0" x2={x + 1.2} y2={height} stroke="#000000" strokeWidth="0.75" />
-              </>
-            ) : (
+            {!doubleDayBoundaries ? (
               <line x1={x} y1="0" x2={x} y2={height} stroke="#000000" strokeWidth="1.0" />
-            )}
+            ) : null}
             <SvgText x={x + w / 2} y={19} size={10} weight={700} anchor="middle">
               ({dayIndex + 1})
             </SvgText>
@@ -2046,7 +2039,7 @@ function FwsSvgTemperatureGrid({
 
       {Array.from({ length: reportSlotCount + 1 }).map((_, index) => {
         const x = left + index * cellW;
-        if (isGr && index % slotsPerDay === 0) return null;
+        if (doubleDayBoundaries && index % slotsPerDay === 0) return null;
         return (
           <line
             key={`chart-v-${index}`}
@@ -2232,6 +2225,42 @@ function FwsSvgTemperatureGrid({
           </text>
         );
       })}
+
+      {doubleDayBoundaries
+        ? Array.from({ length: template.dayCount - 1 }, (_, index) => {
+            const dayBoundary = index + 1;
+            const x = left + dayBoundary * slotsPerDay * cellW;
+            const gap = 2.4;
+
+            return (
+              <g key={`double-day-boundary-${dayBoundary}`} aria-hidden="true">
+                <rect
+                  x={x - gap / 2}
+                  y="0"
+                  width={gap}
+                  height={height}
+                  fill="#ffffff"
+                />
+                <line
+                  x1={x - gap / 2}
+                  y1="0"
+                  x2={x - gap / 2}
+                  y2={height}
+                  stroke="#000000"
+                  strokeWidth="0.75"
+                />
+                <line
+                  x1={x + gap / 2}
+                  y1="0"
+                  x2={x + gap / 2}
+                  y2={height}
+                  stroke="#000000"
+                  strokeWidth="0.75"
+                />
+              </g>
+            );
+          })
+        : null}
     </g>
   );
 }
