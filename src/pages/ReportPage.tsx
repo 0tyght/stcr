@@ -1805,7 +1805,7 @@ function GrSvgMeta({
         return (
           <g key={item.value}>
             <FwsCheckbox x={x} y={29} size={11} checked={form.rubberType === item.value} />
-            <SvgText x={x + 5.5} y={68} size={7.5} anchor="middle">{item.label}</SvgText>
+            <SvgText x={x + 5.5} y={52} size={7.5} anchor="middle">{item.label}</SvgText>
           </g>
         );
       })}
