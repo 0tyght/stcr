@@ -1,7 +1,7 @@
 {
     "dataSource":  "node-red",
-    "apiBaseUrl":  "https://poly-mic-extras-bernard.trycloudflare.com/stcr/api",
+    "apiBaseUrl":  "https://athletic-yacht-investigations-surname.trycloudflare.com/stcr/api",
     "pollIntervalMs":  5000,
     "requestTimeoutMs":  15000,
-    "updatedAt":  "2026-07-14T11:28:40.7649553Z"
+    "updatedAt":  "2026-07-15T03:51:37.7957488Z"
 }
