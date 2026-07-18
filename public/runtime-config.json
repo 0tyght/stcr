@@ -1,7 +1,7 @@
 {
     "dataSource":  "node-red",
-    "apiBaseUrl":  "https://temporary-researchers-framing-bases.trycloudflare.com/stcr/api",
+    "apiBaseUrl":  "https://steven-raleigh-deer-turtle.trycloudflare.com/stcr/api",
     "pollIntervalMs":  5000,
     "requestTimeoutMs":  15000,
-    "updatedAt":  "2026-07-17T08:19:19.4562912Z"
+    "updatedAt":  "2026-07-18T01:27:08.9171734Z"
 }
