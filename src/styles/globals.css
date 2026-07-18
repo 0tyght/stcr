@@ -2312,3 +2312,237 @@ tbody tr:hover {
   min-height: 30px;
   padding: 5px 9px;
 }
+
+/* =========================
+   Desktop / Tablet layout
+   ========================= */
+
+@media (max-width: 1180px) {
+  :root {
+    --sidebar-width: 76px;
+  }
+
+  .app-shell {
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  }
+
+  .sidebar {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    max-width: var(--sidebar-width);
+    transition:
+      width 160ms ease,
+      min-width 160ms ease,
+      max-width 160ms ease,
+      box-shadow 160ms ease;
+  }
+
+  .sidebar:hover,
+  .sidebar:focus-within {
+    width: 232px;
+    min-width: 232px;
+    max-width: 232px;
+    box-shadow: 12px 0 28px rgba(0, 0, 0, 0.34);
+  }
+
+  .brand-row {
+    justify-content: center;
+    padding-inline: 8px;
+  }
+
+  .brand-text,
+  .nav-item span,
+  .oven-word,
+  .sidebar-footer span {
+    display: none;
+  }
+
+  .sidebar:hover .brand-row,
+  .sidebar:focus-within .brand-row {
+    justify-content: flex-start;
+    padding-inline: 12px;
+  }
+
+  .sidebar:hover .brand-text,
+  .sidebar:focus-within .brand-text {
+    display: flex;
+  }
+
+  .nav-item {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .sidebar:hover .nav-item,
+  .sidebar:focus-within .nav-item {
+    justify-content: flex-start;
+    padding-inline: 15px;
+  }
+
+  .sidebar:hover .nav-item span,
+  .sidebar:focus-within .nav-item span,
+  .sidebar:hover .oven-word,
+  .sidebar:focus-within .oven-word {
+    display: inline;
+  }
+
+  .oven-link {
+    justify-content: center;
+    gap: 4px;
+    padding-inline: 6px;
+  }
+
+  .oven-link .mini-status {
+    position: absolute;
+    right: 8px;
+    margin-left: 0;
+  }
+
+  .sidebar:hover .oven-link,
+  .sidebar:focus-within .oven-link {
+    justify-content: flex-start;
+    gap: 12px;
+    padding-inline: 11px;
+  }
+
+  .sidebar:hover .oven-link .mini-status,
+  .sidebar:focus-within .oven-link .mini-status {
+    position: static;
+    margin-left: auto;
+  }
+
+  .sidebar-footer {
+    display: grid;
+    place-items: center;
+    padding-inline: 4px;
+  }
+
+  .sidebar:hover .sidebar-footer,
+  .sidebar:focus-within .sidebar-footer {
+    display: block;
+    padding-inline: 12px;
+  }
+
+  .sidebar:hover .sidebar-footer span,
+  .sidebar:focus-within .sidebar-footer span {
+    display: block;
+  }
+
+  .view-root {
+    padding: 12px 14px 20px;
+  }
+
+  .live-clock {
+    display: none;
+  }
+
+  table {
+    min-width: 820px;
+  }
+
+  .report-signatures {
+    grid-template-columns: repeat(2, minmax(180px, 220px));
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1180px) {
+  .summary-grid,
+  .metrics-grid,
+  .realtime-gauge-grid,
+  .history-stat-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .oven-grid {
+    grid-template-columns: repeat(3, minmax(210px, 1fr));
+  }
+
+  .detail-grid,
+  .detail-overview-grid {
+    grid-template-columns: minmax(0, 1.3fr) minmax(230px, 0.55fr);
+  }
+
+  .settings-layout {
+    grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.1fr);
+  }
+
+  .gauge-card {
+    min-height: 170px;
+    padding-inline: 9px;
+  }
+}
+
+@media (max-width: 900px) {
+  .view-root {
+    padding: 12px;
+  }
+
+  .page-header {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .page-actions {
+    justify-content: flex-end;
+  }
+
+  .summary-grid,
+  .metrics-grid,
+  .realtime-gauge-grid,
+  .history-stat-grid,
+  .report-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .oven-grid {
+    grid-template-columns: repeat(2, minmax(210px, 1fr));
+  }
+
+  .toolbar-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .toolbar-grid .search-field {
+    grid-column: 1 / -1;
+  }
+
+  .toolbar-grid .field:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .dashboard-toolbar {
+    grid-template-columns: minmax(220px, 1fr) auto;
+  }
+
+  .operation-times {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .time-series-chart,
+  .grafana-chart-panel .time-series-chart {
+    height: 310px;
+  }
+
+  table {
+    min-width: 700px;
+  }
+
+  .table-wrap {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) var(--surface);
+  }
+}
+
+@media (max-width: 740px) {
+  .page-header,
+  .dashboard-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    grid-template-columns: 1fr;
+  }
+
+  .page-actions,
+  .segmented {
+    justify-content: flex-start;
+  }
+}
