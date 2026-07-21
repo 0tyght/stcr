@@ -36,11 +36,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate Node-RED contract
+        run: |
+          npm run node-red:build
+          npm run node-red:validate
+          git diff --exit-code -- node-red/flows.json
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Build
         run: npm run build
         env:
           GITHUB_PAGES: "true"
-          VITE_DATA_SOURCE: "node-red"
           VITE_REALTIME_POLL_INTERVAL_MS: "5000"
           VITE_API_TIMEOUT_MS: "15000"
 

@@ -6,6 +6,12 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    proxy: {
+      "/stcr/api": {
+        target: "http://127.0.0.1:1880",
+        changeOrigin: false,
+      },
+    },
     headers: {
       "X-Content-Type-Options": "nosniff",
       "X-Frame-Options": "DENY",
@@ -15,6 +21,12 @@ export default defineConfig({
   },
   preview: {
     port: 4173,
+    proxy: {
+      "/stcr/api": {
+        target: "http://127.0.0.1:1880",
+        changeOrigin: false,
+      },
+    },
     headers: {
       "X-Content-Type-Options": "nosniff",
       "X-Frame-Options": "DENY",

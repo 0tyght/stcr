@@ -1,0 +1,28 @@
+[Unit]
+Description=STCR Node-RED API and factory telemetry service
+After=network-online.target mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=node-red
+Group=node-red
+WorkingDirectory=/opt/stcr
+EnvironmentFile=/etc/stcr/stcr.env
+ExecStart=/usr/bin/node-red --userDir /var/lib/node-red --settings /opt/stcr/node-red/settings.production.cjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/node-red
+
+[Install]
+WantedBy=multi-user.target

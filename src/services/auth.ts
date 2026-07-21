@@ -1,5 +1,5 @@
 import { runtimeConfig } from "../config/runtime";
-import { getCompany, getCompanyIdFromAccount } from "../config/companies";
+import { getCompany } from "../config/companies";
 import { COMPANY_STORAGE_KEY } from "../config/preferences";
 import { ApiError } from "./api/errors";
 
@@ -48,17 +48,6 @@ export function clearAuthSession(): void {
 }
 
 export async function login(username: string, password: string): Promise<AuthSession> {
-  if (runtimeConfig.dataSource === "mock") {
-    const session: AuthSession = {
-      token: "mock-session",
-      username,
-      companyId: getCompanyIdFromAccount(username),
-      expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
-    };
-    saveAuthSession(session);
-    return session;
-  }
-
   if (!password) {
     throw new ApiError("กรุณากรอกรหัสผ่าน", { code: "PASSWORD_REQUIRED" });
   }
@@ -87,7 +76,7 @@ export async function login(username: string, password: string): Promise<AuthSes
 export async function logout(): Promise<void> {
   const session = readAuthSession();
   clearAuthSession();
-  if (runtimeConfig.dataSource !== "node-red" || !session) return;
+  if (!session) return;
 
   try {
     const company = getCompany(session.companyId);

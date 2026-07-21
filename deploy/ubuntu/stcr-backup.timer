@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the STCR database backup every day
+
+[Timer]
+OnCalendar=*-*-* 02:15:00
+RandomizedDelaySec=900
+Persistent=true
+Unit=stcr-backup.service
+
+[Install]
+WantedBy=timers.target

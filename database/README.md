@@ -6,6 +6,7 @@ The production source of truth is MariaDB/MySQL. Node-RED is responsible for ing
 
 1. Node-RED sends one four-sensor batch per oven to `POST /stcr/api/telemetry` every minute with a company-scoped API Key.
 2. Every individual IoT message is inserted into `telemetry_events` with topic, device, sensor, sequence, timestamps and quality.
+   Factory MQTT payloads are also retained unchanged in `factory_mqtt_messages` before normalization.
 3. Complete four-sensor oven snapshots are inserted into `sensor_readings`, including ignition data.
 4. `oven_cycles.fired_at` records the first fire event.
 5. `report_started_at` is set only after chamber temperature stays above the configured lower limit for 30 minutes.

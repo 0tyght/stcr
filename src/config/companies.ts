@@ -49,13 +49,6 @@ export type CompanyConfig = {
     logo: string;
     logoBox: { x: number; y: number; width: number; height: number };
   };
-  mockData: {
-    sourceStartIndex: number;
-    count?: number;
-    displayNumberStart?: number;
-    zone?: string;
-    line?: string;
-  };
   theme: CompanyTheme;
 };
 
@@ -80,7 +73,6 @@ export const companies = {
       logo: grLogo,
       logoBox: { x: 42, y: 6, width: 90, height: 62 },
     },
-    mockData: { sourceStartIndex: 0 },
     theme: {
       primary: "#eed236",
       primarySoft: "#eed236",
@@ -129,13 +121,6 @@ export const companies = {
       logo: ttnLogo,
       logoBox: { x: 34.5, y: -15, width: 105, height: 105 },
     },
-    mockData: {
-      sourceStartIndex: 0,
-      count: 10,
-      displayNumberStart: 1,
-      zone: "TTN",
-      line: "Smoking Line",
-    },
     theme: {
       primary: "#ab84fe",
       primarySoft: "#efe7ff",
@@ -176,12 +161,6 @@ export const accountList = companyList.flatMap((company) =>
 
 export function getCompany(companyId: string | null | undefined): CompanyConfig {
   return companies[companyId as CompanyId] ?? companies[DEFAULT_COMPANY_ID];
-}
-
-export function getCompanyIdFromAccount(accountId: string | null | undefined): CompanyId {
-  return (
-    accountList.find((account) => account.id === accountId)?.companyId ?? DEFAULT_COMPANY_ID
-  );
 }
 
 export function getCurrentCompany(): CompanyConfig {

@@ -1,10 +1,6 @@
 import { LogIn, Moon, Palette } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import {
-  accountList,
-  applyCompanyTheme,
-  getCompany,
-} from "../config/companies";
+import { applyCompanyTheme, getCompany } from "../config/companies";
 import {
   ACCOUNT_STORAGE_KEY,
   getStoredAccountId,
@@ -13,7 +9,6 @@ import {
   THEME_STORAGE_KEY,
   type ThemeMode,
 } from "../config/preferences";
-import { runtimeConfig } from "../config/runtime";
 
 export function LoginPage({
   onLogin,
@@ -25,7 +20,6 @@ export function LoginPage({
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => getStoredThemeMode("company"));
   const [loginError, setLoginError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const passwordRequired = runtimeConfig.dataSource === "node-red";
 
   const companyId = getStoredCompanyId();
   const company = useMemo(() => getCompany(companyId), [companyId]);
@@ -99,28 +93,15 @@ export function LoginPage({
 
         <label>
           <span>ผู้ใช้</span>
-          {passwordRequired ? (
-            <input
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              type="text"
-              autoComplete="username"
-              maxLength={80}
-              required
-              placeholder="กรอกชื่อผู้ใช้"
-            />
-          ) : (
-            <select
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-            >
-              {accountList.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.label}
-                </option>
-              ))}
-            </select>
-          )}
+          <input
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            type="text"
+            autoComplete="username"
+            maxLength={80}
+            required
+            placeholder="กรอกชื่อผู้ใช้"
+          />
         </label>
 
         <label>
@@ -129,9 +110,9 @@ export function LoginPage({
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             type="password"
-            placeholder={passwordRequired ? "กรอกรหัสผ่าน" : "โหมดทดลองไม่ต้องกรอก"}
+            placeholder="กรอกรหัสผ่าน"
             autoComplete="current-password"
-            required={passwordRequired}
+            required
           />
         </label>
 

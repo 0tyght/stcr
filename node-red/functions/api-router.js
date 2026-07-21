@@ -14,6 +14,10 @@ const allowedOrigin = requestOrigin && allowedOrigins.includes(requestOrigin) ? 
 const sensorKeys = ["chamberTemp", "humidity", "furnaceTemp", "blowerTemp"];
 const maxBodyBytes = 32 * 1024;
 const maxHistoryRangeMs = 14 * 24 * 60 * 60 * 1000;
+const configuredOfflineSeconds = Number(env.get("STCR_OFFLINE_THRESHOLD_SECONDS") || 180);
+const offlineThresholdMs = Number.isFinite(configuredOfflineSeconds) && configuredOfflineSeconds >= 30
+  ? configuredOfflineSeconds * 1000
+  : 180 * 1000;
 
 function responseHeaders(contentType = "application/json; charset=utf-8") {
   return {
@@ -232,6 +236,148 @@ function getDatabasePool() {
   return pool;
 }
 
+function databaseTimestamp(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value.toISOString();
+  const timestamp = Date.parse(String(value));
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+}
+
+function emptyReadings(updatedAt) {
+  return {
+    chamberTemp: { key: "chamberTemp", value: 0, unit: "C", updatedAt },
+    humidity: { key: "humidity", value: 0, unit: "%", updatedAt },
+    furnaceTemp: { key: "furnaceTemp", value: 0, unit: "C", updatedAt },
+    blowerTemp: { key: "blowerTemp", value: 0, unit: "C", updatedAt },
+  };
+}
+
+async function loadRuntimeStateFromDatabase() {
+  const pool = getDatabasePool();
+  const [ovenRows] = await pool.execute(
+    `SELECT o.company_id AS companyId, o.id, o.oven_number AS ovenNumber,
+            o.name, o.zone_name AS zoneName, o.line_name AS lineName,
+            o.status, o.enabled, o.chamber_lower AS chamberLower,
+            o.chamber_upper AS chamberUpper, o.humidity_lower AS humidityLower,
+            o.humidity_upper AS humidityUpper, o.furnace_lower AS furnaceLower,
+            o.furnace_upper AS furnaceUpper, o.blower_lower AS blowerLower,
+            o.blower_upper AS blowerUpper, o.last_seen_at AS lastSeenAt,
+            c.cycle_number AS cycleNumber, c.state AS cycleState,
+            c.fired_at AS firedAt, c.report_started_at AS reportStartedAt,
+            c.stopped_at AS stoppedAt,
+            r.recorded_at AS readingAt, r.chamber_temp AS chamberTemp,
+            r.humidity, r.furnace_temp AS furnaceTemp, r.blower_temp AS blowerTemp
+     FROM ovens o
+     LEFT JOIN oven_cycles c ON c.id=(
+       SELECT c2.id FROM oven_cycles c2
+       WHERE c2.company_id=o.company_id AND c2.oven_id=o.id
+       ORDER BY c2.cycle_number DESC, c2.id DESC LIMIT 1
+     )
+     LEFT JOIN sensor_readings r ON r.id=(
+       SELECT r2.id FROM sensor_readings r2
+       WHERE r2.company_id=o.company_id AND r2.oven_id=o.id
+       ORDER BY r2.recorded_at DESC, r2.id DESC LIMIT 1
+     )
+     WHERE o.enabled=TRUE
+     ORDER BY o.company_id, o.oven_number`,
+  );
+  const [alarmRows] = await pool.execute(
+    `SELECT id, company_id AS companyId, oven_id AS ovenId, sensor_key AS sensorKey,
+            severity, status, title, detail, measured_value AS measuredValue,
+            limit_value AS limitValue, created_at AS createdAt, resolved_at AS resolvedAt
+     FROM alarms
+     ORDER BY created_at DESC
+     LIMIT 400`,
+  );
+
+  const companies = {};
+  for (const row of ovenRows) {
+    const companyId = String(row.companyId || "");
+    if (!["gr", "ttn"].includes(companyId)) continue;
+    companies[companyId] ||= {
+      companyId,
+      ovens: [],
+      history: {},
+      archivedCycles: {},
+      alarms: [],
+      auditEvents: [],
+    };
+
+    const lastUpdatedAt = databaseTimestamp(row.readingAt || row.lastSeenAt) || new Date(0).toISOString();
+    const readings = emptyReadings(lastUpdatedAt);
+    if (row.readingAt) {
+      readings.chamberTemp.value = Number(row.chamberTemp);
+      readings.humidity.value = Number(row.humidity);
+      readings.furnaceTemp.value = Number(row.furnaceTemp);
+      readings.blowerTemp.value = Number(row.blowerTemp);
+    }
+    const firedAt = databaseTimestamp(row.firedAt);
+    const reportStartedAt = databaseTimestamp(row.reportStartedAt);
+    const stoppedAt = databaseTimestamp(row.stoppedAt);
+    const oven = {
+      id: String(row.id),
+      number: Number(row.ovenNumber),
+      name: String(row.name),
+      zone: String(row.zoneName),
+      line: String(row.lineName),
+      status: ["open", "closed", "offline"].includes(row.status) ? row.status : "offline",
+      enabled: Boolean(row.enabled),
+      cycleCount: Number(row.cycleNumber || 0),
+      ...(firedAt ? { firedAt } : {}),
+      ...(reportStartedAt ? { reportStartedAt, startedAt: reportStartedAt } : {}),
+      ...(stoppedAt ? { stoppedAt } : {}),
+      lastUpdatedAt,
+      readings,
+      limits: {
+        chamberTemp: { sensor: "chamberTemp", lower: Number(row.chamberLower), upper: Number(row.chamberUpper) },
+        humidity: { sensor: "humidity", lower: Number(row.humidityLower), upper: Number(row.humidityUpper) },
+        furnaceTemp: { sensor: "furnaceTemp", lower: Number(row.furnaceLower), upper: Number(row.furnaceUpper) },
+        blowerTemp: { sensor: "blowerTemp", lower: Number(row.blowerLower), upper: Number(row.blowerUpper) },
+      },
+    };
+    companies[companyId].ovens.push(oven);
+    companies[companyId].history[oven.id] = [];
+    companies[companyId].archivedCycles[oven.id] = [];
+  }
+
+  for (const row of alarmRows) {
+    const company = companies[row.companyId];
+    if (!company || !company.ovens.some((oven) => oven.id === row.ovenId)) continue;
+    const createdAt = databaseTimestamp(row.createdAt) || new Date().toISOString();
+    const resolvedAt = databaseTimestamp(row.resolvedAt);
+    company.alarms.push({
+      id: String(row.id),
+      ovenId: String(row.ovenId),
+      severity: row.severity,
+      status: row.status,
+      ...(row.sensorKey ? { sensor: row.sensorKey } : {}),
+      title: String(row.title),
+      detail: String(row.detail),
+      ...(row.measuredValue == null ? {} : { value: Number(row.measuredValue) }),
+      ...(row.limitValue == null ? {} : { limit: Number(row.limitValue) }),
+      createdAt,
+      ...(resolvedAt ? { resolvedAt } : {}),
+    });
+  }
+
+  if (!Object.keys(companies).length) throw new Error("No enabled ovens found in database");
+  const rootState = { version: "database-1", companies };
+  global.set("stcrState", rootState);
+  return rootState;
+}
+
+async function ensureRuntimeState() {
+  const existing = global.get("stcrState");
+  if (existing?.companies && Object.keys(existing.companies).length) return existing;
+
+  let loading = context.get("stcrRuntimeStateLoading");
+  if (!loading) {
+    loading = loadRuntimeStateFromDatabase().finally(() => context.set("stcrRuntimeStateLoading", undefined));
+    context.set("stcrRuntimeStateLoading", loading);
+  }
+  return loading;
+}
+
 async function readReportHistory(companyId, ovenId, historyQuery) {
   const conditions = ["r.company_id=?", "r.oven_id=?"];
   const values = [companyId, ovenId];
@@ -428,6 +574,93 @@ function normalizeTelemetryBatch(body) {
   return { companyId, ovenId, batchId, deviceId, readings };
 }
 
+function normalizeFactoryMqttRaw(body) {
+  const companyId = safeText(body?.companyId, 32);
+  const ovenId = safeText(body?.ovenId, 64);
+  const topic = safeText(body?.topic, 128);
+  const ovenNumber = Number(body?.ovenNumber);
+  const cycleNumber = Number(body?.cycleNumber);
+  const qos = Number(body?.qos);
+  const sourceTimestampMs = Date.parse(body?.sourceTimestamp);
+  const payload = body?.payload;
+  const normalizationStatus = ["received", "normalized", "pending", "rejected"].includes(body?.normalizationStatus)
+    ? body.normalizationStatus
+    : "received";
+  const normalizationDetail = body?.normalizationDetail == null || body.normalizationDetail === ""
+    ? null
+    : safeText(body.normalizationDetail, 255);
+  if (
+    !companyId || !new Set(["gr", "ttn"]).has(companyId) || !ovenId ||
+    !new Set(["test", "sensor"]).has(topic) ||
+    !Number.isSafeInteger(ovenNumber) || ovenNumber < 1 || ovenNumber > 10000 ||
+    !Number.isSafeInteger(cycleNumber) || cycleNumber < 0 || cycleNumber > 1000000 ||
+    !Number.isInteger(qos) || qos < 0 || qos > 2 || !Number.isFinite(sourceTimestampMs) ||
+    !payload || typeof payload !== "object" || Array.isArray(payload) ||
+    (body?.normalizationDetail && !normalizationDetail)
+  ) return null;
+  const payloadJson = JSON.stringify(payload);
+  if (Buffer.byteLength(payloadJson, "utf8") > 8192) return null;
+  return {
+    companyId,
+    ovenId,
+    ovenNumber,
+    cycleNumber,
+    topic,
+    qos,
+    retained: Boolean(body?.retained),
+    duplicateDelivery: Boolean(body?.duplicateDelivery),
+    sourceTimestamp: new Date(sourceTimestampMs).toISOString(),
+    payload,
+    payloadJson,
+    normalizationStatus,
+    normalizationDetail,
+  };
+}
+
+async function persistFactoryMqttRaw(envelope) {
+  const messageHash = crypto.createHash("sha256").update([
+    envelope.companyId,
+    envelope.ovenId,
+    envelope.topic,
+    envelope.cycleNumber,
+    envelope.sourceTimestamp,
+    envelope.payloadJson,
+  ].join("\n")).digest("hex");
+  const pool = getDatabasePool();
+  const [result] = await pool.execute(
+    `INSERT INTO factory_mqtt_messages (
+       company_id, oven_id, oven_number, cycle_number, topic, qos,
+       retained, duplicate_delivery, source_timestamp, payload_json,
+       message_hash, normalization_status, normalization_detail
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       duplicate_delivery=TRUE, received_at=CURRENT_TIMESTAMP(3),
+       normalization_status=VALUES(normalization_status),
+       normalization_detail=VALUES(normalization_detail)`,
+    [
+      envelope.companyId, envelope.ovenId, envelope.ovenNumber, envelope.cycleNumber,
+      envelope.topic, envelope.qos, envelope.retained, envelope.duplicateDelivery,
+      envelope.sourceTimestamp, envelope.payloadJson, messageHash,
+      envelope.normalizationStatus, envelope.normalizationDetail,
+    ],
+  );
+  const ovenState = Number(envelope.payload?.oven_state);
+  if (envelope.topic === "test" && [0, 1].includes(ovenState)) {
+    await pool.execute(
+      `UPDATE ovens SET status=?, last_seen_at=CURRENT_TIMESTAMP(3)
+       WHERE company_id=? AND id=? AND enabled=TRUE`,
+      [ovenState === 1 ? "open" : "closed", envelope.companyId, envelope.ovenId],
+    );
+  } else {
+    await pool.execute(
+      `UPDATE ovens SET last_seen_at=CURRENT_TIMESTAMP(3)
+       WHERE company_id=? AND id=? AND enabled=TRUE`,
+      [envelope.companyId, envelope.ovenId],
+    );
+  }
+  return { messageHash, duplicate: result.affectedRows > 1 };
+}
+
 async function persistHttpTelemetryBatch(batch, apiKeyRecord) {
   const pool = getDatabasePool();
   const connection = await pool.getConnection();
@@ -503,7 +736,7 @@ async function persistHttpTelemetryBatch(batch, apiKeyRecord) {
     );
     await connection.commit();
 
-    const rootState = global.get("stcrState");
+    const rootState = await ensureRuntimeState().catch(() => global.get("stcrState"));
     const companyState = rootState?.companies?.[batch.companyId];
     const oven = companyState?.ovens?.find((item) => item.id === batch.ovenId);
     if (oven) {
@@ -612,8 +845,56 @@ if (method === "POST" && path === "/stcr/api/auth/login") {
 }
 
 if (method === "GET" && path === "/stcr/api/health") {
-  const rootState = global.get("stcrState");
-  return jsonResponse({ ok: Boolean(rootState?.companies), timestamp: new Date().toISOString() });
+  try {
+    const rootState = await ensureRuntimeState();
+    return jsonResponse({ ok: Boolean(rootState?.companies), timestamp: new Date().toISOString() });
+  } catch (error) {
+    node.warn(`Runtime database initialization failed: ${error.message}`);
+    return jsonResponse({ ok: false, timestamp: new Date().toISOString() }, 503);
+  }
+}
+
+if (method === "POST" && path === "/stcr/api/factory-mqtt/raw") {
+  const envelope = normalizeFactoryMqttRaw(requestBody());
+  if (!envelope) return errorResponse("รูปแบบข้อมูล MQTT ต้นฉบับไม่ถูกต้อง", 400, "INVALID_FACTORY_MQTT");
+  const apiKey = String(requestHeaders["x-api-key"] || "").trim();
+  let apiKeyRecord = null;
+  try {
+    apiKeyRecord = await authenticateApiKey(envelope.companyId, envelope.ovenId, apiKey);
+  } catch (error) {
+    node.warn(`Factory MQTT API key lookup failed: ${error.message}`);
+    return errorResponse("ระบบรับข้อมูล MQTT ยังไม่พร้อมใช้งาน", 503, "INGEST_DATABASE_UNAVAILABLE");
+  }
+  if (!apiKeyRecord) return errorResponse("API Key หรือผังบริษัท/เตาไม่ถูกต้อง", 401, "INVALID_API_KEY");
+
+  try {
+    const result = await persistFactoryMqttRaw(envelope);
+    const rootState = global.get("stcrState");
+    const oven = rootState?.companies?.[envelope.companyId]?.ovens?.find(
+      (item) => item.id === envelope.ovenId,
+    );
+    if (oven) {
+      oven.lastUpdatedAt = new Date().toISOString();
+      const ovenState = Number(envelope.payload?.oven_state);
+      if (envelope.topic === "test" && [0, 1].includes(ovenState)) {
+        oven.status = ovenState === 1 ? "open" : "closed";
+      }
+      global.set("stcrState", rootState);
+    }
+    return jsonResponse({
+      accepted: true,
+      companyId: envelope.companyId,
+      ovenId: envelope.ovenId,
+      topic: envelope.topic,
+      ...result,
+    }, 202);
+  } catch (error) {
+    if (error.code === "ER_NO_REFERENCED_ROW_2") {
+      return errorResponse("ไม่พบเตาที่จับคู่ไว้ในฐานข้อมูล", 404, "OVEN_NOT_FOUND");
+    }
+    node.warn(`Factory MQTT raw persistence failed: ${error.message}`);
+    return errorResponse("บันทึกข้อมูล MQTT ต้นฉบับไม่สำเร็จ", 500, "MQTT_RAW_PERSIST_FAILED");
+  }
 }
 
 if (method === "POST" && path === "/stcr/api/telemetry") {
@@ -671,11 +952,20 @@ if (requestedCompanyId && requestedCompanyId !== session.companyId) {
   return errorResponse("ไม่มีสิทธิ์เข้าถึงข้อมูลบริษัทนี้", 403, "TENANT_FORBIDDEN");
 }
 const companyId = session.companyId;
-const rootState = global.get("stcrState");
-if (!rootState?.companies) return errorResponse("Simulator is not initialized", 503, "NOT_READY");
+let rootState;
+try {
+  rootState = await ensureRuntimeState();
+} catch (error) {
+  node.warn(`Runtime database initialization failed: ${error.message}`);
+  return errorResponse("ระบบยังโหลดข้อมูลเตาจากฐานข้อมูลไม่สำเร็จ", 503, "NOT_READY");
+}
 const state = rootState.companies[companyId];
 if (!state) return errorResponse("Company data is not initialized", 503, "NOT_READY");
-const visibleOvens = state.ovens;
+const nowMs = Date.now();
+const visibleOvens = state.ovens.map((oven) => ({
+  ...oven,
+  status: nowMs - Date.parse(oven.lastUpdatedAt) > offlineThresholdMs ? "offline" : oven.status,
+}));
 const visibleOvenById = new Map(visibleOvens.map((oven) => [oven.id, oven]));
 
 function persistState() {
@@ -778,6 +1068,21 @@ if (method === "POST" && path === "/stcr/api/ovens") {
     readings,
     limits,
   };
+  const pool = getDatabasePool();
+  await pool.execute(
+    `INSERT INTO ovens (
+       id, company_id, oven_number, name, zone_name, line_name, status, enabled,
+       chamber_lower, chamber_upper, furnace_lower, furnace_upper,
+       blower_lower, blower_upper, humidity_lower, humidity_upper, last_seen_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      oven.id, companyId, oven.number, oven.name, oven.zone, oven.line, oven.status,
+      limits.chamberTemp.lower, limits.chamberTemp.upper,
+      limits.furnaceTemp.lower, limits.furnaceTemp.upper,
+      limits.blowerTemp.lower, limits.blowerTemp.upper,
+      limits.humidity.lower, limits.humidity.upper, now,
+    ],
+  );
   state.ovens.push(oven);
   state.history[oven.id] = [];
   await addAudit(state, session, "เพิ่มเตาใหม่", oven.name, "เพิ่มเตาผ่าน Node-RED API");
@@ -792,6 +1097,17 @@ if (method === "POST" && acknowledgeMatch) {
   }
   const alarmId = decodeURIComponent(acknowledgeMatch[1]);
   if (!state.alarms.some((alarm) => alarm.id === alarmId)) return errorResponse("Alarm not found", 404, "NOT_FOUND");
+  const pool = getDatabasePool();
+  const databaseAlarmIds = [...new Set([alarmId, `${companyId}-${alarmId}`])];
+  const [acknowledgeResult] = await pool.execute(
+    `UPDATE alarms
+     SET status='acknowledged', acknowledged_at=COALESCE(acknowledged_at, UTC_TIMESTAMP(3))
+     WHERE company_id=? AND id IN (?, ?) AND status='active'`,
+    [companyId, databaseAlarmIds[0], databaseAlarmIds[1]],
+  );
+  if (!acknowledgeResult.affectedRows && String(env.get("STCR_DEPLOYMENT_MODE") || "").toLowerCase() === "production") {
+    return errorResponse("ไม่พบ Alarm ที่ยังรอรับทราบในฐานข้อมูล", 409, "ALARM_STATE_CONFLICT");
+  }
   state.alarms = state.alarms.map((alarm) => alarm.id === alarmId ? { ...alarm, status: "acknowledged" } : alarm);
   await addAudit(state, session, "รับทราบ Alarm", alarmId, "รับทราบผ่านหน้าเว็บ");
   persistState();
@@ -898,6 +1214,9 @@ if (method === "GET" && historyMatch) {
     return jsonResponse(await readReportHistory(companyId, ovenId, query));
   } catch (error) {
     node.warn(`Database history fallback: ${error.message}`);
+    if (String(env.get("STCR_DEPLOYMENT_MODE") || "").toLowerCase() === "production") {
+      return errorResponse("ไม่สามารถอ่านข้อมูลย้อนหลังจากฐานข้อมูลได้", 503, "HISTORY_DATABASE_UNAVAILABLE");
+    }
   }
   const startAt = query.startAt ? Date.parse(query.startAt) : Number.NEGATIVE_INFINITY;
   const endAt = query.endAt ? Date.parse(query.endAt) : Number.POSITIVE_INFINITY;
@@ -910,11 +1229,29 @@ if (method === "GET" && historyMatch) {
 const exportMatch = path.match(/^\/stcr\/api\/ovens\/([^/]+)\/export\.csv$/);
 if (method === "GET" && exportMatch) {
   const ovenId = decodeURIComponent(exportMatch[1]);
-  const points = state.history[ovenId];
-  if (!points || !visibleOvenById.has(ovenId)) return errorResponse("Oven not found", 404, "NOT_FOUND");
+  const inMemoryPoints = state.history[ovenId];
+  const oven = visibleOvenById.get(ovenId);
+  if (!inMemoryPoints || !oven) return errorResponse("Oven not found", 404, "NOT_FOUND");
   const requestedSensors = String(query.sensors || sensorKeys.join(",")).split(",");
   if (!requestedSensors.length || requestedSensors.some((sensor) => !sensorKeys.includes(sensor))) {
     return errorResponse("Unknown sensor", 400, "INVALID_SENSOR");
+  }
+  const exportQuery = {
+    ...query,
+    cycleNumber: query.cycleNumber || (!query.startAt && oven.cycleCount > 0 ? String(oven.cycleCount) : undefined),
+  };
+  if (!validHistoryQuery(exportQuery)) {
+    return errorResponse("ช่วงเวลาหรือรอบสำหรับส่งออกไม่ถูกต้อง", 400, "INVALID_EXPORT_RANGE");
+  }
+  let points;
+  try {
+    points = await readReportHistory(companyId, ovenId, exportQuery);
+  } catch (error) {
+    node.warn(`Database CSV export fallback: ${error.message}`);
+    if (String(env.get("STCR_DEPLOYMENT_MODE") || "").toLowerCase() === "production") {
+      return errorResponse("ไม่สามารถส่งออกข้อมูลจากฐานข้อมูลได้", 503, "EXPORT_DATABASE_UNAVAILABLE");
+    }
+    points = inMemoryPoints;
   }
   const rows = [
     ["timestamp", ...requestedSensors],
@@ -957,6 +1294,20 @@ if (method === "PUT" && limitsMatch) {
     lower: Number(body[sensor].lower),
     upper: Number(body[sensor].upper),
   }]));
+  const pool = getDatabasePool();
+  await pool.execute(
+    `UPDATE ovens
+     SET chamber_lower=?, chamber_upper=?, humidity_lower=?, humidity_upper=?,
+         furnace_lower=?, furnace_upper=?, blower_lower=?, blower_upper=?
+     WHERE company_id=? AND id=?`,
+    [
+      normalizedLimits.chamberTemp.lower, normalizedLimits.chamberTemp.upper,
+      normalizedLimits.humidity.lower, normalizedLimits.humidity.upper,
+      normalizedLimits.furnaceTemp.lower, normalizedLimits.furnaceTemp.upper,
+      normalizedLimits.blowerTemp.lower, normalizedLimits.blowerTemp.upper,
+      companyId, ovenId,
+    ],
+  );
   state.ovens[index] = { ...state.ovens[index], limits: normalizedLimits };
   await addAudit(state, session, "เปลี่ยนค่า Limit", state.ovens[index].name, "บันทึก Upper/Lower ผ่าน Node-RED API");
   persistState();
@@ -979,6 +1330,11 @@ if (ovenMatch) {
     const zone = body.zone === undefined ? state.ovens[index].zone : safeText(body.zone, 40);
     const line = body.line === undefined ? state.ovens[index].line : safeText(body.line, 40);
     if (!name || !zone || !line) return errorResponse("ข้อมูลเตาไม่ถูกต้อง", 400, "INVALID_OVEN");
+    const pool = getDatabasePool();
+    await pool.execute(
+      `UPDATE ovens SET name=?, zone_name=?, line_name=? WHERE company_id=? AND id=?`,
+      [name, zone, line, companyId, ovenId],
+    );
     state.ovens[index] = { ...state.ovens[index], name, zone, line };
     await addAudit(state, session, "แก้ไขข้อมูลเตา", name, "แก้ชื่อ โซน หรือไลน์ผ่าน Node-RED API");
     persistState();

@@ -169,6 +169,30 @@ CREATE TABLE IF NOT EXISTS telemetry_events (
   CONSTRAINT fk_telemetry_oven FOREIGN KEY (company_id, oven_id) REFERENCES ovens(company_id, id)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS factory_mqtt_messages (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  company_id VARCHAR(32) NOT NULL,
+  oven_id VARCHAR(64) NOT NULL,
+  oven_number INT NOT NULL,
+  cycle_number INT NOT NULL,
+  topic VARCHAR(128) NOT NULL,
+  qos TINYINT UNSIGNED NOT NULL,
+  retained BOOLEAN NOT NULL DEFAULT FALSE,
+  duplicate_delivery BOOLEAN NOT NULL DEFAULT FALSE,
+  source_timestamp DATETIME(3) NOT NULL,
+  payload_json JSON NOT NULL,
+  message_hash CHAR(64) NOT NULL,
+  normalization_status ENUM('received', 'normalized', 'pending', 'rejected') NOT NULL DEFAULT 'received',
+  normalization_detail VARCHAR(255) NULL,
+  received_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_factory_mqtt_message_hash (message_hash),
+  KEY ix_factory_mqtt_company_oven_time (company_id, oven_id, source_timestamp),
+  KEY ix_factory_mqtt_topic_time (topic, source_timestamp),
+  CONSTRAINT fk_factory_mqtt_company FOREIGN KEY (company_id) REFERENCES companies(id),
+  CONSTRAINT fk_factory_mqtt_oven FOREIGN KEY (company_id, oven_id) REFERENCES ovens(company_id, id)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS alarms (
   id VARCHAR(96) PRIMARY KEY,
   company_id VARCHAR(32) NOT NULL,
@@ -203,6 +227,20 @@ CREATE TABLE IF NOT EXISTS audit_events (
   CONSTRAINT fk_audit_company FOREIGN KEY (company_id) REFERENCES companies(id)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS sessions (
+  token CHAR(64) NOT NULL,
+  user_id BIGINT UNSIGNED NOT NULL,
+  company_id VARCHAR(32) NOT NULL,
+  username VARCHAR(80) NOT NULL,
+  roles JSON NOT NULL,
+  expires_at DATETIME(3) NOT NULL,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (token),
+  KEY ix_sessions_user (user_id),
+  KEY ix_sessions_expires (expires_at),
+  CONSTRAINT fk_sessions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS report_document_settings (
   company_id VARCHAR(32) NOT NULL,
   document_no VARCHAR(80) NOT NULL,
@@ -235,3 +273,34 @@ VALUES
   ('gr', 'F01-05-05 R07', '22/06/67', 'system'),
   ('ttn', 'F-WS-05 Rev.11', '1-ธ.ค.-68', 'system')
 ON DUPLICATE KEY UPDATE company_id = VALUES(company_id);
+
+-- Seed: TTN ovens 1-9 (oven_number maps 1:1 to oven-N, all offline on fresh install)
+INSERT INTO ovens (
+  id, company_id, oven_number, name, zone_name, line_name,
+  status, enabled,
+  chamber_lower, chamber_upper,
+  furnace_lower, furnace_upper,
+  blower_lower,  blower_upper,
+  humidity_lower, humidity_upper
+) VALUES
+  ('oven-1', 'ttn', 1, 'เตา 1', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-2', 'ttn', 2, 'เตา 2', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-3', 'ttn', 3, 'เตา 3', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-4', 'ttn', 4, 'เตา 4', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-5', 'ttn', 5, 'เตา 5', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-6', 'ttn', 6, 'เตา 6', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-7', 'ttn', 7, 'เตา 7', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-8', 'ttn', 8, 'เตา 8', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-9', 'ttn', 9, 'เตา 9', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00)
+ON DUPLICATE KEY UPDATE
+  name           = VALUES(name),
+  zone_name      = VALUES(zone_name),
+  line_name      = VALUES(line_name),
+  chamber_lower  = VALUES(chamber_lower),
+  chamber_upper  = VALUES(chamber_upper),
+  furnace_lower  = VALUES(furnace_lower),
+  furnace_upper  = VALUES(furnace_upper),
+  blower_lower   = VALUES(blower_lower),
+  blower_upper   = VALUES(blower_upper),
+  humidity_lower = VALUES(humidity_lower),
+  humidity_upper = VALUES(humidity_upper);

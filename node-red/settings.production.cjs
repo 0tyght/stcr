@@ -6,6 +6,16 @@ function requiredEnvironment(name) {
   return value;
 }
 
+const allowedOrigins = requiredEnvironment("STCR_ALLOWED_ORIGINS")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+
+function validateCorsOrigin(origin, callback) {
+  if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+  return callback(new Error("CORS origin rejected"));
+}
+
 module.exports = {
   flowFile: path.join(__dirname, "flows.json"),
   flowFilePretty: true,
@@ -16,10 +26,13 @@ module.exports = {
   // stay disabled, so the tunnel cannot expose flow editing by accident.
   httpAdminRoot: false,
   httpNodeRoot: "/",
+  // Express handles automatic OPTIONS responses before the flow router, so
+  // CORS must also be enforced here. The API router repeats the same allowlist
+  // for normal responses as a defense-in-depth check.
   httpNodeCors: {
-    origin: "https://0tyght.github.io",
+    origin: validateCorsOrigin,
     methods: "GET,POST,PUT,PATCH,OPTIONS",
-    allowedHeaders: "Content-Type,Authorization",
+    allowedHeaders: "Content-Type,Authorization,X-API-Key",
   },
 
   credentialSecret: requiredEnvironment("STCR_NODE_RED_CREDENTIAL_SECRET"),

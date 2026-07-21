@@ -54,7 +54,13 @@ function Import-RequiredEnvironment {
     'STCR_SESSION_TTL_MINUTES',
     'STCR_TRUST_PROXY',
     'STCR_NODE_RED_CREDENTIAL_SECRET',
-    'STCR_API_KEY_PEPPER'
+    'STCR_API_KEY_PEPPER',
+    'STCR_TTN_INGEST_API_KEY',
+    'STCR_FACTORY_MQTT_URL',
+    'STCR_FACTORY_MQTT_USERNAME',
+    'STCR_FACTORY_MQTT_PASSWORD',
+    'STCR_FACTORY_MQTT_COMPANY_ID',
+    'STCR_FACTORY_MQTT_OVEN_MAP_JSON'
   )
 
   foreach ($key in $requiredKeys) {
@@ -69,6 +75,12 @@ function Import-RequiredEnvironment {
     throw 'STCR_API_KEY_PEPPER must contain at least 32 characters'
   }
 
+  $env:STCR_DEPLOYMENT_MODE = 'test'
+  $env:STCR_FACTORY_MQTT_ENABLED = 'true'
+  $env:STCR_FACTORY_MQTT_FORWARD_ENABLED = 'true'
+  $env:STCR_FACTORY_MQTT_TOPICS = 'test,sensor'
+  $env:STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES = '420'
+
   $httpIngestEnabled = [Environment]::GetEnvironmentVariable('STCR_HTTP_INGEST_ENABLED', 'User')
   if (-not $httpIngestEnabled) { $httpIngestEnabled = 'false' }
   Set-Item -Path 'Env:STCR_HTTP_INGEST_ENABLED' -Value $httpIngestEnabled
@@ -78,7 +90,7 @@ function Import-RequiredEnvironment {
   Set-Item -Path 'Env:STCR_INGEST_URL' -Value $ingestUrl
 
   if ($httpIngestEnabled -eq 'true') {
-    foreach ($key in @('STCR_GR_INGEST_API_KEY', 'STCR_TTN_INGEST_API_KEY')) {
+    foreach ($key in @('STCR_GR_INGEST_API_KEY')) {
       $value = [Environment]::GetEnvironmentVariable($key, 'User')
       if (-not $value) {
         throw "Missing Windows user environment variable while HTTP ingest is enabled: $key"
