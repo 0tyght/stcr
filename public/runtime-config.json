@@ -1,7 +1,7 @@
 {
     "dataSource":  "node-red",
-    "apiBaseUrl":  "https://harbour-nitrogen-columbus-surrounding.trycloudflare.com/stcr/api",
+    "apiBaseUrl":  "https://copyrighted-prepaid-providence-moon.trycloudflare.com/stcr/api",
     "pollIntervalMs":  5000,
     "requestTimeoutMs":  15000,
-    "updatedAt":  "2026-07-21T07:56:07.6844306Z"
+    "updatedAt":  "2026-07-21T08:22:09.1175774Z"
 }
