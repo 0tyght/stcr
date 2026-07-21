@@ -72,51 +72,66 @@ const values = {
 };
 const env = { get: (key) => values[key] };
 
-const [disabledForward, inspected] = runAdapter(structuredClone(sample), env, adapterNode, Buffer);
-assert.equal(disabledForward, null);
-assert.equal(inspected.payload.status, "validated");
-assert.equal(inspected.payload.pageUsed, false);
-assert.deepEqual(
-  inspected.payload.normalizedPayload.readings.map(({ sensorKey, value }) => [sensorKey, value]),
-  [["chamberTemp", 59.45], ["humidity", 46.48], ["furnaceTemp", 424], ["blowerTemp", 201]],
-);
+// adapter ใหม่: return inspection message โดยตรง (1 output) + msg._mqttEnvelope สำหรับ db-writer
+{
+  const msg = structuredClone(sample);
+  const inspected = runAdapter(msg, env, adapterNode, Buffer);
+  assert.equal(inspected.payload.status, "validated");
+  assert.equal(inspected.payload.pageUsed, false);
+  assert.deepEqual(
+    inspected.payload.normalizedPayload.readings.map(({ sensorKey, value }) => [sensorKey, value]),
+    [["chamberTemp", 59.45], ["humidity", 46.48], ["furnaceTemp", 424], ["blowerTemp", 201]],
+  );
+  assert.equal(msg._mqttEnvelope.type, "sensor");
+  assert.equal(msg._mqttEnvelope.ovenId, "oven-3");
+  assert.equal(msg._mqttEnvelope.companyId, "ttn");
+}
 
-values.STCR_FACTORY_MQTT_FORWARD_ENABLED = "true";
-const [forwarded] = runAdapter(structuredClone(sample), env, adapterNode, Buffer);
-assert.equal(forwarded.length, 2);
-assert.match(forwarded[0].url, /\/factory-mqtt\/raw$/);
-assert.match(forwarded[1].url, /\/telemetry$/);
-assert.equal(forwarded[1].payload.companyId, "ttn");
-assert.equal(forwarded[1].payload.ovenId, "oven-3");
+// sensor ขาด: pending
+{
+  const msg = { ...structuredClone(sample), payload: JSON.stringify({ ...JSON.parse(sample.payload), blower: null }) };
+  const missing = runAdapter(msg, env, adapterNode, Buffer);
+  assert.equal(missing.payload.status, "pending");
+  assert.deepEqual(missing.payload.missingSensors, ["blowerTemp"]);
+  assert.equal(msg._mqttEnvelope.type, "pending");
+}
 
-const [missingRaw, missing] = runAdapter({
-  ...structuredClone(sample),
-  payload: JSON.stringify({ ...JSON.parse(sample.payload), blower: null }),
-}, env, adapterNode, Buffer);
-assert.equal(missing.payload.status, "pending");
-assert.deepEqual(missing.payload.missingSensors, ["blowerTemp"]);
-assert.equal(missingRaw.payload.payload.blower, null);
+// test topic: validated + ovenState
+{
+  const msg = {
+    topic: "test",
+    payload: JSON.stringify({ oven: 3, cycle: 116, oven_state: 1, time_stamp: sampleTimestamp }),
+    factoryMqtt: sample.factoryMqtt,
+  };
+  const status = runAdapter(msg, env, adapterNode, Buffer);
+  assert.equal(status.payload.status, "validated");
+  assert.equal(status.payload.ovenState, 1);
+  assert.equal(msg._mqttEnvelope.type, "test");
+  assert.equal(msg._mqttEnvelope.ovenState, 1);
+}
 
-const [statusRaw, status] = runAdapter({
-  topic: "test",
-  payload: JSON.stringify({ oven: 3, cycle: 116, oven_state: 1, time_stamp: sampleTimestamp }),
-  factoryMqtt: sample.factoryMqtt,
-}, env, adapterNode, Buffer);
-assert.equal(status.payload.status, "validated");
-assert.equal(status.payload.ovenState, 1);
-assert.equal(statusRaw.payload.normalizationStatus, "received");
+// UTC offset correction
+{
+  values.STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES = "420";
+  const msg = {
+    ...structuredClone(sample),
+    payload: JSON.stringify({ ...JSON.parse(sample.payload), time_stamp: "2026-07-21T10:30:00.000Z" }),
+  };
+  const corrected = runAdapter(msg, env, adapterNode, Buffer);
+  assert.equal(corrected.payload.normalizedSourceTimestamp, "2026-07-21T03:30:00.000Z");
+  values.STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES = "0";
+}
 
-values.STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES = "420";
-const [, corrected] = runAdapter({
-  ...structuredClone(sample),
-  payload: JSON.stringify({ ...JSON.parse(sample.payload), time_stamp: "2026-07-21T10:30:00.000Z" }),
-}, env, adapterNode, Buffer);
-assert.equal(corrected.payload.normalizedSourceTimestamp, "2026-07-21T03:30:00.000Z");
-
-values.STCR_FACTORY_MQTT_OVEN_MAP_JSON = '{"1":"oven-1"}';
-const [unmappedRaw, unmapped] = runAdapter(structuredClone(sample), env, adapterNode, Buffer);
-assert.equal(unmappedRaw, null);
-assert.equal(unmapped.payload.status, "pending");
+// unmapped oven
+{
+  const savedMap = values.STCR_FACTORY_MQTT_OVEN_MAP_JSON;
+  values.STCR_FACTORY_MQTT_OVEN_MAP_JSON = '{"1":"oven-1"}';
+  const msg = structuredClone(sample);
+  const unmapped = runAdapter(msg, env, adapterNode, Buffer);
+  assert.equal(unmapped.payload.status, "pending");
+  assert.equal(msg._mqttEnvelope, undefined);
+  values.STCR_FACTORY_MQTT_OVEN_MAP_JSON = savedMap;
+}
 
 for (const table of [
   "companies", "ovens", "oven_cycles", "sensor_readings", "telemetry_events",

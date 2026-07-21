@@ -159,6 +159,7 @@ async function recordLoginSuccess(userId) {
 }
 
 function cleanupSessions() {
+  // ลบ expired sessions จาก memory cache (ไม่ต้องทำ DB cleanup ทุก request)
   const now = Date.now();
   const sessions = global.get("stcrAuthSessions") || {};
   for (const [token, session] of Object.entries(sessions)) {
@@ -173,8 +174,75 @@ function authenticate() {
   if (!authorization.startsWith("Bearer ")) return null;
   const token = authorization.slice(7).trim();
   if (!/^[a-f0-9]{64}$/i.test(token)) return null;
-  return cleanupSessions()[token] || null;
+  // ลองหาจาก memory cache ก่อน (fast path)
+  const cached = cleanupSessions()[token];
+  if (cached) return cached;
+  return null;
 }
+
+async function authenticateFromDb(token) {
+  // fallback: ดึง session จาก DB (กรณี Node-RED restart แล้ว cache หาย)
+  if (!/^[a-f0-9]{64}$/i.test(token)) return null;
+  try {
+    const pool = getDatabasePool();
+    const [rows] = await pool.execute(
+      `SELECT user_id AS userId, company_id AS companyId, username,
+              roles, expires_at AS expiresAt
+       FROM sessions
+       WHERE token=? AND expires_at > UTC_TIMESTAMP(3)
+       LIMIT 1`,
+      [token],
+    );
+    const row = rows[0];
+    if (!row) return null;
+    const expiresAtMs = new Date(row.expiresAt).getTime();
+    let roles;
+    try { roles = typeof row.roles === "string" ? JSON.parse(row.roles) : row.roles; } catch { roles = ["viewer"]; }
+    const session = { userId: row.userId, username: row.username, companyId: row.companyId, roles, expiresAtMs };
+    // เก็บ cache กลับเข้า memory
+    const sessions = global.get("stcrAuthSessions") || {};
+    sessions[token] = session;
+    global.set("stcrAuthSessions", sessions);
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+async function createSession(user, ttlMinutes) {
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAtMs = Date.now() + ttlMinutes * 60 * 1000;
+  const expiresAt = new Date(expiresAtMs).toISOString();
+  const session = { userId: user.id, username: user.username, companyId: user.companyId, roles: user.roles, expiresAtMs };
+
+  // เขียนลง DB ก่อน แล้วค่อย cache ใน memory
+  const pool = getDatabasePool();
+  await pool.execute(
+    `INSERT INTO sessions (token, user_id, company_id, username, roles, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE expires_at=VALUES(expires_at)`,
+    [token, user.id, user.companyId, user.username, JSON.stringify(user.roles), expiresAt],
+  );
+  const sessions = cleanupSessions();
+  sessions[token] = session;
+  global.set("stcrAuthSessions", sessions);
+  return { token, expiresAt, expiresAtMs };
+}
+
+async function deleteSession(token) {
+  // ลบจากทั้ง memory และ DB
+  const sessions = cleanupSessions();
+  delete sessions[token];
+  global.set("stcrAuthSessions", sessions);
+  try {
+    const pool = getDatabasePool();
+    await pool.execute(`DELETE FROM sessions WHERE token=?`, [token]);
+  } catch { /* ไม่หยุดถ้า DB error */ }
+}
+
+// cleanup DB sessions เก่า (รันครั้งแรกที่ Node-RED เริ่ม)
+getDatabasePool().execute(`DELETE FROM sessions WHERE expires_at <= UTC_TIMESTAMP(3)`)
+  .catch((err) => node.warn(`Session cleanup failed: ${err.message}`));
 
 async function validateSessionAccount(session) {
   if (!session?.userId) return false;
@@ -830,17 +898,13 @@ if (method === "POST" && path === "/stcr/api/auth/login") {
   await recordLoginSuccess(user.id);
 
   const ttlMinutes = Math.min(1440, Math.max(15, Number(env.get("STCR_SESSION_TTL_MINUTES") || 480)));
-  const token = crypto.randomBytes(32).toString("hex");
-  const expiresAtMs = Date.now() + ttlMinutes * 60 * 1000;
-  const sessions = cleanupSessions();
-  sessions[token] = { userId: user.id, username, companyId: user.companyId, roles: user.roles, expiresAtMs };
-  global.set("stcrAuthSessions", sessions);
+  const { token, expiresAt, expiresAtMs } = await createSession(user, ttlMinutes);
   return jsonResponse({
     token,
     username,
     companyId: user.companyId,
     roles: user.roles,
-    expiresAt: new Date(expiresAtMs).toISOString(),
+    expiresAt,
   });
 }
 
@@ -929,9 +993,26 @@ if (method === "POST" && path === "/stcr/api/telemetry") {
 }
 
 const session = authenticate();
-if (!session) return errorResponse("กรุณาเข้าสู่ระบบใหม่", 401, "UNAUTHORIZED");
+if (!session) {
+  // memory cache miss — ลองดึงจาก DB (กรณี Node-RED restart)
+  const authHeader = String(requestHeaders.authorization || "");
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+  const dbSession = token ? await authenticateFromDb(token) : null;
+  if (!dbSession) return errorResponse("กรุณาเข้าสู่ระบบใหม่", 401, "UNAUTHORIZED");
+  // dbSession ถูก cache ใน memory แล้วโดย authenticateFromDb
+  // ต้องดึงอีกรอบจาก memory
+  const freshSession = authenticate();
+  if (!freshSession) return errorResponse("กรุณาเข้าสู่ระบบใหม่", 401, "UNAUTHORIZED");
+  // ใช้ freshSession ต่อ — แต่เนื่องจาก JS ไม่มี reassign block scope ใช้ workaround
+  msg._session = freshSession;
+} else {
+  msg._session = session;
+}
+const resolvedSession = msg._session;
+// alias เพื่อให้ code ส่วนที่เหลือใช้ได้ทั้งสองชื่อ
+const session = resolvedSession;
 try {
-  if (!(await validateSessionAccount(session))) {
+  if (!(await validateSessionAccount(resolvedSession))) {
     return errorResponse("บัญชีถูกระงับหรือสิทธิ์หมดอายุ", 401, "ACCOUNT_INACTIVE");
   }
 } catch (error) {
@@ -941,17 +1022,15 @@ try {
 
 if (method === "POST" && path === "/stcr/api/auth/logout") {
   const token = String(requestHeaders.authorization).slice(7).trim();
-  const sessions = cleanupSessions();
-  delete sessions[token];
-  global.set("stcrAuthSessions", sessions);
+  await deleteSession(token);
   return jsonResponse({ ok: true });
 }
 
 const requestedCompanyId = String(query.companyId || "").toLowerCase();
-if (requestedCompanyId && requestedCompanyId !== session.companyId) {
+if (requestedCompanyId && requestedCompanyId !== resolvedSession.companyId) {
   return errorResponse("ไม่มีสิทธิ์เข้าถึงข้อมูลบริษัทนี้", 403, "TENANT_FORBIDDEN");
 }
-const companyId = session.companyId;
+const companyId = resolvedSession.companyId;
 let rootState;
 try {
   rootState = await ensureRuntimeState();

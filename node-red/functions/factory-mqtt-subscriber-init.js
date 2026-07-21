@@ -4,6 +4,25 @@ if (!enabled) {
   return;
 }
 
+// สร้าง DB pool สำหรับ adapter ล่วงหน้าเพื่อลด latency ของ message แรก
+// adapter จะดึง pool นี้ผ่าน global.get("stcrMqttDbPool")
+if (!global.get("stcrMqttDbPool")) {
+  const password = String(env.get("STCR_DB_PASSWORD") || "");
+  if (password) {
+    const pool = mysql.createPool({
+      host: env.get("STCR_DB_HOST") || "127.0.0.1",
+      port: Number(env.get("STCR_DB_PORT") || 3306),
+      user: env.get("STCR_DB_USER") || "stcr_app",
+      password,
+      database: env.get("STCR_DB_NAME") || "stcr",
+      waitForConnections: true,
+      connectionLimit: 4,
+      timezone: "Z",
+    });
+    global.set("stcrMqttDbPool", pool);
+  }
+}
+
 const deploymentMode = String(env.get("STCR_DEPLOYMENT_MODE") || "development").toLowerCase();
 const brokerUrl = String(env.get("STCR_FACTORY_MQTT_URL") || "").trim();
 const username = String(env.get("STCR_FACTORY_MQTT_USERNAME") || "").trim();
