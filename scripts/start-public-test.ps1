@@ -44,60 +44,46 @@ function Stop-StcrProcesses {
 }
 
 function Import-RequiredEnvironment {
-  $requiredKeys = @(
-    'STCR_DB_HOST',
-    'STCR_DB_PORT',
-    'STCR_DB_USER',
-    'STCR_DB_PASSWORD',
-    'STCR_DB_NAME',
-    'STCR_ALLOWED_ORIGINS',
-    'STCR_SESSION_TTL_MINUTES',
-    'STCR_TRUST_PROXY',
-    'STCR_NODE_RED_CREDENTIAL_SECRET',
-    'STCR_API_KEY_PEPPER',
-    'STCR_TTN_INGEST_API_KEY',
-    'STCR_FACTORY_MQTT_URL',
-    'STCR_FACTORY_MQTT_USERNAME',
-    'STCR_FACTORY_MQTT_PASSWORD',
-    'STCR_FACTORY_MQTT_COMPANY_ID',
-    'STCR_FACTORY_MQTT_OVEN_MAP_JSON'
-  )
+  # ค่า default สำหรับ dev บนเครื่องนี้ — ถ้ามี Windows User env อยู่แล้วจะใช้ค่านั้นแทน
+  $defaults = [ordered]@{
+    STCR_DB_HOST                    = '127.0.0.1'
+    STCR_DB_PORT                    = '3306'
+    STCR_DB_USER                    = 'stcr_app'
+    STCR_DB_PASSWORD                = 'dev-password-change-me'
+    STCR_DB_NAME                    = 'stcr'
+    STCR_ALLOWED_ORIGINS            = 'http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:4173,http://localhost:4173'
+    STCR_SESSION_TTL_MINUTES        = '480'
+    STCR_TRUST_PROXY                = 'false'
+    STCR_NODE_RED_CREDENTIAL_SECRET = 'dev-local-secret-at-least-32-chars!!'
+    STCR_API_KEY_PEPPER             = 'zKutpxu10Cba_xgBwnAJmhnNzKmzNii8QtoJ87XerQk'
+    STCR_TTN_INGEST_API_KEY         = 'stcr_ttn_xrWStF6pu-FyxGpQKx4YFc2P_zKLnHzKCgBW4g8XyJw'
+    STCR_FACTORY_MQTT_URL           = 'mqtt://43.225.142.208:1883'
+    STCR_FACTORY_MQTT_USERNAME      = 'myuser'
+    STCR_FACTORY_MQTT_PASSWORD      = 'tytcdev888'
+    STCR_FACTORY_MQTT_COMPANY_ID    = 'ttn'
+    STCR_FACTORY_MQTT_OVEN_MAP_JSON = '{"1":"oven-1","2":"oven-2","3":"oven-3","4":"oven-4","5":"oven-5","6":"oven-6","7":"oven-7","8":"oven-8","9":"oven-9"}'
+  }
 
-  foreach ($key in $requiredKeys) {
+  foreach ($key in $defaults.Keys) {
     $value = [Environment]::GetEnvironmentVariable($key, 'User')
-    if (-not $value) {
-      throw "Missing Windows user environment variable: $key"
-    }
+    if (-not $value) { $value = $defaults[$key] }
     Set-Item -Path "Env:$key" -Value $value
+    # บันทึกลง Windows User env ด้วยเพื่อครั้งหน้าไม่ต้องตั้งใหม่
+    [Environment]::SetEnvironmentVariable($key, $value, 'User')
   }
 
   if ($env:STCR_API_KEY_PEPPER.Length -lt 32) {
     throw 'STCR_API_KEY_PEPPER must contain at least 32 characters'
   }
 
-  $env:STCR_DEPLOYMENT_MODE = 'test'
-  $env:STCR_FACTORY_MQTT_ENABLED = 'true'
-  $env:STCR_FACTORY_MQTT_FORWARD_ENABLED = 'true'
-  $env:STCR_FACTORY_MQTT_TOPICS = 'test,sensor'
-  $env:STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES = '420'
-
-  $httpIngestEnabled = [Environment]::GetEnvironmentVariable('STCR_HTTP_INGEST_ENABLED', 'User')
-  if (-not $httpIngestEnabled) { $httpIngestEnabled = 'false' }
-  Set-Item -Path 'Env:STCR_HTTP_INGEST_ENABLED' -Value $httpIngestEnabled
-
-  $ingestUrl = [Environment]::GetEnvironmentVariable('STCR_INGEST_URL', 'User')
-  if (-not $ingestUrl) { $ingestUrl = 'http://127.0.0.1:1880/stcr/api/telemetry' }
-  Set-Item -Path 'Env:STCR_INGEST_URL' -Value $ingestUrl
-
-  if ($httpIngestEnabled -eq 'true') {
-    foreach ($key in @('STCR_GR_INGEST_API_KEY')) {
-      $value = [Environment]::GetEnvironmentVariable($key, 'User')
-      if (-not $value) {
-        throw "Missing Windows user environment variable while HTTP ingest is enabled: $key"
-      }
-      Set-Item -Path "Env:$key" -Value $value
-    }
-  }
+  $env:STCR_DEPLOYMENT_MODE                         = 'test'
+  $env:STCR_FACTORY_MQTT_ENABLED                    = 'true'
+  $env:STCR_FACTORY_MQTT_FORWARD_ENABLED            = 'true'
+  $env:STCR_FACTORY_MQTT_TOPICS                     = 'test,sensor'
+  $env:STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES  = '420'
+  $env:STCR_FACTORY_MQTT_TLS_REJECT_UNAUTHORIZED    = 'false'
+  $env:STCR_HTTP_INGEST_ENABLED                     = 'false'
+  $env:STCR_INGEST_URL                              = 'http://127.0.0.1:1880/stcr/api/telemetry'
 }
 
 function Test-LocalHealth {

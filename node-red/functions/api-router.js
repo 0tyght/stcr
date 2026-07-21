@@ -992,24 +992,15 @@ if (method === "POST" && path === "/stcr/api/telemetry") {
   }
 }
 
-const session = authenticate();
-if (!session) {
-  // memory cache miss — ลองดึงจาก DB (กรณี Node-RED restart)
+// ตรวจ session — ลอง memory cache ก่อน ถ้าไม่มีลองดึงจาก DB
+let resolvedSession = authenticate();
+if (!resolvedSession) {
   const authHeader = String(requestHeaders.authorization || "");
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
-  const dbSession = token ? await authenticateFromDb(token) : null;
-  if (!dbSession) return errorResponse("กรุณาเข้าสู่ระบบใหม่", 401, "UNAUTHORIZED");
-  // dbSession ถูก cache ใน memory แล้วโดย authenticateFromDb
-  // ต้องดึงอีกรอบจาก memory
-  const freshSession = authenticate();
-  if (!freshSession) return errorResponse("กรุณาเข้าสู่ระบบใหม่", 401, "UNAUTHORIZED");
-  // ใช้ freshSession ต่อ — แต่เนื่องจาก JS ไม่มี reassign block scope ใช้ workaround
-  msg._session = freshSession;
-} else {
-  msg._session = session;
+  if (token) resolvedSession = await authenticateFromDb(token);
 }
-const resolvedSession = msg._session;
-// alias เพื่อให้ code ส่วนที่เหลือใช้ได้ทั้งสองชื่อ
+if (!resolvedSession) return errorResponse("กรุณาเข้าสู่ระบบใหม่", 401, "UNAUTHORIZED");
+// alias ให้ใช้ชื่อ session ได้เหมือนเดิม
 const session = resolvedSession;
 try {
   if (!(await validateSessionAccount(resolvedSession))) {
