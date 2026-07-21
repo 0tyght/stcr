@@ -1,4 +1,4 @@
-param(
+﻿param(
   [switch]$SkipGitPush,
   [switch]$SkipDeployWait,
   [switch]$Background
@@ -80,7 +80,7 @@ function Import-RequiredEnvironment {
   $env:STCR_FACTORY_MQTT_ENABLED                    = 'true'
   $env:STCR_FACTORY_MQTT_FORWARD_ENABLED            = 'true'
   $env:STCR_FACTORY_MQTT_TOPICS                     = 'test,sensor'
-  $env:STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES  = '420'
+  $env:STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES  = '0'
   $env:STCR_FACTORY_MQTT_TLS_REJECT_UNAUTHORIZED    = 'false'
   $env:STCR_HTTP_INGEST_ENABLED                     = 'false'
   $env:STCR_INGEST_URL                              = 'http://127.0.0.1:1880/stcr/api/telemetry'

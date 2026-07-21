@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS sensor_readings (
   chamber_temp DECIMAL(8,2) NOT NULL,
   humidity DECIMAL(8,2) NOT NULL,
   furnace_temp DECIMAL(8,2) NOT NULL,
-  blower_temp DECIMAL(8,2) NOT NULL,
+  blower_temp DECIMAL(8,2) NULL,
   cycle_phase ENUM('ignition', 'recording', 'cooldown', 'idle') NOT NULL,
   included_in_report BOOLEAN NOT NULL DEFAULT FALSE,
   quality ENUM('good', 'suspect', 'missing', 'manual') NOT NULL DEFAULT 'good',
@@ -261,9 +261,9 @@ ON DUPLICATE KEY UPDATE
 
 INSERT INTO roles (code, name)
 VALUES
-  ('admin', 'ผู้ดูแลระบบ'),
-  ('operator', 'พนักงานควบคุมเตา'),
-  ('viewer', 'ผู้ดูรายงาน')
+  ('admin', 'เธเธนเนเธ”เธนเนเธฅเธฃเธฐเธเธ'),
+  ('operator', 'เธเธเธฑเธเธเธฒเธเธเธงเธเธเธธเธกเน€เธ•เธฒ'),
+  ('viewer', 'เธเธนเนเธ”เธนเธฃเธฒเธขเธเธฒเธ')
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 
 INSERT INTO report_document_settings (
@@ -271,7 +271,7 @@ INSERT INTO report_document_settings (
 )
 VALUES
   ('gr', 'F01-05-05 R07', '22/06/67', 'system'),
-  ('ttn', 'F-WS-05 Rev.11', '1-ธ.ค.-68', 'system')
+  ('ttn', 'F-WS-05 Rev.11', '1-เธ.เธ.-68', 'system')
 ON DUPLICATE KEY UPDATE company_id = VALUES(company_id);
 
 -- Seed: TTN ovens 1-9 (oven_number maps 1:1 to oven-N, all offline on fresh install)
@@ -283,15 +283,15 @@ INSERT INTO ovens (
   blower_lower,  blower_upper,
   humidity_lower, humidity_upper
 ) VALUES
-  ('oven-1', 'ttn', 1, 'เตา 1', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
-  ('oven-2', 'ttn', 2, 'เตา 2', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
-  ('oven-3', 'ttn', 3, 'เตา 3', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
-  ('oven-4', 'ttn', 4, 'เตา 4', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
-  ('oven-5', 'ttn', 5, 'เตา 5', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
-  ('oven-6', 'ttn', 6, 'เตา 6', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
-  ('oven-7', 'ttn', 7, 'เตา 7', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
-  ('oven-8', 'ttn', 8, 'เตา 8', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
-  ('oven-9', 'ttn', 9, 'เตา 9', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00)
+  ('oven-1', 'ttn', 1, 'เน€เธ•เธฒ 1', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-2', 'ttn', 2, 'เน€เธ•เธฒ 2', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-3', 'ttn', 3, 'เน€เธ•เธฒ 3', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-4', 'ttn', 4, 'เน€เธ•เธฒ 4', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-5', 'ttn', 5, 'เน€เธ•เธฒ 5', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-6', 'ttn', 6, 'เน€เธ•เธฒ 6', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-7', 'ttn', 7, 'เน€เธ•เธฒ 7', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-8', 'ttn', 8, 'เน€เธ•เธฒ 8', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-9', 'ttn', 9, 'เน€เธ•เธฒ 9', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00)
 ON DUPLICATE KEY UPDATE
   name           = VALUES(name),
   zone_name      = VALUES(zone_name),

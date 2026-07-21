@@ -1,44 +1,241 @@
-# ตั้งค่า Windows User Environment Variables สำหรับ STCR dev บนเครื่องนี้
-# รัน: powershell -ExecutionPolicy Bypass -File scripts\setup-dev-env.ps1
+﻿# STCR development environment setup
+# Compatible with Windows PowerShell 5.1 and PowerShell 7+
+# This file intentionally uses ASCII-only comments/messages to avoid encoding problems.
 
-$ErrorActionPreference = 'Stop'
+[CmdletBinding()]
+param(
+    [string]$DbHost = "127.0.0.1",
+    [int]$DbPort = 3306,
+    [string]$DbUser = "stcr_app",
+    [string]$DbName = "stcr",
+    [string]$MqttUrl = "mqtt://43.225.142.208:1883",
+    [ValidateSet("gr", "ttn")]
+    [string]$MqttCompanyId = "ttn"
+)
 
-# ======= ตั้งค่าตรงนี้ =======
-$cred = [ordered]@{
-    # DB (XAMPP)
-    STCR_DB_HOST                            = '127.0.0.1'
-    STCR_DB_PORT                            = '3306'
-    STCR_DB_USER                            = 'stcr_app'
-    STCR_DB_PASSWORD                        = 'dev-password-change-me'   # <-- ใส่ password จริงที่ตั้งตอน CREATE USER
-    STCR_DB_NAME                            = 'stcr'
+$ErrorActionPreference = "Stop"
 
-    # Web / session
-    STCR_ALLOWED_ORIGINS                    = 'http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:4173,http://localhost:4173'
-    STCR_SESSION_TTL_MINUTES                = '480'
-    STCR_TRUST_PROXY                        = 'false'
+function Set-StcrUserVariable {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
 
-    # Node-RED secret (ใส่อะไรก็ได้ >= 32 ตัว)
-    STCR_NODE_RED_CREDENTIAL_SECRET         = 'dev-local-secret-at-least-32-chars!!'
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$Value
+    )
 
-    # API key pepper + TTN key ที่เพิ่งสร้าง
-    STCR_API_KEY_PEPPER                     = 'zKutpxu10Cba_xgBwnAJmhnNzKmzNii8QtoJ87XerQk'
-    STCR_TTN_INGEST_API_KEY                 = 'stcr_ttn_xrWStF6pu-FyxGpQKx4YFc2P_zKLnHzKCgBW4g8XyJw'
-
-    # MQTT โรงงาน TTN (plain mqtt ไม่มี TLS)
-    STCR_FACTORY_MQTT_URL                   = 'mqtt://43.225.142.208:1883'
-    STCR_FACTORY_MQTT_USERNAME              = 'myuser'
-    STCR_FACTORY_MQTT_PASSWORD              = 'tytcdev888'
-    STCR_FACTORY_MQTT_COMPANY_ID            = 'ttn'
-    STCR_FACTORY_MQTT_OVEN_MAP_JSON         = '{"1":"oven-1","2":"oven-2","3":"oven-3","4":"oven-4","5":"oven-5","6":"oven-6","7":"oven-7","8":"oven-8","9":"oven-9"}'
+    [Environment]::SetEnvironmentVariable($Name, $Value, "User")
+    Set-Item -Path ("Env:" + $Name) -Value $Value
+    Write-Host ("SET  " + $Name) -ForegroundColor DarkGray
 }
 
-Write-Host 'Setting Windows User environment variables...' -ForegroundColor Cyan
-foreach ($entry in $cred.GetEnumerator()) {
-    [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'User')
-    Write-Host "  SET $($entry.Key)" -ForegroundColor DarkGray
+function Get-StcrUserVariable {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    return [Environment]::GetEnvironmentVariable($Name, "User")
 }
 
-Write-Host ''
-Write-Host 'Done. Open a NEW terminal window before running npm run public:start' -ForegroundColor Green
-Write-Host ''
-Write-Host 'IMPORTANT: Edit STCR_DB_PASSWORD in this script to match your XAMPP stcr_app password first!' -ForegroundColor Yellow
+function ConvertFrom-StcrSecureString {
+    param(
+        [Parameter(Mandatory = $true)]
+        [Security.SecureString]$SecureValue
+    )
+
+    $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureValue)
+    try {
+        return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
+    }
+    finally {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
+    }
+}
+
+function Read-StcrRequiredText {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Prompt
+    )
+
+    $existing = Get-StcrUserVariable -Name $Name
+    if (-not [string]::IsNullOrWhiteSpace($existing)) {
+        Set-Item -Path ("Env:" + $Name) -Value $existing
+        Write-Host ("KEEP " + $Name) -ForegroundColor DarkGray
+        return $existing
+    }
+
+    $value = Read-Host $Prompt
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        throw ($Name + " is required.")
+    }
+
+    Set-StcrUserVariable -Name $Name -Value $value
+    return $value
+}
+
+function Read-StcrRequiredSecret {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Prompt
+    )
+
+    $existing = Get-StcrUserVariable -Name $Name
+    if (-not [string]::IsNullOrWhiteSpace($existing)) {
+        Set-Item -Path ("Env:" + $Name) -Value $existing
+        Write-Host ("KEEP " + $Name) -ForegroundColor DarkGray
+        return $existing
+    }
+
+    $secureValue = Read-Host $Prompt -AsSecureString
+    $plainValue = ConvertFrom-StcrSecureString -SecureValue $secureValue
+
+    if ([string]::IsNullOrWhiteSpace($plainValue)) {
+        throw ($Name + " is required.")
+    }
+
+    Set-StcrUserVariable -Name $Name -Value $plainValue
+    return $plainValue
+}
+
+function New-StcrRandomSecret {
+    param(
+        [int]$ByteLength = 48
+    )
+
+    $bytes = New-Object byte[] $ByteLength
+    $generator = [Security.Cryptography.RandomNumberGenerator]::Create()
+
+    try {
+        $generator.GetBytes($bytes)
+    }
+    finally {
+        $generator.Dispose()
+    }
+
+    return [Convert]::ToBase64String($bytes)
+}
+
+function Import-OrCreate-StcrSecret {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [int]$MinimumLength = 32
+    )
+
+    $value = Get-StcrUserVariable -Name $Name
+
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        $value = New-StcrRandomSecret
+        Set-StcrUserVariable -Name $Name -Value $value
+        Write-Host ("GENERATED " + $Name) -ForegroundColor Yellow
+    }
+    else {
+        Set-Item -Path ("Env:" + $Name) -Value $value
+        Write-Host ("KEEP " + $Name) -ForegroundColor DarkGray
+    }
+
+    if ($value.Length -lt $MinimumLength) {
+        throw ($Name + " must contain at least " + $MinimumLength + " characters.")
+    }
+
+    return $value
+}
+
+$allowedOrigins = @(
+    "https://0tyght.github.io",
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+    "http://127.0.0.1:4173",
+    "http://localhost:4173"
+) -join ","
+
+$ovenMap = [ordered]@{
+    "1" = "oven-1"
+    "2" = "oven-2"
+    "3" = "oven-3"
+    "4" = "oven-4"
+    "5" = "oven-5"
+    "6" = "oven-6"
+    "7" = "oven-7"
+    "8" = "oven-8"
+    "9" = "oven-9"
+} | ConvertTo-Json -Compress
+
+$settings = [ordered]@{
+    STCR_DB_HOST = $DbHost
+    STCR_DB_PORT = [string]$DbPort
+    STCR_DB_USER = $DbUser
+    STCR_DB_NAME = $DbName
+
+    STCR_ALLOWED_ORIGINS = $allowedOrigins
+    STCR_SESSION_TTL_MINUTES = "480"
+    STCR_TRUST_PROXY = "false"
+    STCR_DEPLOYMENT_MODE = "test"
+
+    STCR_FACTORY_MQTT_ENABLED = "true"
+    STCR_FACTORY_MQTT_URL = $MqttUrl
+    STCR_FACTORY_MQTT_COMPANY_ID = $MqttCompanyId
+    STCR_FACTORY_MQTT_TOPICS = "test,sensor"
+    STCR_FACTORY_MQTT_CLIENT_ID = ("stcr-" + $MqttCompanyId + "-server")
+    STCR_FACTORY_MQTT_OVEN_MAP_JSON = $ovenMap
+
+    # A timestamp ending in Z is UTC. Keep this at zero unless the source is proven incorrect.
+    STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES = "0"
+
+    # This broker currently uses mqtt:// in the test environment.
+    STCR_FACTORY_MQTT_TLS_REJECT_UNAUTHORIZED = "false"
+
+    STCR_FACTORY_MQTT_FORWARD_ENABLED = "false"
+    STCR_HTTP_INGEST_ENABLED = "false"
+    STCR_INGEST_URL = "http://127.0.0.1:1880/stcr/api/telemetry"
+}
+
+Write-Host ""
+Write-Host "Configuring STCR user environment variables..." -ForegroundColor Cyan
+
+foreach ($entry in $settings.GetEnumerator()) {
+    Set-StcrUserVariable -Name $entry.Key -Value ([string]$entry.Value)
+}
+
+$null = Read-StcrRequiredSecret `
+    -Name "STCR_DB_PASSWORD" `
+    -Prompt "Enter the stcr_app MySQL password"
+
+$null = Read-StcrRequiredText `
+    -Name "STCR_FACTORY_MQTT_USERNAME" `
+    -Prompt "Enter the MQTT username"
+
+$null = Read-StcrRequiredSecret `
+    -Name "STCR_FACTORY_MQTT_PASSWORD" `
+    -Prompt "Enter the MQTT password"
+
+$null = Import-OrCreate-StcrSecret `
+    -Name "STCR_NODE_RED_CREDENTIAL_SECRET" `
+    -MinimumLength 32
+
+$null = Import-OrCreate-StcrSecret `
+    -Name "STCR_API_KEY_PEPPER" `
+    -MinimumLength 32
+
+Write-Host ""
+Write-Host "STCR environment is ready." -ForegroundColor Green
+Write-Host ("MQTT company : " + $env:STCR_FACTORY_MQTT_COMPANY_ID)
+Write-Host ("MQTT topics  : " + $env:STCR_FACTORY_MQTT_TOPICS)
+Write-Host ("MQTT URL     : " + $env:STCR_FACTORY_MQTT_URL)
+Write-Host ("Allowed CORS : " + $env:STCR_ALLOWED_ORIGINS)
+Write-Host ""
+Write-Host "Restart the services so Node-RED loads the new variables:" -ForegroundColor Yellow
+Write-Host "  npm run public:stop"
+Write-Host "  npm run node-red:build"
+Write-Host "  npm run node-red:validate"
+Write-Host "  npm run public:start"
