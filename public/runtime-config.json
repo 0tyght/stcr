@@ -1,6 +1,7 @@
 {
-    "apiBaseUrl":  "/stcr/api",
+    "dataSource":  "node-red",
+    "apiBaseUrl":  "https://stadium-birmingham-alert-surgery.trycloudflare.com/stcr/api",
     "pollIntervalMs":  5000,
     "requestTimeoutMs":  15000,
-    "updatedAt":  null
+    "updatedAt":  "2026-07-21T06:08:19.2622690Z"
 }
