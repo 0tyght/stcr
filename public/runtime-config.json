@@ -1,7 +1,7 @@
 {
     "dataSource":  "node-red",
-    "apiBaseUrl":  "https://again-officials-romance-dispatch.trycloudflare.com/stcr/api",
+    "apiBaseUrl":  "https://load-enabled-groundwater-mixing.trycloudflare.com/stcr/api",
     "pollIntervalMs":  5000,
     "requestTimeoutMs":  15000,
-    "updatedAt":  "2026-07-21T06:22:38.5474571Z"
+    "updatedAt":  "2026-07-21T06:34:01.4567345Z"
 }
