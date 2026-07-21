@@ -1,7 +1,7 @@
 {
     "dataSource":  "node-red",
-    "apiBaseUrl":  "https://copyrighted-prepaid-providence-moon.trycloudflare.com/stcr/api",
+    "apiBaseUrl":  "https://risks-browser-criteria-separate.trycloudflare.com/stcr/api",
     "pollIntervalMs":  5000,
     "requestTimeoutMs":  15000,
-    "updatedAt":  "2026-07-21T08:22:09.1175774Z"
+    "updatedAt":  "2026-07-21T08:42:07.9995506Z"
 }
