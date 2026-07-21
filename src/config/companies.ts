@@ -152,7 +152,7 @@ export const companies = {
 
 export type CompanyId = keyof typeof companies;
 
-export const DEFAULT_COMPANY_ID: CompanyId = "gr";
+export const DEFAULT_COMPANY_ID: CompanyId = "ttn";
 export const DEFAULT_ACCOUNT_ID = companies[DEFAULT_COMPANY_ID].accounts[0].id;
 export const companyList = Object.values(companies);
 export const accountList = companyList.flatMap((company) =>

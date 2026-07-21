@@ -11,7 +11,7 @@
     "type": "tab",
     "label": "02 รับข้อมูล MQTT โรงงาน",
     "disabled": false,
-    "info": "รับข้อมูลจริงจาก MQTT ตรวจสอบและส่งเข้า STCR API"
+    "info": "รับข้อมูลจริงจาก MQTT โรงงาน เขียนลง MySQL โดยตรง"
   },
   {
     "id": "stcr-platform-note",
@@ -429,7 +429,7 @@
     "id": "stcr-factory-mqtt-adapter",
     "type": "function",
     "z": "stcr-factory-mqtt-tab",
-    "name": "ตรวจสอบและแปลงข้อมูล MQTT ให้ตรงกับ API",
+    "name": "ตรวจสอบและแปลงข้อมูล MQTT",
     "func": "// factory-mqtt-adapter.js\n// ตรวจสอบและ normalize MQTT message แบบ synchronous\n// การเขียน MySQL ทำใน factory-mqtt-db-writer.js (node ถัดไป)\n\nconst allowedTopics = new Set([\"test\", \"sensor\"]);\nconst companyId = String(env.get(\"STCR_FACTORY_MQTT_COMPANY_ID\") || \"\").trim().toLowerCase();\nconst deploymentMode = String(env.get(\"STCR_DEPLOYMENT_MODE\") || \"development\").toLowerCase();\nconst topic = String(msg.topic || \"\").trim();\nconst receivedAt = msg.factoryMqtt?.receivedAt || new Date().toISOString();\nconst sourceUtcOffsetMinutes = Number(env.get(\"STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES\") || 0);\n\nfunction inspection(status, detail, extra = {}) {\n  return {\n    topic: `stcr/factory-mqtt/${status}`,\n    payload: { status, detail, sourceTopic: topic, companyId: companyId || null, receivedAt, ...extra },\n  };\n}\n\nif (![\"gr\", \"ttn\"].includes(companyId)) {\n  node.status({ fill: \"red\", shape: \"ring\", text: \"company mapping missing\" });\n  return inspection(\"rejected\", \"STCR_FACTORY_MQTT_COMPANY_ID is missing\");\n}\nif (!allowedTopics.has(topic)) {\n  node.status({ fill: \"yellow\", shape: \"ring\", text: \"unknown MQTT topic\" });\n  return inspection(\"rejected\", \"Unknown MQTT topic\");\n}\n\nconst rawText = Buffer.isBuffer(msg.payload) ? msg.payload.toString(\"utf8\") : String(msg.payload || \"\");\nif (!rawText || Buffer.byteLength(rawText, \"utf8\") > 8192) {\n  return inspection(\"rejected\", \"MQTT payload is empty or too large\");\n}\n\nlet source;\ntry {\n  source = JSON.parse(rawText);\n} catch {\n  node.status({ fill: \"yellow\", shape: \"ring\", text: \"invalid MQTT JSON\" });\n  return inspection(\"rejected\", \"MQTT payload is not valid JSON\");\n}\n\nconst ovenNumber = Number(source.oven);\nconst cycleNumber = Number(source.cycle);\nconst rawSourceTimestampMs = Date.parse(source.time_stamp);\nconst validSourceOffset = Number.isInteger(sourceUtcOffsetMinutes) && Math.abs(sourceUtcOffsetMinutes) <= 840;\nconst sourceTimestampMs = rawSourceTimestampMs - sourceUtcOffsetMinutes * 60 * 1000;\nif (\n  !Number.isSafeInteger(ovenNumber) || ovenNumber < 1 || ovenNumber > 10000 ||\n  !Number.isSafeInteger(cycleNumber) || cycleNumber < 0 || cycleNumber > 1000000 ||\n  !Number.isFinite(rawSourceTimestampMs) || !validSourceOffset\n) {\n  node.status({ fill: \"yellow\", shape: \"ring\", text: \"invalid MQTT identity\" });\n  return inspection(\"rejected\", \"Invalid oven, cycle, or timestamp\", { rawPayload: source });\n}\n\nlet ovenMap = {};\ntry {\n  ovenMap = JSON.parse(String(env.get(\"STCR_FACTORY_MQTT_OVEN_MAP_JSON\") || \"{}\"));\n} catch {\n  return inspection(\"rejected\", \"STCR_FACTORY_MQTT_OVEN_MAP_JSON is invalid JSON\");\n}\nconst explicitOvenId = typeof ovenMap[String(ovenNumber)] === \"string\"\n  ? ovenMap[String(ovenNumber)].trim()\n  : \"\";\nconst ovenId = explicitOvenId || (deploymentMode === \"production\" ? \"\" : `oven-${ovenNumber}`);\nif (!ovenId || ovenId.length > 64 || /[\\u0000-\\u001f\\u007f]/.test(ovenId)) {\n  node.status({ fill: \"red\", shape: \"ring\", text: `oven ${ovenNumber} unmapped` });\n  return inspection(\"pending\", \"Oven mapping is required\", { ovenNumber, cycleNumber, rawPayload: source });\n}\n\nconst sourceTimestamp = new Date(sourceTimestampMs).toISOString();\n\n// ── topic: test ──────────────────────────────────────────────────────────────\nif (topic === \"test\") {\n  const ovenState = Number(source.oven_state);\n  if (![0, 1].includes(ovenState)) {\n    node.status({ fill: \"yellow\", shape: \"ring\", text: `oven ${ovenNumber} bad state` });\n    return inspection(\"rejected\", \"oven_state must be 0 or 1\", { ovenNumber, ovenId, cycleNumber, rawPayload: source });\n  }\n  node.status({ fill: \"blue\", shape: \"dot\", text: `status oven ${ovenNumber}` });\n  // ส่ง normalized envelope ไปยัง db-writer\n  msg._mqttEnvelope = {\n    type: \"test\",\n    companyId, ovenId, ovenNumber, cycleNumber,\n    topic, qos: Number(msg.factoryMqtt?.qos ?? 0),\n    retained: Boolean(msg.factoryMqtt?.retain),\n    duplicateDelivery: Boolean(msg.factoryMqtt?.duplicate),\n    sourceTimestamp, source, ovenState,\n  };\n  return inspection(\"validated\", \"oven_state is the primary control value (0=closed, 1=open)\", {\n    ovenNumber, ovenId, cycleNumber, ovenState, rawPayload: source,\n  });\n}\n\n// ── topic: sensor ────────────────────────────────────────────────────────────\nconst startOven = Number(source.startoven);\nif (![0, 1].includes(startOven)) {\n  return inspection(\"rejected\", \"startoven must be 0 or 1\", { ovenNumber, ovenId, cycleNumber, rawPayload: source });\n}\n\nconst definitions = [\n  [\"chamberTemp\", \"roomtemp\", \"C\"],\n  [\"humidity\",    \"humanity\", \"%\"],\n  [\"furnaceTemp\", \"oventemp\", \"C\"],\n  [\"blowerTemp\",  \"blower\",   \"C\"],\n];\nconst missingSensors = definitions\n  .filter(([, sourceKey]) =>\n    source[sourceKey] === null || source[sourceKey] === undefined ||\n    source[sourceKey] === \"\" || !Number.isFinite(Number(source[sourceKey])),\n  )\n  .map(([sensorKey]) => sensorKey);\n\nif (missingSensors.length) {\n  node.status({ fill: \"yellow\", shape: \"ring\", text: `${missingSensors.join(\", \")} missing` });\n  msg._mqttEnvelope = {\n    type: \"pending\",\n    companyId, ovenId, ovenNumber, cycleNumber,\n    topic, qos: Number(msg.factoryMqtt?.qos ?? 0),\n    retained: Boolean(msg.factoryMqtt?.retain),\n    duplicateDelivery: Boolean(msg.factoryMqtt?.duplicate),\n    sourceTimestamp, source, missingSensors,\n  };\n  return inspection(\"pending\", \"Sensor values are incomplete\", {\n    ovenNumber, ovenId, cycleNumber, missingSensors, rawPayload: source,\n  });\n}\n\nconst now = Date.now();\nconst stale = now - sourceTimestampMs > 2 * 60 * 1000;\nconst future = sourceTimestampMs - now > 30 * 1000;\nconst qualityReasons = [...(stale ? [\"stale\"] : []), ...(future ? [\"future-timestamp\"] : [])];\nconst quality = qualityReasons.length ? \"suspect\" : \"good\";\nconst sequence = sourceTimestampMs;\n\nconst readings = definitions.map(([sensorKey, sourceKey, unit]) => ({\n  sensorKey,\n  sensorId: `factory-${companyId}-${ovenId}-${sensorKey}`,\n  sequence,\n  value: Number(source[sourceKey]),\n  rawValue: Number(source[sourceKey]),\n  unit,\n  quality,\n  qualityReasons,\n  sourceTimestamp,\n}));\n\nnode.status({ fill: \"green\", shape: \"dot\", text: `normalized oven ${ovenNumber}` });\n\nmsg._mqttEnvelope = {\n  type: \"sensor\",\n  companyId, ovenId, ovenNumber, cycleNumber,\n  topic, qos: Number(msg.factoryMqtt?.qos ?? 0),\n  retained: Boolean(msg.factoryMqtt?.retain),\n  duplicateDelivery: Boolean(msg.factoryMqtt?.duplicate),\n  sourceTimestamp, source,\n  startOven, quality, qualityReasons, readings,\n  batchId: `mqtt-${ovenNumber}-${cycleNumber}-${sourceTimestampMs}`,\n  deviceId: `factory-${companyId}-oven-${ovenNumber}`,\n};\n\nreturn inspection(\"validated\", \"Sensor data normalized; queued for database write\", {\n  ovenNumber, ovenId, cycleNumber, startOven,\n  page: source.page,\n  pageUsed: false,\n  originalSourceTimestamp: source.time_stamp,\n  normalizedSourceTimestamp: sourceTimestamp,\n  normalizedPayload: {\n    companyId, ovenId,\n    batchId: msg._mqttEnvelope.batchId,\n    deviceId: msg._mqttEnvelope.deviceId,\n    readings,\n  },\n  rawPayload: source,\n});\n",
     "outputs": 1,
     "timeout": 0,
@@ -437,7 +437,7 @@
     "initialize": "",
     "finalize": "",
     "libs": [],
-    "x": 600,
+    "x": 560,
     "y": 160,
     "wires": [
       [
@@ -458,8 +458,8 @@
     "initialize": "",
     "finalize": "",
     "libs": [],
-    "x": 970,
-    "y": 210,
+    "x": 860,
+    "y": 120,
     "wires": [
       []
     ]
@@ -485,8 +485,8 @@
         "module": "crypto"
       }
     ],
-    "x": 980,
-    "y": 160,
+    "x": 860,
+    "y": 200,
     "wires": [
       []
     ]
