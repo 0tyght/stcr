@@ -3,12 +3,17 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(fileURLToPath(import.meta.url));
-const router         = await readFile(join(root, "functions", "api-router.js"), "utf8");
-const subscriberInit = await readFile(join(root, "functions", "factory-mqtt-subscriber-init.js"), "utf8");
-const subscriberFin  = await readFile(join(root, "functions", "factory-mqtt-subscriber-finalize.js"), "utf8");
-const adapter        = await readFile(join(root, "functions", "factory-mqtt-adapter.js"), "utf8");
-const dbWriter       = await readFile(join(root, "functions", "factory-mqtt-db-writer.js"), "utf8");
-const inspection     = await readFile(join(root, "functions", "factory-mqtt-inspection.js"), "utf8");
+async function readFunctionSource(filename) {
+  const source = await readFile(join(root, "functions", filename), "utf8");
+  return source.replace(/\r\n?/g, "\n");
+}
+
+const router         = await readFunctionSource("api-router.js");
+const subscriberInit = await readFunctionSource("factory-mqtt-subscriber-init.js");
+const subscriberFin  = await readFunctionSource("factory-mqtt-subscriber-finalize.js");
+const adapter        = await readFunctionSource("factory-mqtt-adapter.js");
+const dbWriter       = await readFunctionSource("factory-mqtt-db-writer.js");
+const inspection     = await readFunctionSource("factory-mqtt-inspection.js");
 
 const platformTabId = "stcr-platform-tab";
 const mqttTabId     = "stcr-factory-mqtt-tab";
