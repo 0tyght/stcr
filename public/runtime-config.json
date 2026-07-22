@@ -1,7 +1,7 @@
 {
     "dataSource":  "node-red",
-    "apiBaseUrl":  "https://milk-attitudes-housewares-driver.trycloudflare.com/stcr/api",
+    "apiBaseUrl":  "https://timer-prisoners-persian-lives.trycloudflare.com/stcr/api",
     "pollIntervalMs":  1000,
     "requestTimeoutMs":  15000,
-    "updatedAt":  "2026-07-22T06:33:44.6960830Z"
+    "updatedAt":  "2026-07-22T08:48:38.7417971Z"
 }
