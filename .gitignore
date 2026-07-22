@@ -16,3 +16,8 @@ vite.config.d.ts
 
 .patch-backup/
 .patch-backup/
+MQTT.txt
+*.sql.gz
+*.zip
+.env.*
+!.env.example
