@@ -6,7 +6,6 @@ import {
   Moon,
   Palette,
   Radio,
-  ShieldCheck,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
@@ -114,10 +113,6 @@ export function LoginPage({
             </p>
           </div>
 
-          <div className="login-showcase-points">
-            <span><Radio size={16} /> ข้อมูลจาก MQTT แบบเรียลไทม์</span>
-            <span><ShieldCheck size={16} /> แยกข้อมูลตามบริษัทอย่างปลอดภัย</span>
-          </div>
         </aside>
 
         <form className="login-panel login-modern-panel" onSubmit={handleSubmit}>
