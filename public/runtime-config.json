@@ -1,7 +1,7 @@
 {
     "dataSource":  "node-red",
-    "apiBaseUrl":  "https://risks-browser-criteria-separate.trycloudflare.com/stcr/api",
-    "pollIntervalMs":  5000,
+    "apiBaseUrl":  "https://milk-attitudes-housewares-driver.trycloudflare.com/stcr/api",
+    "pollIntervalMs":  1000,
     "requestTimeoutMs":  15000,
-    "updatedAt":  "2026-07-21T08:42:07.9995506Z"
+    "updatedAt":  "2026-07-22T06:33:44.6960830Z"
 }
