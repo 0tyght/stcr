@@ -261,9 +261,9 @@ ON DUPLICATE KEY UPDATE
 
 INSERT INTO roles (code, name)
 VALUES
-  ('admin', 'เธเธนเนเธ”เธนเนเธฅเธฃเธฐเธเธ'),
-  ('operator', 'เธเธเธฑเธเธเธฒเธเธเธงเธเธเธธเธกเน€เธ•เธฒ'),
-  ('viewer', 'เธเธนเนเธ”เธนเธฃเธฒเธขเธเธฒเธ')
+  ('admin', 'ผู้ดูแลระบบ'),
+  ('operator', 'พนักงานควบคุมเตา'),
+  ('viewer', 'ผู้ดูรายงาน')
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 
 INSERT INTO report_document_settings (
@@ -271,7 +271,7 @@ INSERT INTO report_document_settings (
 )
 VALUES
   ('gr', 'F01-05-05 R07', '22/06/67', 'system'),
-  ('ttn', 'F-WS-05 Rev.11', '1-เธ.เธ.-68', 'system')
+  ('ttn', 'F-WS-05 Rev.11', '1-ธ.ค.-68', 'system')
 ON DUPLICATE KEY UPDATE company_id = VALUES(company_id);
 
 -- Seed: TTN ovens 1-9 (oven_number maps 1:1 to oven-N, all offline on fresh install)
@@ -283,15 +283,15 @@ INSERT INTO ovens (
   blower_lower,  blower_upper,
   humidity_lower, humidity_upper
 ) VALUES
-  ('oven-1', 'ttn', 1, 'เน€เธ•เธฒ 1', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
-  ('oven-2', 'ttn', 2, 'เน€เธ•เธฒ 2', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
-  ('oven-3', 'ttn', 3, 'เน€เธ•เธฒ 3', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
-  ('oven-4', 'ttn', 4, 'เน€เธ•เธฒ 4', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
-  ('oven-5', 'ttn', 5, 'เน€เธ•เธฒ 5', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
-  ('oven-6', 'ttn', 6, 'เน€เธ•เธฒ 6', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
-  ('oven-7', 'ttn', 7, 'เน€เธ•เธฒ 7', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
-  ('oven-8', 'ttn', 8, 'เน€เธ•เธฒ 8', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
-  ('oven-9', 'ttn', 9, 'เน€เธ•เธฒ 9', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00)
+  ('oven-1', 'ttn', 1, 'เตา 1', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-2', 'ttn', 2, 'เตา 2', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-3', 'ttn', 3, 'เตา 3', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-4', 'ttn', 4, 'เตา 4', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-5', 'ttn', 5, 'เตา 5', 'TTN', 'Smoking Line A', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-6', 'ttn', 6, 'เตา 6', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-7', 'ttn', 7, 'เตา 7', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-8', 'ttn', 8, 'เตา 8', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-9', 'ttn', 9, 'เตา 9', 'TTN', 'Smoking Line B', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00)
 ON DUPLICATE KEY UPDATE
   name           = VALUES(name),
   zone_name      = VALUES(zone_name),
@@ -304,6 +304,34 @@ ON DUPLICATE KEY UPDATE
   blower_upper   = VALUES(blower_upper),
   humidity_lower = VALUES(humidity_lower),
   humidity_upper = VALUES(humidity_upper);
+
+-- Seed: GR ovens 11-26. Keep all ovens offline until real telemetry arrives.
+INSERT INTO ovens (
+  id, company_id, oven_number, name, zone_name, line_name,
+  status, enabled,
+  chamber_lower, chamber_upper,
+  furnace_lower, furnace_upper,
+  blower_lower, blower_upper,
+  humidity_lower, humidity_upper
+) VALUES
+  ('oven-11', 'gr', 11, 'เตา 11', 'A', 'Line 1', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-12', 'gr', 12, 'เตา 12', 'A', 'Line 1', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-13', 'gr', 13, 'เตา 13', 'A', 'Line 1', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-14', 'gr', 14, 'เตา 14', 'A', 'Line 1', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-15', 'gr', 15, 'เตา 15', 'A', 'Line 1', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-16', 'gr', 16, 'เตา 16', 'A', 'Line 1', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-17', 'gr', 17, 'เตา 17', 'A', 'Line 1', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-18', 'gr', 18, 'เตา 18', 'A', 'Line 1', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-19', 'gr', 19, 'เตา 19', 'B', 'Line 2', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-20', 'gr', 20, 'เตา 20', 'B', 'Line 2', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-21', 'gr', 21, 'เตา 21', 'B', 'Line 2', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-22', 'gr', 22, 'เตา 22', 'B', 'Line 2', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-23', 'gr', 23, 'เตา 23', 'B', 'Line 2', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-24', 'gr', 24, 'เตา 24', 'B', 'Line 2', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-25', 'gr', 25, 'เตา 25', 'B', 'Line 2', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00),
+  ('oven-26', 'gr', 26, 'เตา 26', 'B', 'Line 2', 'offline', TRUE, 35.00, 60.00, 450.00, 550.00, 330.00, 400.00, 45.00, 85.00)
+ON DUPLICATE KEY UPDATE id = VALUES(id);
+
 -- One row per oven per UTC minute. Values are aggregated from realtime MQTT.
 CREATE TABLE IF NOT EXISTS sensor_minute_aggregates (
   company_id VARCHAR(32) NOT NULL,

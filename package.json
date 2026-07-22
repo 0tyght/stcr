@@ -10,6 +10,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "node-red:build": "node node-red/build-flow.mjs",
     "node-red:validate": "node node-red/validate-flow.mjs",
+    "test:mqtt-lifecycle": "node scripts/test-mqtt-lifecycle.mjs",
     "production:preflight": "node scripts/production-preflight.mjs",
     "db:backup": "powershell -ExecutionPolicy Bypass -File ./scripts/backup-database.ps1",
     "db:secure": "powershell -ExecutionPolicy Bypass -File ./scripts/secure-test-database.ps1",
@@ -30,6 +31,7 @@
   "devDependencies": {
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
+    "mysql2": "^3.23.1",
     "typescript": "^5.9.3",
     "vite": "^7.1.10"
   }

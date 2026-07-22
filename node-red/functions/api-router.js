@@ -434,69 +434,199 @@ async function loadRuntimeStateFromDatabase() {
   return rootState;
 }
 
+async function applyOfflineThreshold(rootState, referenceDate = new Date()) {
+  if (!rootState?.companies) return rootState;
+
+  const nowMs = referenceDate.getTime();
+  const changed = [];
+
+  for (const [companyId, company] of Object.entries(rootState.companies)) {
+    for (const oven of company.ovens || []) {
+      const lastUpdatedMs = Date.parse(
+        String(oven.lastUpdatedAt || ""),
+      );
+
+      const stale =
+        !Number.isFinite(lastUpdatedMs) ||
+        nowMs - lastUpdatedMs > offlineThresholdMs;
+
+      if (stale && oven.status !== "offline") {
+        oven.status = "offline";
+        changed.push({
+          companyId,
+          ovenId: oven.id,
+        });
+      }
+    }
+  }
+
+  if (!changed.length) return rootState;
+
+  global.set("stcrState", rootState);
+
+  try {
+    const pool = getDatabasePool();
+
+    await Promise.all(
+      changed.map(({ companyId, ovenId }) =>
+        pool.execute(
+          `UPDATE ovens
+           SET status='offline'
+           WHERE company_id=?
+             AND id=?
+             AND status<>'offline'`,
+          [companyId, ovenId],
+        ),
+      ),
+    );
+  } catch (error) {
+    node.warn(
+      `Offline status persistence failed: ${error.message}`,
+    );
+  }
+
+  return rootState;
+}
+
 async function ensureRuntimeState() {
   const existing = global.get("stcrState");
-  if (existing?.companies && Object.keys(existing.companies).length) return existing;
+
+  if (
+    existing?.companies &&
+    Object.keys(existing.companies).length
+  ) {
+    return applyOfflineThreshold(existing);
+  }
 
   let loading = context.get("stcrRuntimeStateLoading");
+
   if (!loading) {
-    loading = loadRuntimeStateFromDatabase().finally(() => context.set("stcrRuntimeStateLoading", undefined));
+    loading = loadRuntimeStateFromDatabase().finally(() =>
+      context.set("stcrRuntimeStateLoading", undefined),
+    );
+
     context.set("stcrRuntimeStateLoading", loading);
   }
-  return loading;
+
+  return applyOfflineThreshold(await loading);
 }
 
 async function readReportHistory(companyId, ovenId, historyQuery) {
-  const conditions = ["r.company_id=?", "r.oven_id=?"];
-  const values = [companyId, ovenId];
+  const conditions = [
+    "a.company_id=?",
+    "a.oven_id=?",
+  ];
+
+  const values = [
+    companyId,
+    ovenId,
+  ];
+
   if (historyQuery.includeIgnition !== "true") {
-    conditions.push(
-      "r.included_in_report=TRUE",
-      "c.report_started_at IS NOT NULL",
-      "r.recorded_at>=c.report_started_at",
-      "(c.stopped_at IS NULL OR r.recorded_at<=c.stopped_at)",
-    );
+    conditions.push("a.included_in_report=TRUE");
   }
+
   if (historyQuery.startAt) {
-    conditions.push("r.recorded_at>=?");
+    conditions.push("a.minute_at>=?");
     values.push(historyQuery.startAt);
   }
+
   if (historyQuery.endAt) {
-    conditions.push("r.recorded_at<=?");
+    conditions.push("a.minute_at<=?");
     values.push(historyQuery.endAt);
   }
+
   if (historyQuery.cycleNumber) {
-    conditions.push("c.cycle_number=?");
+    conditions.push("a.cycle_number=?");
     values.push(Number(historyQuery.cycleNumber));
   }
 
   const pool = getDatabasePool();
+
   await pool.query("SET time_zone = '+00:00'");
-  const requestedRangeMs = historyQuery.startAt && historyQuery.endAt
-    ? Math.max(0, Date.parse(historyQuery.endAt) - Date.parse(historyQuery.startAt))
-    : 0;
-  const bucketSeconds = requestedRangeMs > 24 * 60 * 60 * 1000 ? 600 : 60;
+
+  const requestedRangeMs =
+    historyQuery.startAt && historyQuery.endAt
+      ? Math.max(
+          0,
+          Date.parse(historyQuery.endAt) -
+            Date.parse(historyQuery.startAt),
+        )
+      : 0;
+
+  const bucketSeconds =
+    requestedRangeMs > 24 * 60 * 60 * 1000
+      ? 600
+      : 60;
+
   const [rows] = await pool.execute(
     `SELECT
-       DATE_FORMAT(MIN(r.recorded_at), '%Y-%m-%dT%H:%i:%s.%fZ') AS timestamp,
-       AVG(r.chamber_temp) AS chamberTemp,
-       AVG(r.humidity) AS humidity,
-       AVG(r.furnace_temp) AS furnaceTemp,
-       AVG(r.blower_temp) AS blowerTemp
-     FROM sensor_readings r
-     LEFT JOIN oven_cycles c ON c.id=r.cycle_id
+       DATE_FORMAT(
+         MIN(a.minute_at),
+         '%Y-%m-%dT%H:%i:%s.000Z'
+       ) AS timestamp,
+
+       SUM(
+         a.chamber_temp_avg *
+         a.chamber_temp_count
+       ) /
+       NULLIF(
+         SUM(a.chamber_temp_count),
+         0
+       ) AS chamberTemp,
+
+       SUM(
+         a.humidity_avg *
+         a.humidity_count
+       ) /
+       NULLIF(
+         SUM(a.humidity_count),
+         0
+       ) AS humidity,
+
+       SUM(
+         a.furnace_temp_avg *
+         a.furnace_temp_count
+       ) /
+       NULLIF(
+         SUM(a.furnace_temp_count),
+         0
+       ) AS furnaceTemp,
+
+       SUM(
+         a.blower_temp_avg *
+         a.blower_temp_count
+       ) /
+       NULLIF(
+         SUM(a.blower_temp_count),
+         0
+       ) AS blowerTemp
+
+     FROM sensor_minute_aggregates a
+
      WHERE ${conditions.join(" AND ")}
-     GROUP BY FLOOR(UNIX_TIMESTAMP(r.recorded_at) / ${bucketSeconds})
-     ORDER BY MIN(r.recorded_at) ASC
+
+     GROUP BY
+       FLOOR(
+         UNIX_TIMESTAMP(a.minute_at) /
+         ${bucketSeconds}
+       )
+
+     ORDER BY MIN(a.minute_at) ASC
+
      LIMIT 10000`,
     values,
   );
+
+  const nullableNumber = (value) =>
+    value == null ? null : Number(value);
+
   return rows.map((row) => ({
     timestamp: row.timestamp,
-    chamberTemp: Number(row.chamberTemp),
-    humidity: Number(row.humidity),
-    furnaceTemp: Number(row.furnaceTemp),
-    blowerTemp: Number(row.blowerTemp),
+    chamberTemp: nullableNumber(row.chamberTemp),
+    humidity: nullableNumber(row.humidity),
+    furnaceTemp: nullableNumber(row.furnaceTemp),
+    blowerTemp: nullableNumber(row.blowerTemp),
   }));
 }
 

@@ -13,7 +13,9 @@ const allowedOrigins = requiredEnvironment("STCR_ALLOWED_ORIGINS")
 
 function validateCorsOrigin(origin, callback) {
   if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-  return callback(new Error("CORS origin rejected"));
+  // Let the API router return a controlled 403 response. Passing an error here
+  // makes the CORS middleware turn a normal rejection into HTTP 500.
+  return callback(null, false);
 }
 
 module.exports = {

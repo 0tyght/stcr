@@ -5,6 +5,9 @@
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Public start must never commit or push automatically.
+$SkipGitPush = $true
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $runtimeDir = Join-Path $root '.runtime'
 $cloudflared = Join-Path $runtimeDir 'cloudflared.exe'
@@ -44,46 +47,99 @@ function Stop-StcrProcesses {
 }
 
 function Import-RequiredEnvironment {
-  # ค่า default สำหรับ dev บนเครื่องนี้ — ถ้ามี Windows User env อยู่แล้วจะใช้ค่านั้นแทน
   $defaults = [ordered]@{
-    STCR_DB_HOST                    = '127.0.0.1'
-    STCR_DB_PORT                    = '3306'
-    STCR_DB_USER                    = 'stcr_app'
-    STCR_DB_PASSWORD                = 'dev-password-change-me'
-    STCR_DB_NAME                    = 'stcr'
-    STCR_ALLOWED_ORIGINS            = 'http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:4173,http://localhost:4173'
-    STCR_SESSION_TTL_MINUTES        = '480'
-    STCR_TRUST_PROXY                = 'false'
-    STCR_NODE_RED_CREDENTIAL_SECRET = 'dev-local-secret-at-least-32-chars!!'
-    STCR_API_KEY_PEPPER             = 'zKutpxu10Cba_xgBwnAJmhnNzKmzNii8QtoJ87XerQk'
-    STCR_TTN_INGEST_API_KEY         = 'stcr_ttn_xrWStF6pu-FyxGpQKx4YFc2P_zKLnHzKCgBW4g8XyJw'
-    STCR_FACTORY_MQTT_URL           = 'mqtt://43.225.142.208:1883'
-    STCR_FACTORY_MQTT_USERNAME      = 'myuser'
-    STCR_FACTORY_MQTT_PASSWORD      = 'tytcdev888'
-    STCR_FACTORY_MQTT_COMPANY_ID    = 'ttn'
+    STCR_DB_HOST = '127.0.0.1'
+    STCR_DB_PORT = '3306'
+    STCR_DB_USER = 'stcr_app'
+    STCR_DB_NAME = 'stcr'
+    STCR_ALLOWED_ORIGINS = 'https://0tyght.github.io,http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:4173,http://localhost:4173'
+    STCR_SESSION_TTL_MINUTES = '480'
+    STCR_TRUST_PROXY = 'true'
+    STCR_DEPLOYMENT_MODE = 'test'
+    STCR_FACTORY_MQTT_ENABLED = 'true'
+    STCR_FACTORY_MQTT_FORWARD_ENABLED = 'false'
+    STCR_FACTORY_MQTT_TOPICS = 'test,sensor'
+    STCR_FACTORY_MQTT_COMPANY_ID = 'ttn'
     STCR_FACTORY_MQTT_OVEN_MAP_JSON = '{"1":"oven-1","2":"oven-2","3":"oven-3","4":"oven-4","5":"oven-5","6":"oven-6","7":"oven-7","8":"oven-8","9":"oven-9"}'
+    # The factory currently sends Bangkok wall-clock time with a trailing Z.
+    # Remove this correction after the publisher sends a real UTC/offset timestamp.
+    STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES = '420'
+    STCR_FACTORY_MQTT_TLS_REJECT_UNAUTHORIZED = 'false'
+    STCR_FACTORY_MQTT_STORE_RAW_MESSAGES = 'false'
+    STCR_OFFLINE_THRESHOLD_SECONDS = '180'
+    STCR_REPORT_READY_HOLD_SECONDS = '1800'
+    STCR_HTTP_INGEST_ENABLED = 'false'
+    STCR_INGEST_URL = 'http://127.0.0.1:1880/stcr/api/telemetry'
   }
 
   foreach ($key in $defaults.Keys) {
-    $value = [Environment]::GetEnvironmentVariable($key, 'User')
-    if (-not $value) { $value = $defaults[$key] }
+    $value = [Environment]::GetEnvironmentVariable(
+      $key,
+      'User'
+    )
+
+    if ([string]::IsNullOrWhiteSpace($value)) {
+      $value = [string]$defaults[$key]
+    }
+
     Set-Item -Path "Env:$key" -Value $value
-    # บันทึกลง Windows User env ด้วยเพื่อครั้งหน้าไม่ต้องตั้งใหม่
-    [Environment]::SetEnvironmentVariable($key, $value, 'User')
+  }
+
+  $required = @(
+    'STCR_DB_PASSWORD',
+    'STCR_NODE_RED_CREDENTIAL_SECRET',
+    'STCR_API_KEY_PEPPER',
+    'STCR_FACTORY_MQTT_URL',
+    'STCR_FACTORY_MQTT_USERNAME',
+    'STCR_FACTORY_MQTT_PASSWORD'
+  )
+
+  $missing = @()
+
+  foreach ($key in $required) {
+    $value = [Environment]::GetEnvironmentVariable(
+      $key,
+      'User'
+    )
+
+    if ([string]::IsNullOrWhiteSpace($value)) {
+      $missing += $key
+      continue
+    }
+
+    Set-Item -Path "Env:$key" -Value $value
+  }
+
+  $optional = @(
+    'STCR_TTN_INGEST_API_KEY'
+  )
+
+  foreach ($key in $optional) {
+    $value = [Environment]::GetEnvironmentVariable(
+      $key,
+      'User'
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($value)) {
+      Set-Item -Path "Env:$key" -Value $value
+    }
+  }
+
+  if ($missing.Count -gt 0) {
+    throw (
+      'Missing Windows User environment variables: ' +
+      ($missing -join ', ') +
+      '. Run scripts\setup-dev-env.ps1 before public:start.'
+    )
   }
 
   if ($env:STCR_API_KEY_PEPPER.Length -lt 32) {
     throw 'STCR_API_KEY_PEPPER must contain at least 32 characters'
   }
 
-  $env:STCR_DEPLOYMENT_MODE                         = 'test'
-  $env:STCR_FACTORY_MQTT_ENABLED                    = 'true'
-  $env:STCR_FACTORY_MQTT_FORWARD_ENABLED            = 'true'
-  $env:STCR_FACTORY_MQTT_TOPICS                     = 'test,sensor'
-  $env:STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES  = '0'
-  $env:STCR_FACTORY_MQTT_TLS_REJECT_UNAUTHORIZED    = 'false'
-  $env:STCR_HTTP_INGEST_ENABLED                     = 'false'
-  $env:STCR_INGEST_URL                              = 'http://127.0.0.1:1880/stcr/api/telemetry'
+  if ($env:STCR_NODE_RED_CREDENTIAL_SECRET.Length -lt 32) {
+    throw 'STCR_NODE_RED_CREDENTIAL_SECRET must contain at least 32 characters'
+  }
 }
 
 function Test-LocalHealth {
@@ -226,7 +282,7 @@ if (-not $url) {
 $runtimeConfig = [ordered]@{
   dataSource = 'node-red'
   apiBaseUrl = "$url/stcr/api"
-  pollIntervalMs = 1000
+  pollIntervalMs = 5000
   requestTimeoutMs = 15000
   updatedAt = (Get-Date).ToUniversalTime().ToString('o')
 } | ConvertTo-Json
@@ -235,43 +291,6 @@ $runtimeConfig = [ordered]@{
   $runtimeConfig + [Environment]::NewLine,
   (New-Object Text.UTF8Encoding($false))
 )
-
-if (-not $SkipGitPush) {
-  $branch = (git -C $root rev-parse --abbrev-ref HEAD).Trim()
-  if ($branch -ne 'main') { throw "Automatic push requires branch main; current branch is $branch" }
-
-  git -C $root add -- public/runtime-config.json
-  git -C $root diff --cached --quiet -- public/runtime-config.json
-  if ($LASTEXITCODE -ne 0) {
-    git -C $root commit -m 'อัปเดตลิงก์ Node-RED ชั่วคราว'
-    if ($LASTEXITCODE -ne 0) { throw 'Git commit failed' }
-  }
-  git -C $root push origin main
-  if ($LASTEXITCODE -ne 0) { throw 'Git push failed' }
-
-  if (-not $SkipDeployWait) {
-    $sha = (git -C $root rev-parse HEAD).Trim()
-    Write-Host 'Waiting for GitHub Pages deployment...' -ForegroundColor DarkGray
-    $deployDeadline = (Get-Date).AddMinutes(3)
-    $deployment = $null
-    do {
-      Start-Sleep -Seconds 5
-      try {
-        $runs = Invoke-RestMethod -TimeoutSec 20 -Headers @{ 'User-Agent' = 'STCR-Public-Test' } `
-          -Uri 'https://api.github.com/repos/0tyght/stcr/actions/runs?per_page=10'
-        $deployment = $runs.workflow_runs | Where-Object { $_.head_sha -eq $sha } | Select-Object -First 1
-      } catch {
-        $deployment = $null
-      }
-    } while ((-not $deployment -or $deployment.status -ne 'completed') -and (Get-Date) -lt $deployDeadline)
-
-    if ($deployment.conclusion -eq 'success') {
-      Write-Host 'GitHub Pages deployment completed.' -ForegroundColor Green
-    } else {
-      Write-Warning 'GitHub Pages is still deploying. The server is online; check Actions before testing the web.'
-    }
-  }
-}
 
 Write-Host ''
 Write-Host 'STCR public test server is ready' -ForegroundColor Green

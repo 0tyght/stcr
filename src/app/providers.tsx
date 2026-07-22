@@ -83,7 +83,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     }
   }, [markSuccess]);
 
-  // Poll only the lightweight realtime oven endpoint every second.
+  // Poll the realtime oven endpoint every five seconds.
   const syncRealtime = useCallback((): Promise<void> => {
     if (realtimeRequestRef.current) return realtimeRequestRef.current;
 
@@ -145,7 +145,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, [syncRealtime]);
 
   useEffect(() => {
-    const alarmIntervalMs = Math.max(5_000, runtimeConfig.pollIntervalMs * 5);
+    const alarmIntervalMs = Math.max(5_000, runtimeConfig.pollIntervalMs);
     const timer = window.setInterval(() => {
       void syncAlarms();
     }, alarmIntervalMs);

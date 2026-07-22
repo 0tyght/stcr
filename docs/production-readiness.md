@@ -1,22 +1,20 @@
 # STCR Production Readiness
 
-Audit date: 2026-07-21  
+Audit date: 2026-07-22
 Decision: **NO-GO for factory production**
 
 ## Blocking items
 
 1. Confirm why the broker currently publishes only ovens 1-6 although TTN has ovens 1-9. Oven numbers map directly, `oven_state` and `startoven` agree in observed messages, and `page` is currently ignored because it was always `1` and has no confirmed business meaning.
-2. Implement the real oven-cycle state machine for telemetry ingestion: ignition, 30-minute ready hold, recording, completed/cancelled, and report boundaries.
-3. Configure the issued TTN API key and run a controlled database-forwarding test before leaving MQTT forwarding enabled.
-4. Enable MQTT TLS on port 8883, rotate the credential that was shared in plaintext, and re-test certificate validation.
-5. Generate and activate separate GR and TTN ingestion API keys, scoped to the correct company/oven, then execute replay and cross-tenant rejection tests.
-6. Create the least-privilege production MySQL account and verify its grants. Never run Node-RED as MySQL root.
-7. Establish retention jobs for raw MQTT, telemetry and audit data.
-8. Finish alarm creation/resolution and offline-sensor monitoring from real telemetry, then test restart recovery from MySQL.
-9. Copy backups to encrypted off-host storage and perform a documented restore drill with measured recovery time.
-10. Add monitoring for DB connectivity, last telemetry age per oven, ingestion failures, disk usage, backup age and Node-RED process health.
-11. Run end-to-end acceptance for both companies: login/roles, tenant isolation, 6-day realtime graph, historical cycle, PDF/CSV, settings and loss-of-signal behavior.
-12. Obtain authorized SSH key access and validate the systemd, nginx, firewall, MariaDB and backup configuration on the actual Ubuntu host.
+2. Enable MQTT TLS on port 8883, rotate the credential that was shared in plaintext, and re-test certificate validation.
+3. Generate and activate separate GR and TTN ingestion API keys, scoped to the correct company/oven, then execute replay and cross-tenant rejection tests for HTTP ingestion.
+4. Create the least-privilege production MySQL account and verify its grants. Never run Node-RED as MySQL root.
+5. Establish retention jobs for raw MQTT, telemetry and audit data.
+6. Finish alarm creation/resolution and offline-sensor monitoring from real telemetry, then test restart recovery from MySQL.
+7. Copy backups to encrypted off-host storage and perform a documented restore drill with measured recovery time.
+8. Add monitoring for DB connectivity, last telemetry age per oven, ingestion failures, disk usage, backup age and Node-RED process health.
+9. Run end-to-end acceptance for both companies: login/roles, tenant isolation, 6-day realtime graph, historical cycle, PDF/CSV, settings and loss-of-signal behavior.
+10. Obtain authorized SSH key access and validate the systemd, nginx, firewall, MariaDB and backup configuration on the actual Ubuntu host.
 
 ## Completed in the 2026-07-21 audit
 
@@ -31,6 +29,15 @@ Decision: **NO-GO for factory production**
 - Added Ubuntu Node-RED, nginx, local backup service and daily timer templates.
 - Confirmed anonymous MQTT access is rejected; confirmed port 1883 is reachable and TLS port 8883 is not.
 - Production dependency audit reports zero known vulnerabilities.
+
+## Completed on 2026-07-22
+
+- Added one-minute sensor aggregation and changed history/report queries to use the same stored averages.
+- Implemented the real MQTT cycle lifecycle: ignition, 30-minute ready hold, recording and completed report boundaries.
+- Verified the lifecycle with an automated MySQL integration test and observed real TTN messages create ignition cycles.
+- Corrected the factory timestamp by 420 minutes and confirmed new source/receive timestamps have zero-second offset.
+- Added offline status persistence after 180 seconds without data and corrected rejected CORS origins to return HTTP 403.
+- Added GR ovens 11-26 to clean installs and existing-install migration without overwriting local settings.
 
 ## Guardrails already present
 

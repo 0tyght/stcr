@@ -22,6 +22,7 @@ Flow ชุดนี้รับข้อมูลจริงจาก MQTT ข
 - `STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES=420`
 - `STCR_TTN_INGEST_API_KEY`
 - `STCR_OFFLINE_THRESHOLD_SECONDS=180`
+- `STCR_REPORT_READY_HOLD_SECONDS=1800`
 - ค่าฐานข้อมูลและ secret ตาม [../deploy/ubuntu/stcr.env.example](../deploy/ubuntu/stcr.env.example)
 
 TTN ใช้ mapping เตา 1–9 แบบตรงตัว ข้อมูลหมายเลขอื่นจะถูกปฏิเสธ ในการตรวจล่าสุด Broker ส่งข้อความจากเตา 1–6 และยังไม่พบข้อความจากเตา 7–9

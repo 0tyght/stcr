@@ -13,9 +13,6 @@ vite.config.js
 vite.config.d.ts
 
 .patch-backup/
-
-.patch-backup/
-.patch-backup/
 MQTT.txt
 *.sql.gz
 *.zip

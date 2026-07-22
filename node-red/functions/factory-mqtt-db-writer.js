@@ -26,6 +26,10 @@ const flushGraceMs = Math.max(
   0,
   Number(env.get("STCR_FACTORY_MQTT_MINUTE_FLUSH_GRACE_MS") || 5000),
 );
+const defaultReadyHoldSeconds = Math.max(
+  60,
+  Number(env.get("STCR_REPORT_READY_HOLD_SECONDS") || 1800),
+);
 const storeRawMessages =
   String(
     env.get("STCR_FACTORY_MQTT_STORE_RAW_MESSAGES") || "false",
@@ -399,6 +403,198 @@ async function persistHeartbeat(value, receivedAtDate) {
   global.set(PERSIST_STATE_KEY, states);
 }
 
+async function resolveCycleLifecycle(
+  connection,
+  bucket,
+  ovenRow,
+  minuteAt,
+  firstSourceAt,
+) {
+  if (!Number.isSafeInteger(bucket.cycleNumber) || bucket.cycleNumber < 1) {
+    return null;
+  }
+
+  if (bucket.startOven === 1) {
+    // A new cycle number is authoritative. Close an older active cycle first.
+    await connection.execute(
+      `UPDATE oven_cycles
+       SET state = 'completed',
+           stopped_at = COALESCE(stopped_at, ?)
+       WHERE company_id = ?
+         AND oven_id = ?
+         AND cycle_number <> ?
+         AND state IN ('ignition', 'recording')`,
+      [
+        firstSourceAt,
+        bucket.companyId,
+        bucket.ovenId,
+        bucket.cycleNumber,
+      ],
+    );
+
+    await connection.execute(
+      `INSERT INTO oven_cycles (
+         company_id,
+         oven_id,
+         cycle_number,
+         state,
+         fired_at,
+         ready_temperature,
+         ready_hold_seconds
+       ) VALUES (?, ?, ?, 'ignition', ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         cycle_number = VALUES(cycle_number)`,
+      [
+        bucket.companyId,
+        bucket.ovenId,
+        bucket.cycleNumber,
+        firstSourceAt,
+        Number(ovenRow.chamberLower),
+        defaultReadyHoldSeconds,
+      ],
+    );
+  } else if (bucket.startOven === 0) {
+    await connection.execute(
+      `UPDATE oven_cycles
+       SET state = 'completed',
+           stopped_at = COALESCE(stopped_at, ?)
+       WHERE company_id = ?
+         AND oven_id = ?
+         AND cycle_number = ?
+         AND state IN ('ignition', 'recording')`,
+      [
+        firstSourceAt,
+        bucket.companyId,
+        bucket.ovenId,
+        bucket.cycleNumber,
+      ],
+    );
+  }
+
+  const [cycleRows] = await connection.execute(
+    `SELECT id, state, fired_at AS firedAt,
+            report_started_at AS reportStartedAt,
+            stopped_at AS stoppedAt,
+            ready_temperature AS readyTemperature,
+            ready_hold_seconds AS readyHoldSeconds
+     FROM oven_cycles
+     WHERE company_id = ?
+       AND oven_id = ?
+       AND cycle_number = ?
+     LIMIT 1
+     FOR UPDATE`,
+    [bucket.companyId, bucket.ovenId, bucket.cycleNumber],
+  );
+
+  return cycleRows[0] || null;
+}
+
+async function promoteReadyCycle(
+  connection,
+  cycle,
+  bucket,
+  minuteAt,
+) {
+  if (!cycle || cycle.state !== "ignition") return cycle;
+
+  const readyHoldSeconds = Math.max(
+    60,
+    Number(cycle.readyHoldSeconds || defaultReadyHoldSeconds),
+  );
+  const readyTemperature = Number(cycle.readyTemperature);
+  const requiredMinutes = Math.ceil(readyHoldSeconds / 60);
+  const holdStart = new Date(minuteAt.getTime() - (requiredMinutes - 1) * 60_000);
+
+  const [rows] = await connection.execute(
+    `SELECT MIN(minute_at) AS firstMinute,
+            MAX(minute_at) AS lastMinute,
+            MIN(chamber_temp_min) AS minimumTemperature,
+            COUNT(*) AS minuteCount
+     FROM sensor_minute_aggregates
+     WHERE company_id = ?
+       AND oven_id = ?
+       AND cycle_id = ?
+       AND minute_at BETWEEN ? AND ?
+       AND chamber_temp_count > 0`,
+    [
+      bucket.companyId,
+      bucket.ovenId,
+      cycle.id,
+      holdStart,
+      minuteAt,
+    ],
+  );
+
+  const readiness = rows[0] || {};
+  if (
+    Number(readiness.minuteCount || 0) < requiredMinutes ||
+    Number(readiness.minimumTemperature) < readyTemperature
+  ) {
+    return cycle;
+  }
+
+  const reportStartedAt = validDate(readiness.firstMinute, holdStart);
+  await connection.execute(
+    `UPDATE oven_cycles
+     SET state = 'recording',
+         report_started_at = COALESCE(report_started_at, ?)
+     WHERE id = ?
+       AND state = 'ignition'`,
+    [reportStartedAt, cycle.id],
+  );
+  await connection.execute(
+    `UPDATE sensor_minute_aggregates
+     SET cycle_phase = 'recording',
+         included_in_report = TRUE
+     WHERE company_id = ?
+       AND oven_id = ?
+       AND cycle_id = ?
+       AND minute_at >= ?`,
+    [bucket.companyId, bucket.ovenId, cycle.id, reportStartedAt],
+  );
+  await connection.execute(
+    `UPDATE sensor_readings
+     SET cycle_phase = 'recording',
+         included_in_report = TRUE
+     WHERE company_id = ?
+       AND oven_id = ?
+       AND cycle_id = ?
+       AND recorded_at >= ?`,
+    [bucket.companyId, bucket.ovenId, cycle.id, reportStartedAt],
+  );
+
+  return {
+    ...cycle,
+    state: "recording",
+    reportStartedAt,
+  };
+}
+
+function syncCycleMemory(bucket, cycle) {
+  if (!cycle) return;
+  const { rootState, oven } = findMemoryOven(bucket);
+  if (!rootState || !oven) return;
+
+  oven.cycleCount = bucket.cycleNumber;
+  oven.firedAt = validDate(cycle.firedAt).toISOString();
+
+  if (cycle.reportStartedAt) {
+    oven.reportStartedAt = validDate(cycle.reportStartedAt).toISOString();
+    oven.startedAt = oven.reportStartedAt;
+  } else {
+    delete oven.reportStartedAt;
+    delete oven.startedAt;
+  }
+
+  if (cycle.stoppedAt) {
+    oven.stoppedAt = validDate(cycle.stoppedAt).toISOString();
+  } else {
+    delete oven.stoppedAt;
+  }
+
+  global.set("stcrState", rootState);
+}
+
 async function persistMinuteBucket(bucket) {
   const pool = getPool();
   const connection = await pool.getConnection();
@@ -417,7 +613,7 @@ async function persistMinuteBucket(bucket) {
     await connection.beginTransaction();
 
     const [ovenRows] = await connection.execute(
-      `SELECT id
+      `SELECT id, chamber_lower AS chamberLower
        FROM ovens
        WHERE company_id = ?
          AND id = ?
@@ -432,18 +628,14 @@ async function persistMinuteBucket(bucket) {
       );
     }
 
-    const [cycleRows] = await connection.execute(
-      `SELECT id, state
-       FROM oven_cycles
-       WHERE company_id = ?
-         AND oven_id = ?
-         AND cycle_number = ?
-       LIMIT 1`,
-      [bucket.companyId, bucket.ovenId, bucket.cycleNumber],
+    let cycle = await resolveCycleLifecycle(
+      connection,
+      bucket,
+      ovenRows[0],
+      minuteAt,
+      firstSourceAt,
     );
-
-    const cycle = cycleRows[0] || null;
-    const cyclePhase =
+    let cyclePhase =
       cycle?.state === "recording"
         ? "recording"
         : cycle?.state === "ignition"
@@ -451,7 +643,7 @@ async function persistMinuteBucket(bucket) {
           : cycle?.state === "completed"
             ? "cooldown"
             : "idle";
-    const includedInReport = cyclePhase === "recording";
+    let includedInReport = cyclePhase === "recording";
 
     await connection.execute(
       `INSERT INTO sensor_minute_aggregates (
@@ -567,6 +759,22 @@ async function persistMinuteBucket(bucket) {
       ],
     );
 
+    cycle = await promoteReadyCycle(
+      connection,
+      cycle,
+      bucket,
+      minuteAt,
+    );
+    cyclePhase =
+      cycle?.state === "recording"
+        ? "recording"
+        : cycle?.state === "ignition"
+          ? "ignition"
+          : cycle?.state === "completed"
+            ? "cooldown"
+            : "idle";
+    includedInReport = cyclePhase === "recording";
+
     // Keep the existing history API compatible: one average point per minute.
     // The three core values are required by the current sensor_readings schema.
     if (
@@ -621,6 +829,7 @@ async function persistMinuteBucket(bucket) {
     }
 
     await connection.commit();
+    syncCycleMemory(bucket, cycle);
 
     const { rootState, companyState, oven } = findMemoryOven(bucket);
     if (rootState && companyState && oven && chamber.count && humidity.count && furnace.count) {

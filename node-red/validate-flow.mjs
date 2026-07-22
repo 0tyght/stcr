@@ -433,8 +433,14 @@ assert.match(dbWriterSource, /sensor_minute_aggregates/);
 assert.match(dbWriterSource, /chamber_temp_avg/);
 assert.match(dbWriterSource, /heartbeatSeconds/);
 assert.match(dbWriterSource, /STCR_FACTORY_MQTT_STORE_RAW_MESSAGES/);
+assert.match(dbWriterSource, /resolveCycleLifecycle/);
+assert.match(dbWriterSource, /promoteReadyCycle/);
+assert.match(dbWriterSource, /ready_hold_seconds/);
+assert.match(dbWriterSource, /state = 'completed'/);
 assert.match(subscriberSource, /factoryMqttMinuteFlushTimer/);
 assert.match(schemaSource, /CREATE TABLE IF NOT EXISTS sensor_minute_aggregates\b/);
+assert.match(schemaSource, /\('oven-11', 'gr', 11/);
+assert.match(schemaSource, /\('oven-26', 'gr', 26/);
 
 console.log(
   "Node-RED production flow validation passed.",

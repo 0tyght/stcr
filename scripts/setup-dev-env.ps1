@@ -181,6 +181,7 @@ $settings = [ordered]@{
     STCR_SESSION_TTL_MINUTES = "480"
     STCR_TRUST_PROXY = "false"
     STCR_DEPLOYMENT_MODE = "test"
+    STCR_OFFLINE_THRESHOLD_SECONDS = "180"
 
     STCR_FACTORY_MQTT_ENABLED = "true"
     STCR_FACTORY_MQTT_URL = $MqttUrl
@@ -189,8 +190,9 @@ $settings = [ordered]@{
     STCR_FACTORY_MQTT_CLIENT_ID = ("stcr-" + $MqttCompanyId + "-server")
     STCR_FACTORY_MQTT_OVEN_MAP_JSON = $ovenMap
 
-    # A timestamp ending in Z is UTC. Keep this at zero unless the source is proven incorrect.
-    STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES = "0"
+    # The current publisher sends Bangkok wall-clock time with a trailing Z.
+    STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES = "420"
+    STCR_REPORT_READY_HOLD_SECONDS = "1800"
 
     # This broker currently uses mqtt:// in the test environment.
     STCR_FACTORY_MQTT_TLS_REJECT_UNAUTHORIZED = "false"
