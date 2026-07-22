@@ -676,3 +676,120 @@
   width: 100%;
   margin: 4px 0 10px;
 }
+
+/* =========================
+   Shared page hierarchy
+   ========================= */
+
+:root[data-ui-theme="company"] .view-root:not(.page-dashboard) {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--company-primary) 5%, var(--bg)) 0, var(--bg) 190px);
+}
+
+:root[data-ui-theme="company"] .view-root:not(.page-dashboard) > .panel,
+:root[data-ui-theme="company"] .page-settings .settings-layout .panel,
+:root[data-ui-theme="company"] .page-oven-detail .detail-overview-grid .panel,
+:root[data-ui-theme="company"] .page-oven-detail > .chart-panel {
+  border-color: color-mix(in srgb, var(--company-primary) 22%, var(--line));
+  background: #ffffff;
+  box-shadow:
+    0 3px 12px rgba(15, 23, 42, 0.07),
+    inset 0 2px 0 color-mix(in srgb, var(--company-primary) 58%, transparent);
+}
+
+:root[data-ui-theme="company"] .view-root:not(.page-dashboard) .panel-heading {
+  border-bottom-color: color-mix(in srgb, var(--company-primary) 18%, var(--line));
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--company-primary) 9%, #ffffff),
+    #ffffff 76%
+  );
+}
+
+:root[data-ui-theme="company"] .page-alarm .toolbar-grid,
+:root[data-ui-theme="company"] .page-report .report-selection-toolbar,
+:root[data-ui-theme="company"] .page-report .report-cycle-toolbar,
+:root[data-ui-theme="company"] .page-oven-detail .detail-control-bar {
+  border-color: color-mix(in srgb, var(--company-primary) 28%, var(--line));
+  background: color-mix(in srgb, var(--company-primary) 5%, #ffffff);
+  box-shadow:
+    0 3px 10px rgba(15, 23, 42, 0.06),
+    inset 3px 0 0 var(--company-primary);
+}
+
+:root[data-ui-theme="company"] .page-report .report-form-controls,
+:root[data-ui-theme="company"] .page-report .report-preview-column {
+  border-color: color-mix(in srgb, var(--company-primary) 24%, var(--line));
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.07);
+}
+
+:root[data-ui-theme="company"] .page-report .report-form-controls {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--company-primary) 6%, #ffffff),
+    #ffffff 88px
+  );
+  box-shadow:
+    0 3px 12px rgba(15, 23, 42, 0.07),
+    inset 0 2px 0 color-mix(in srgb, var(--company-primary) 58%, transparent);
+}
+
+:root[data-ui-theme="company"] .page-report .report-preview-heading {
+  border-bottom-color: color-mix(in srgb, var(--company-primary) 22%, var(--line));
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--company-primary) 11%, #ffffff),
+    #ffffff 72%
+  );
+}
+
+:root[data-ui-theme="company"] .page-report .report-detail-card {
+  border-color: color-mix(in srgb, var(--company-primary) 18%, var(--line));
+  background: color-mix(in srgb, var(--company-primary) 2.5%, #ffffff);
+}
+
+:root[data-ui-theme="company"] .page-settings .audit-item {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--company-primary);
+  background: var(--surface-soft);
+}
+
+:root[data-ui-theme="company"] .page-alarm .table-wrap {
+  border-color: color-mix(in srgb, var(--company-primary) 22%, var(--line));
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.07);
+}
+
+:root[data-ui-theme="company"] .empty-state,
+:root[data-ui-theme="company"] .loading-state {
+  border-color: color-mix(in srgb, var(--company-primary) 28%, var(--line));
+  background: color-mix(in srgb, var(--company-primary) 3%, #ffffff);
+  color: var(--ink);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+}
+
+:root[data-ui-theme="company"] .empty-state h2,
+:root[data-ui-theme="company"] .loading-state strong {
+  color: var(--ink-strong);
+}
+
+:root[data-ui-theme="company"] .empty-state p,
+:root[data-ui-theme="company"] .loading-state span {
+  color: var(--muted);
+}
+
+:root[data-ui-theme="company"] .page-alarm th {
+  border-bottom-color: color-mix(in srgb, var(--company-primary) 25%, var(--line));
+  background: color-mix(in srgb, var(--company-primary) 9%, var(--surface-strong));
+  color: var(--ink-strong);
+}
+
+:root[data-ui-theme="company"] .page-oven-detail .gauge-card,
+:root[data-ui-theme="company"] .page-oven-detail .status-banner,
+:root[data-ui-theme="company"] .page-oven-detail .status-range-card {
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+:root[data-ui-theme="company"] .page-oven-detail .grafana-chart-panel {
+  border-color: color-mix(in srgb, var(--company-primary) 20%, var(--line));
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.07);
+}

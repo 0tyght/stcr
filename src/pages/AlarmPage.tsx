@@ -139,7 +139,7 @@ export function AlarmPage() {
 
             <tbody>
               {alarms.map((alarm) => (
-                <tr key={alarm.id}>
+                <tr key={alarm.id} className={`alarm-row severity-${alarm.severity}`}>
                   <td>{formatDateTime(alarm.createdAt)}</td>
 
                   <td>{alarm.ovenName}</td>

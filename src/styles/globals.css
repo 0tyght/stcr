@@ -101,6 +101,52 @@ a {
   overflow-x: auto;
 }
 
+/* Page depth system: the dashboard is the visual reference for every workspace. */
+.view-root:not(.page-dashboard) {
+  --page-accent: var(--company-primary, var(--orange));
+  --page-accent-soft: color-mix(in srgb, var(--page-accent) 9%, var(--surface));
+}
+
+.view-root:not(.page-dashboard) > .page-header {
+  min-height: 50px;
+  margin: -2px 0 12px;
+  padding: 0 2px;
+}
+
+.view-root:not(.page-dashboard) > .panel,
+.page-settings .settings-layout .panel,
+.page-oven-detail .detail-overview-grid .panel,
+.page-oven-detail > .chart-panel {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--page-accent) 16%, var(--line));
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.12),
+    inset 0 2px 0 color-mix(in srgb, var(--page-accent) 48%, transparent);
+}
+
+.view-root:not(.page-dashboard) .panel-heading {
+  margin: -12px -12px 12px;
+  padding: 11px 12px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--page-accent) 14%, var(--line));
+  background: linear-gradient(90deg, var(--page-accent-soft), var(--surface) 72%);
+}
+
+.view-root:not(.page-dashboard) .panel-heading h2 {
+  letter-spacing: 0.01em;
+}
+
+.view-root:not(.page-dashboard) .panel-heading h2::before {
+  display: inline-block;
+  width: 3px;
+  height: 13px;
+  margin-right: 7px;
+  border-radius: 999px;
+  background: var(--page-accent);
+  content: "";
+  vertical-align: -1px;
+}
+
 /* =========================
    Sidebar
    ========================= */
@@ -1916,7 +1962,11 @@ tbody tr:hover {
 .settings-layout {
   display: grid;
   grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.1fr);
-  gap: 8px;
+  gap: 12px;
+}
+
+.page-settings .settings-stack {
+  gap: 12px;
 }
 
 .limit-row {
@@ -2287,6 +2337,26 @@ tbody tr:hover {
   .time-series-chart {
     height: 290px;
   }
+}
+
+.page-alarm .table-wrap {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.page-alarm .alarm-row td:first-child {
+  border-left: 3px solid transparent;
+}
+
+.page-alarm .alarm-row.severity-danger td:first-child {
+  border-left-color: var(--red);
+}
+
+.page-alarm .alarm-row.severity-warning td:first-child {
+  border-left-color: var(--yellow);
+}
+
+.page-alarm .alarm-row.severity-offline td:first-child {
+  border-left-color: var(--offline);
 }
 
 .gauge-meta small.is-stale {
