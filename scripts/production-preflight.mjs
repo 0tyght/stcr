@@ -4,6 +4,10 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
+const [nodeMajor, nodeMinor] = process.versions.node.split(".").map(Number);
+if (nodeMajor < 24 || (nodeMajor === 24 && nodeMinor < 7)) {
+  failures.push("Node.js 24.7.0 or newer is required for crypto.argon2Sync");
+}
 const requireValue = (name, minimumLength = 1) => {
   const value = String(process.env[name] || "").trim();
   if (value.length < minimumLength || /replace-with|change-this|example/i.test(value)) {
@@ -31,6 +35,14 @@ requireValue("STCR_DB_PORT");
 requireValue("STCR_DB_USER");
 requireValue("STCR_DB_PASSWORD", 16);
 requireValue("STCR_DB_NAME");
+const backupUser = requireValue("STCR_BACKUP_DB_USER");
+const backupPassword = requireValue("STCR_BACKUP_DB_PASSWORD", 16);
+if (backupUser && backupUser === String(process.env.STCR_DB_USER || "")) {
+  failures.push("STCR_BACKUP_DB_USER must be separate from the runtime database user");
+}
+if (backupPassword && backupPassword === String(process.env.STCR_DB_PASSWORD || "")) {
+  failures.push("STCR_BACKUP_DB_PASSWORD must differ from the runtime database password");
+}
 requireValue("STCR_NODE_RED_CREDENTIAL_SECRET", 32);
 requireValue("STCR_API_KEY_PEPPER", 32);
 if (httpIngestEnabled) {
@@ -61,6 +73,7 @@ if (mqttEnabled) {
   requireValue("STCR_FACTORY_MQTT_CLIENT_ID");
   const topicRoutesText = requireValue("STCR_FACTORY_MQTT_TOPIC_ROUTES_JSON");
   const ovenMapsText = requireValue("STCR_FACTORY_MQTT_OVEN_MAPS_JSON");
+  const sensorRangesText = requireValue("STCR_FACTORY_MQTT_SENSOR_RANGES_JSON");
   if (!mqttUrl.startsWith("mqtts://")) failures.push("STCR_FACTORY_MQTT_URL must use mqtts:// in production");
   if (String(process.env.STCR_FACTORY_MQTT_TLS_REJECT_UNAUTHORIZED || "true").toLowerCase() !== "true") {
     failures.push("STCR_FACTORY_MQTT_TLS_REJECT_UNAUTHORIZED must be true in production");
@@ -88,6 +101,18 @@ if (mqttEnabled) {
     }
   } catch {
     failures.push("STCR_FACTORY_MQTT_OVEN_MAPS_JSON must be valid JSON");
+  }
+  try {
+    const ranges = JSON.parse(sensorRangesText);
+    for (const sensorKey of ["chamberTemp", "humidity", "furnaceTemp", "blowerTemp"]) {
+      const min = Number(ranges?.[sensorKey]?.min);
+      const max = Number(ranges?.[sensorKey]?.max);
+      if (!Number.isFinite(min) || !Number.isFinite(max) || min >= max) {
+        failures.push(`Invalid physical sensor range: ${sensorKey}`);
+      }
+    }
+  } catch {
+    failures.push("STCR_FACTORY_MQTT_SENSOR_RANGES_JSON must be valid JSON");
   }
 }
 

@@ -424,6 +424,8 @@ export function ReportPage() {
   }));
 
   const reportRef = useRef<SVGSVGElement | null>(null);
+  const reportRequestIdRef = useRef(0);
+  const lastAutoLoadKeyRef = useRef("");
 
   useEffect(() => {
     let active = true;
@@ -530,6 +532,7 @@ export function ReportPage() {
 
   const loadReport = useCallback(async () => {
     if (!oven || !cycleRange || selectedCycle == null) return;
+    const requestId = ++reportRequestIdRef.current;
 
     if (mode === "current" && !oven.reportStartedAt) {
       setPoints([]);
@@ -550,21 +553,30 @@ export function ReportPage() {
         sensors: allSensorKeys,
       });
 
+      if (requestId !== reportRequestIdRef.current) return;
       setPoints(nextPoints);
       if (!nextPoints.length) {
         setReportError("ไม่พบข้อมูลที่บันทึกไว้สำหรับรอบอบนี้");
       }
     } catch (error) {
+      if (requestId !== reportRequestIdRef.current) return;
       setPoints([]);
       setReportError(error instanceof Error ? error.message : "โหลดข้อมูลรายงานไม่สำเร็จ");
     } finally {
-      setLoadingReport(false);
+      if (requestId === reportRequestIdRef.current) setLoadingReport(false);
     }
   }, [cycleRange, mode, oven, selectedCycle]);
 
+  const autoLoadKey =
+    oven && cycleRange && selectedCycle != null
+      ? `${oven.id}|${mode}|${selectedCycle}|${cycleRange.start.toISOString()}|${cycleRange.end.toISOString()}`
+      : "";
+
   useEffect(() => {
+    if (!autoLoadKey || lastAutoLoadKeyRef.current === autoLoadKey) return;
+    lastAutoLoadKeyRef.current = autoLoadKey;
     void loadReport();
-  }, [loadReport]);
+  }, [autoLoadKey, loadReport]);
 
   const reportSlots = useMemo(() => {
     if (!oven || !cycleRange) return [];
@@ -1012,27 +1024,45 @@ export function ReportPage() {
         </section>
       ) : null}
 
-      <ReportFormControls
-        form={reportForm}
-        company={company}
-        onChange={setReportForm}
-      />
-
       <section
-        className="report-page-shell"
-        aria-label="พรีวิวรายงาน PDF"
-        hidden={!previewExpanded}
+        className={`report-workspace ${previewExpanded ? "" : "is-preview-hidden"}`}
+        aria-label="พื้นที่จัดทำรายงาน"
       >
-        <FwsSvgReport
-          refElement={reportRef}
-          oven={oven}
-          cycle={selectedCycle}
-          cycleRange={cycleRange}
-          cycleMeta={cycleMeta}
-          slots={reportSlots}
-          company={company}
-          form={reportForm}
-        />
+        <aside className="report-editor-column">
+          <ReportFormControls
+            form={reportForm}
+            company={company}
+            onChange={setReportForm}
+          />
+        </aside>
+
+        <div className="report-preview-column" hidden={!previewExpanded}>
+          <header className="report-preview-heading">
+            <div>
+              <strong>พรีวิวเอกสาร</strong>
+              <span>เตา {oven.number} · รอบ {selectedCycle} · {points.length.toLocaleString("th-TH")} จุดข้อมูล</span>
+            </div>
+            <span className={`report-load-status ${loadingReport ? "is-loading" : ""}`} role="status">
+              {loadingReport ? "กำลังอัปเดตข้อมูล" : "พร้อมดาวน์โหลด"}
+            </span>
+          </header>
+
+          <section
+            className="report-page-shell"
+            aria-label="พรีวิวรายงาน PDF"
+          >
+            <FwsSvgReport
+              refElement={reportRef}
+              oven={oven}
+              cycle={selectedCycle}
+              cycleRange={cycleRange}
+              cycleMeta={cycleMeta}
+              slots={reportSlots}
+              company={company}
+              form={reportForm}
+            />
+          </section>
+        </div>
       </section>
     </main>
   );
@@ -3354,13 +3384,112 @@ const reportPageStyles = `
     font-size: 12px;
   }
 
+  .report-workspace {
+    display: grid;
+    grid-template-columns: minmax(380px, 440px) minmax(0, 1fr);
+    gap: 14px;
+    align-items: start;
+    min-width: 0;
+  }
+
+  .report-workspace.is-preview-hidden {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .report-editor-column,
+  .report-preview-column {
+    min-width: 0;
+  }
+
+  .report-preview-column {
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--company-primary) 18%, var(--line));
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+
+  .report-preview-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in srgb, var(--company-primary) 4%, var(--surface));
+  }
+
+  .report-preview-heading > div {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .report-preview-heading strong {
+    color: var(--ink-strong);
+    font-size: 14px;
+  }
+
+  .report-preview-heading span {
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .report-load-status {
+    flex: 0 0 auto;
+    padding: 5px 9px;
+    border: 1px solid color-mix(in srgb, #2f855a 32%, var(--line));
+    border-radius: 999px;
+    color: #25734c !important;
+    background: color-mix(in srgb, #e8f7ef 78%, var(--surface));
+    font-weight: 750;
+  }
+
+  .report-load-status.is-loading {
+    border-color: color-mix(in srgb, var(--company-primary) 42%, var(--line));
+    color: var(--ink-strong) !important;
+    background: color-mix(in srgb, var(--company-primary) 10%, var(--surface));
+  }
+
+  .report-editor-column .report-form-controls__grid,
+  .report-editor-column .report-form-details {
+    grid-template-columns: 1fr;
+  }
+
+  .report-editor-column .report-choice-row--rubber,
+  .report-editor-column .report-choice-row--temperature {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .report-editor-column .report-choice-list,
+  .report-editor-column .report-target-row {
+    grid-template-columns: 1fr;
+  }
+
+  .report-editor-column .report-cycle-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .report-editor-column .report-form-field--reason {
+    grid-column: 1 / -1;
+  }
+
+  .report-editor-column .report-document-field {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .report-editor-column .report-document-lock {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
   .report-page .report-page-shell {
     min-width: 0;
     max-width: 100%;
     overflow-x: hidden;
     overflow-y: visible;
     padding: 14px;
-    border-left: 4px solid var(--company-primary);
+    border: 0;
+    border-radius: 0;
   }
 
   .report-page .report-page-shell .fws-svg-report {
@@ -3372,6 +3501,10 @@ const reportPageStyles = `
   }
 
   @media (max-width: 1180px) {
+    .report-workspace {
+      grid-template-columns: 1fr;
+    }
+
     .report-download-summary,
     .report-history-panel {
       flex-basis: 100%;

@@ -16,7 +16,7 @@ set -a
 source "$ENV_FILE"
 set +a
 
-for name in STCR_DB_HOST STCR_DB_PORT STCR_DB_USER STCR_DB_PASSWORD STCR_DB_NAME; do
+for name in STCR_DB_HOST STCR_DB_PORT STCR_DB_NAME STCR_BACKUP_DB_USER STCR_BACKUP_DB_PASSWORD; do
   if [[ -z "${!name:-}" ]]; then
     echo "Missing $name" >&2
     exit 1
@@ -38,8 +38,8 @@ cat >"$client_config" <<EOF
 [client]
 host=$STCR_DB_HOST
 port=$STCR_DB_PORT
-user=$STCR_DB_USER
-password=$STCR_DB_PASSWORD
+user=$STCR_BACKUP_DB_USER
+password=$STCR_BACKUP_DB_PASSWORD
 default-character-set=utf8mb4
 EOF
 chmod 0600 "$client_config"

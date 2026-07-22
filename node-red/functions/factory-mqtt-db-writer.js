@@ -12,6 +12,7 @@ const isFlushTick = Boolean(msg._minuteFlushTick);
 const BUCKETS_KEY = "stcrMinuteBuckets";
 const FLUSH_LOCK_KEY = "stcrMinuteFlushRunning";
 const PERSIST_STATE_KEY = "stcrOvenPersistState";
+const MESSAGE_GUARD_KEY = "stcrMqttMessageGuard";
 const SENSOR_KEYS = [
   "chamberTemp",
   "humidity",
@@ -53,6 +54,11 @@ function getPool() {
     waitForConnections: true,
     connectionLimit: 4,
     timezone: "Z",
+  });
+  pool.on("connection", (connection) => {
+    connection.query("SET time_zone = '+00:00'", (error) => {
+      if (error) node.warn(`Cannot set database session to UTC: ${error.message}`);
+    });
   });
   global.set("stcrMqttDbPool", pool);
   return pool;
@@ -249,8 +255,40 @@ function makeMessageHash(value) {
     .digest("hex");
 }
 
-async function saveRawMessage(executor, value, receivedAtDate, detail) {
-  if (!storeRawMessages) return;
+function guardMessage(value, receivedAtDate) {
+  const nowMs = receivedAtDate.getTime();
+  const sourceMs = validDate(value.sourceTimestamp, receivedAtDate).getTime();
+  const retentionMs = 10 * 60 * 1000;
+  const toleranceMs = Math.max(
+    0,
+    Number(env.get("STCR_FACTORY_MQTT_OUT_OF_ORDER_TOLERANCE_MS") || 2000),
+  );
+  const guard = global.get(MESSAGE_GUARD_KEY) || { seen: {}, latest: {} };
+
+  for (const [hash, seenAt] of Object.entries(guard.seen)) {
+    if (nowMs - Number(seenAt) > retentionMs) delete guard.seen[hash];
+  }
+
+  const hash = makeMessageHash(value);
+  if (guard.seen[hash]) {
+    global.set(MESSAGE_GUARD_KEY, guard);
+    return "duplicate-message";
+  }
+  guard.seen[hash] = nowMs;
+
+  const streamKey = `${value.companyId}|${value.ovenId}|${value.topic}`;
+  const latestSourceMs = Number(guard.latest[streamKey] || 0);
+  if (latestSourceMs && sourceMs + toleranceMs < latestSourceMs) {
+    global.set(MESSAGE_GUARD_KEY, guard);
+    return "out-of-order-message";
+  }
+  guard.latest[streamKey] = Math.max(latestSourceMs, sourceMs);
+  global.set(MESSAGE_GUARD_KEY, guard);
+  return null;
+}
+
+async function saveRawMessage(executor, value, receivedAtDate, detail, force = false) {
+  if (!storeRawMessages && !force) return;
 
   await executor.execute(
     `INSERT INTO factory_mqtt_messages (
@@ -281,13 +319,13 @@ async function saveRawMessage(executor, value, receivedAtDate, detail) {
       value.ovenNumber,
       value.cycleNumber,
       value.topic,
-      value.qos,
-      value.retained,
-      value.duplicateDelivery,
+      Number(value.qos || 0),
+      Boolean(value.retained),
+      Boolean(value.duplicateDelivery),
       value.sourceTimestamp,
       JSON.stringify(value.source),
       makeMessageHash(value),
-      value.type === "pending" ? "pending" : "normalized",
+      value.normalizationStatus || (value.type === "pending" ? "pending" : "normalized"),
       detail,
       receivedAtDate,
     ],
@@ -866,6 +904,23 @@ if (isFlushTick) {
   return null;
 }
 
+const ignoredReason = guardMessage(envelope, referenceDate);
+if (ignoredReason) {
+  try {
+    await saveRawMessage(
+      getPool(),
+      { ...envelope, normalizationStatus: "rejected" },
+      referenceDate,
+      ignoredReason,
+      true,
+    );
+    await flushCompletedBuckets(referenceDate);
+  } catch (error) {
+    node.warn(`MQTT diagnostic write failed: ${error.message}`);
+  }
+  return null;
+}
+
 updateRealtimeMemory(envelope, referenceDate);
 
 try {
@@ -879,7 +934,15 @@ try {
     addToMinuteBucket(envelope, referenceDate);
     await persistHeartbeat(envelope, referenceDate);
 
-    if (storeRawMessages && envelope.type === "pending") {
+    if ((envelope.invalidSensors || []).length) {
+      await saveRawMessage(
+        getPool(),
+        { ...envelope, normalizationStatus: "rejected" },
+        referenceDate,
+        `invalid: ${envelope.invalidSensors.map((item) => `${item.sensorKey}=${item.value}`).join(", ")}`,
+        true,
+      );
+    } else if (storeRawMessages && envelope.type === "pending") {
       await saveRawMessage(
         getPool(),
         envelope,

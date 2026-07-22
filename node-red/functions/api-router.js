@@ -21,6 +21,42 @@ const offlineThresholdMs = Number.isFinite(configuredOfflineSeconds) && configur
 const sessionAccountRecheckMs = 60 * 1000;
 const httpIngestEnabled =
   String(env.get("STCR_HTTP_INGEST_ENABLED") || "false").toLowerCase() === "true";
+const defaultSensorRanges = {
+  chamberTemp: { min: -40, max: 150 },
+  humidity: { min: 0, max: 100 },
+  furnaceTemp: { min: -40, max: 1000 },
+  blowerTemp: { min: -40, max: 600 },
+};
+
+function readSensorRanges() {
+  try {
+    const configured = String(env.get("STCR_FACTORY_MQTT_SENSOR_RANGES_JSON") || "").trim();
+    if (!configured) return defaultSensorRanges;
+    const parsed = JSON.parse(configured);
+    return Object.fromEntries(Object.keys(defaultSensorRanges).map((sensorKey) => {
+      const min = Number(parsed?.[sensorKey]?.min);
+      const max = Number(parsed?.[sensorKey]?.max);
+      if (!Number.isFinite(min) || !Number.isFinite(max) || min >= max) throw new Error(sensorKey);
+      return [sensorKey, { min, max }];
+    }));
+  } catch (error) {
+    node.warn(`Invalid sensor range configuration; safe defaults are active (${error.message})`);
+    return defaultSensorRanges;
+  }
+}
+
+const sensorRanges = readSensorRanges();
+function validSensorValue(sensorKey, value) {
+  if (value == null) return null;
+  const number = Number(value);
+  const range = sensorRanges[sensorKey];
+  return Number.isFinite(number) && number >= range.min && number <= range.max ? number : null;
+}
+
+function rangeCondition(column, sensorKey) {
+  const range = sensorRanges[sensorKey];
+  return `${column} BETWEEN ${Number(range.min)} AND ${Number(range.max)}`;
+}
 
 function responseHeaders(contentType = "application/json; charset=utf-8") {
   return {
@@ -319,6 +355,11 @@ function getDatabasePool() {
     connectionLimit: 4,
     timezone: "Z",
   });
+  pool.on("connection", (connection) => {
+    connection.query("SET time_zone = '+00:00'", (error) => {
+      if (error) node.warn(`Cannot set database session to UTC: ${error.message}`);
+    });
+  });
   context.set("stcrApiDbPool", pool);
   return pool;
 }
@@ -352,18 +393,57 @@ async function loadRuntimeStateFromDatabase() {
             c.cycle_number AS cycleNumber, c.state AS cycleState,
             c.fired_at AS firedAt, c.report_started_at AS reportStartedAt,
             c.stopped_at AS stoppedAt,
-            r.recorded_at AS readingAt, r.chamber_temp AS chamberTemp,
-            r.humidity, r.furnace_temp AS furnaceTemp, r.blower_temp AS blowerTemp
+            r.minute_at AS readingAt,
+            (SELECT x.chamber_temp_last FROM sensor_minute_aggregates x
+             WHERE x.company_id=o.company_id AND x.oven_id=o.id
+               AND x.minute_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY
+               AND ${rangeCondition("x.chamber_temp_last", "chamberTemp")}
+             ORDER BY x.minute_at DESC LIMIT 1) AS chamberTemp,
+            (SELECT x.minute_at FROM sensor_minute_aggregates x
+             WHERE x.company_id=o.company_id AND x.oven_id=o.id
+               AND x.minute_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY
+               AND ${rangeCondition("x.chamber_temp_last", "chamberTemp")}
+             ORDER BY x.minute_at DESC LIMIT 1) AS chamberAt,
+            (SELECT x.humidity_last FROM sensor_minute_aggregates x
+             WHERE x.company_id=o.company_id AND x.oven_id=o.id
+               AND x.minute_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY
+               AND ${rangeCondition("x.humidity_last", "humidity")}
+             ORDER BY x.minute_at DESC LIMIT 1) AS humidity,
+            (SELECT x.minute_at FROM sensor_minute_aggregates x
+             WHERE x.company_id=o.company_id AND x.oven_id=o.id
+               AND x.minute_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY
+               AND ${rangeCondition("x.humidity_last", "humidity")}
+             ORDER BY x.minute_at DESC LIMIT 1) AS humidityAt,
+            (SELECT x.furnace_temp_last FROM sensor_minute_aggregates x
+             WHERE x.company_id=o.company_id AND x.oven_id=o.id
+               AND x.minute_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY
+               AND ${rangeCondition("x.furnace_temp_last", "furnaceTemp")}
+             ORDER BY x.minute_at DESC LIMIT 1) AS furnaceTemp,
+            (SELECT x.minute_at FROM sensor_minute_aggregates x
+             WHERE x.company_id=o.company_id AND x.oven_id=o.id
+               AND x.minute_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY
+               AND ${rangeCondition("x.furnace_temp_last", "furnaceTemp")}
+             ORDER BY x.minute_at DESC LIMIT 1) AS furnaceAt,
+            (SELECT x.blower_temp_last FROM sensor_minute_aggregates x
+             WHERE x.company_id=o.company_id AND x.oven_id=o.id
+               AND x.minute_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY
+               AND ${rangeCondition("x.blower_temp_last", "blowerTemp")}
+             ORDER BY x.minute_at DESC LIMIT 1) AS blowerTemp,
+            (SELECT x.minute_at FROM sensor_minute_aggregates x
+             WHERE x.company_id=o.company_id AND x.oven_id=o.id
+               AND x.minute_at >= UTC_TIMESTAMP() - INTERVAL 7 DAY
+               AND ${rangeCondition("x.blower_temp_last", "blowerTemp")}
+             ORDER BY x.minute_at DESC LIMIT 1) AS blowerAt
      FROM ovens o
      LEFT JOIN oven_cycles c ON c.id=(
        SELECT c2.id FROM oven_cycles c2
        WHERE c2.company_id=o.company_id AND c2.oven_id=o.id
        ORDER BY c2.cycle_number DESC, c2.id DESC LIMIT 1
      )
-     LEFT JOIN sensor_readings r ON r.id=(
-       SELECT r2.id FROM sensor_readings r2
+     LEFT JOIN sensor_minute_aggregates r
+       ON r.company_id=o.company_id AND r.oven_id=o.id AND r.minute_at=(
+       SELECT MAX(r2.minute_at) FROM sensor_minute_aggregates r2
        WHERE r2.company_id=o.company_id AND r2.oven_id=o.id
-       ORDER BY r2.recorded_at DESC, r2.id DESC LIMIT 1
      )
      WHERE o.enabled=TRUE
      ORDER BY o.company_id, o.oven_number`,
@@ -393,10 +473,18 @@ async function loadRuntimeStateFromDatabase() {
     const lastUpdatedAt = databaseTimestamp(row.readingAt || row.lastSeenAt) || new Date(0).toISOString();
     const readings = emptyReadings(lastUpdatedAt);
     if (row.readingAt) {
-      readings.chamberTemp.value = Number(row.chamberTemp);
-      readings.humidity.value = Number(row.humidity);
-      readings.furnaceTemp.value = Number(row.furnaceTemp);
-      readings.blowerTemp.value = Number(row.blowerTemp);
+      const latestValues = {
+        chamberTemp: [validSensorValue("chamberTemp", row.chamberTemp), row.chamberAt],
+        humidity: [validSensorValue("humidity", row.humidity), row.humidityAt],
+        furnaceTemp: [validSensorValue("furnaceTemp", row.furnaceTemp), row.furnaceAt],
+        blowerTemp: [validSensorValue("blowerTemp", row.blowerTemp), row.blowerAt],
+      };
+      for (const [sensorKey, [value, valueAt]] of Object.entries(latestValues)) {
+        if (value != null) {
+          readings[sensorKey].value = value;
+          readings[sensorKey].updatedAt = databaseTimestamp(valueAt) || lastUpdatedAt;
+        }
+      }
     }
     const firedAt = databaseTimestamp(row.firedAt);
     const reportStartedAt = databaseTimestamp(row.reportStartedAt);
@@ -458,6 +546,7 @@ async function applyOfflineThreshold(rootState, referenceDate = new Date()) {
 
   const nowMs = referenceDate.getTime();
   const changed = [];
+  const recovered = [];
 
   for (const [companyId, company] of Object.entries(rootState.companies)) {
     for (const oven of company.ovens || []) {
@@ -468,36 +557,99 @@ async function applyOfflineThreshold(rootState, referenceDate = new Date()) {
       const stale =
         !Number.isFinite(lastUpdatedMs) ||
         nowMs - lastUpdatedMs > offlineThresholdMs;
+      const hasActiveOfflineAlarm = (company.alarms || []).some(
+        (alarm) =>
+          alarm.ovenId === oven.id &&
+          alarm.severity === "offline" &&
+          alarm.status !== "resolved",
+      );
 
-      if (stale && oven.status !== "offline") {
+      if (stale && (oven.status !== "offline" || !hasActiveOfflineAlarm)) {
         oven.status = "offline";
         changed.push({
           companyId,
           ovenId: oven.id,
+          lastUpdatedMs: Number.isFinite(lastUpdatedMs) ? lastUpdatedMs : 0,
         });
+      } else if (
+        !stale &&
+        oven.status !== "offline" &&
+        hasActiveOfflineAlarm
+      ) {
+        recovered.push({ companyId, ovenId: oven.id });
       }
     }
   }
 
-  if (!changed.length) return rootState;
+  if (!changed.length && !recovered.length) return rootState;
 
   global.set("stcrState", rootState);
 
   try {
     const pool = getDatabasePool();
 
-    await Promise.all(
-      changed.map(({ companyId, ovenId }) =>
-        pool.execute(
+    await Promise.all([
+      ...changed.map(async ({ companyId, ovenId, lastUpdatedMs }) => {
+        await pool.execute(
           `UPDATE ovens
            SET status='offline'
            WHERE company_id=?
              AND id=?
              AND status<>'offline'`,
           [companyId, ovenId],
-        ),
-      ),
-    );
+        );
+        const alarmKey = crypto
+          .createHash("sha256")
+          .update(`${companyId}|${ovenId}|${lastUpdatedMs}`)
+          .digest("hex")
+          .slice(0, 32);
+        const alarmId = `offline-${companyId}-${alarmKey}`;
+        await pool.execute(
+          `INSERT INTO alarms (
+             id, company_id, oven_id, cycle_id, sensor_key, severity, status,
+             title, detail, measured_value, limit_value, created_at
+           ) VALUES (?, ?, ?, NULL, NULL, 'offline', 'active', ?, ?, NULL, NULL, ?)
+           ON DUPLICATE KEY UPDATE
+             status='active', acknowledged_at=NULL, resolved_at=NULL,
+             detail=VALUES(detail), created_at=VALUES(created_at)`,
+          [
+            alarmId,
+            companyId,
+            ovenId,
+            "ขาดการเชื่อมต่อ",
+            `ไม่ได้รับข้อมูลจากเตานานเกิน ${Math.round(offlineThresholdMs / 1000)} วินาที`,
+            referenceDate,
+          ],
+        );
+        const company = rootState.companies[companyId];
+        company.alarms = company.alarms.filter((alarm) => alarm.id !== alarmId);
+        company.alarms.unshift({
+          id: alarmId,
+          ovenId,
+          severity: "offline",
+          status: "active",
+          title: "ขาดการเชื่อมต่อ",
+          detail: `ไม่ได้รับข้อมูลจากเตานานเกิน ${Math.round(offlineThresholdMs / 1000)} วินาที`,
+          createdAt: referenceDate.toISOString(),
+        });
+      }),
+      ...recovered.map(async ({ companyId, ovenId }) => {
+        await pool.execute(
+          `UPDATE alarms
+           SET status='resolved', resolved_at=COALESCE(resolved_at, ?)
+           WHERE company_id=? AND oven_id=? AND severity='offline'
+             AND status IN ('active','acknowledged')`,
+          [referenceDate, companyId, ovenId],
+        );
+        const company = rootState.companies[companyId];
+        company.alarms = company.alarms.map((alarm) =>
+          alarm.ovenId === ovenId && alarm.severity === "offline" && alarm.status !== "resolved"
+            ? { ...alarm, status: "resolved", resolvedAt: referenceDate.toISOString() }
+            : alarm,
+        );
+      }),
+    ]);
+    global.set("stcrState", rootState);
   } catch (error) {
     node.warn(
       `Offline status persistence failed: ${error.message}`,
@@ -586,38 +738,38 @@ async function readReportHistory(companyId, ovenId, historyQuery) {
        ) AS timestamp,
 
        SUM(
-         a.chamber_temp_avg *
+         CASE WHEN ${rangeCondition("a.chamber_temp_avg", "chamberTemp")} THEN a.chamber_temp_avg ELSE NULL END *
          a.chamber_temp_count
        ) /
        NULLIF(
-         SUM(a.chamber_temp_count),
+         SUM(CASE WHEN ${rangeCondition("a.chamber_temp_avg", "chamberTemp")} THEN a.chamber_temp_count ELSE 0 END),
          0
        ) AS chamberTemp,
 
        SUM(
-         a.humidity_avg *
+         CASE WHEN ${rangeCondition("a.humidity_avg", "humidity")} THEN a.humidity_avg ELSE NULL END *
          a.humidity_count
        ) /
        NULLIF(
-         SUM(a.humidity_count),
+         SUM(CASE WHEN ${rangeCondition("a.humidity_avg", "humidity")} THEN a.humidity_count ELSE 0 END),
          0
        ) AS humidity,
 
        SUM(
-         a.furnace_temp_avg *
+         CASE WHEN ${rangeCondition("a.furnace_temp_avg", "furnaceTemp")} THEN a.furnace_temp_avg ELSE NULL END *
          a.furnace_temp_count
        ) /
        NULLIF(
-         SUM(a.furnace_temp_count),
+         SUM(CASE WHEN ${rangeCondition("a.furnace_temp_avg", "furnaceTemp")} THEN a.furnace_temp_count ELSE 0 END),
          0
        ) AS furnaceTemp,
 
        SUM(
-         a.blower_temp_avg *
+         CASE WHEN ${rangeCondition("a.blower_temp_avg", "blowerTemp")} THEN a.blower_temp_avg ELSE NULL END *
          a.blower_temp_count
        ) /
        NULLIF(
-         SUM(a.blower_temp_count),
+         SUM(CASE WHEN ${rangeCondition("a.blower_temp_avg", "blowerTemp")} THEN a.blower_temp_count ELSE 0 END),
          0
        ) AS blowerTemp
 

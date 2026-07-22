@@ -62,6 +62,32 @@ const messageType = topicRoute?.messageType || "";
 const sourceUtcOffsetMinutes = Number(
   env.get("STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES") || 0,
 );
+const defaultSensorRanges = {
+  chamberTemp: { min: -40, max: 150 },
+  humidity: { min: 0, max: 100 },
+  furnaceTemp: { min: -40, max: 1000 },
+  blowerTemp: { min: -40, max: 600 },
+};
+
+function readSensorRanges() {
+  const configured = String(
+    env.get("STCR_FACTORY_MQTT_SENSOR_RANGES_JSON") || "",
+  ).trim();
+  if (!configured) return defaultSensorRanges;
+
+  const parsed = JSON.parse(configured);
+  return Object.fromEntries(
+    Object.keys(defaultSensorRanges).map((sensorKey) => {
+      const candidate = parsed?.[sensorKey];
+      const min = Number(candidate?.min);
+      const max = Number(candidate?.max);
+      if (!Number.isFinite(min) || !Number.isFinite(max) || min >= max) {
+        throw new Error(`Invalid range for ${sensorKey}`);
+      }
+      return [sensorKey, { min, max }];
+    }),
+  );
+}
 
 function inspection(status, detail, extra = {}) {
   msg.topic = `stcr/factory-mqtt/${status}`;
@@ -259,6 +285,17 @@ const definitions = [
   ["blowerTemp", "blower", "C"],
 ];
 
+let sensorRanges;
+try {
+  sensorRanges = readSensorRanges();
+} catch (error) {
+  return reject(`MQTT sensor range configuration is invalid: ${error.message}`, {
+    ovenNumber,
+    ovenId,
+    cycleNumber,
+  });
+}
+
 const now = Date.now();
 const stale = now - sourceTimestampMs > 2 * 60 * 1000;
 const future = sourceTimestampMs - now > 30 * 1000;
@@ -266,11 +303,11 @@ const qualityReasons = [
   ...(stale ? ["stale"] : []),
   ...(future ? ["future-timestamp"] : []),
 ];
-const quality = qualityReasons.length ? "suspect" : "good";
 const sequence = sourceTimestampMs;
 
 const readings = [];
 const missingSensors = [];
+const invalidSensors = [];
 for (const [sensorKey, sourceKey, unit] of definitions) {
   const rawValue = source[sourceKey];
   const numericValue = Number(rawValue);
@@ -285,6 +322,19 @@ for (const [sensorKey, sourceKey, unit] of definitions) {
     continue;
   }
 
+  const range = sensorRanges[sensorKey];
+  if (numericValue < range.min || numericValue > range.max) {
+    invalidSensors.push({
+      sensorKey,
+      sourceKey,
+      value: numericValue,
+      min: range.min,
+      max: range.max,
+      reason: "outside-physical-range",
+    });
+    continue;
+  }
+
   readings.push({
     sensorKey,
     sensorId: `factory-${companyId}-${ovenId}-${sensorKey}`,
@@ -292,10 +342,20 @@ for (const [sensorKey, sourceKey, unit] of definitions) {
     value: numericValue,
     rawValue: numericValue,
     unit,
-    quality,
-    qualityReasons,
     sourceTimestamp,
   });
+}
+
+for (const invalid of invalidSensors) {
+  qualityReasons.push(`outside-range:${invalid.sensorKey}`);
+  if (!missingSensors.includes(invalid.sensorKey)) {
+    missingSensors.push(invalid.sensorKey);
+  }
+}
+const quality = qualityReasons.length ? "suspect" : "good";
+for (const reading of readings) {
+  reading.quality = quality;
+  reading.qualityReasons = [...qualityReasons];
 }
 
 const batchId = `mqtt-${ovenNumber}-${cycleNumber}-${sourceTimestampMs}`;
@@ -310,6 +370,7 @@ msg._mqttEnvelope = {
   qualityReasons,
   readings,
   missingSensors,
+  invalidSensors,
   batchId,
   deviceId,
 };
@@ -335,6 +396,7 @@ return inspection(
     page: source.page,
     pageUsed: false,
     missingSensors,
+    invalidSensors,
     originalSourceTimestamp: source.time_stamp,
     normalizedSourceTimestamp: sourceTimestamp,
     normalizedPayload: {

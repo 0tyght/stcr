@@ -292,6 +292,27 @@ const env = {
   );
 }
 
+// Physically impossible values are quarantined, not normalized.
+{
+  const msg = {
+    ...structuredClone(sample),
+    payload: JSON.stringify({
+      ...JSON.parse(sample.payload),
+      oventemp: 1372,
+    }),
+  };
+  const quarantined = runAdapter(msg, env, adapterNode, Buffer);
+  assert.equal(quarantined.payload.status, "pending");
+  assert.equal(quarantined._mqttEnvelope.quality, "suspect");
+  assert.deepEqual(
+    quarantined._mqttEnvelope.invalidSensors.map(({ sensorKey }) => sensorKey),
+    ["furnaceTemp"],
+  );
+  assert.ok(
+    !quarantined._mqttEnvelope.readings.some(({ sensorKey }) => sensorKey === "furnaceTemp"),
+  );
+}
+
 // Minute flush ticks pass through the adapter without MQTT validation.
 {
   const tick = {
@@ -421,6 +442,7 @@ assert.doesNotMatch(
 );
 
 for (const table of [
+  "schema_migrations",
   "companies",
   "ovens",
   "oven_cycles",
@@ -469,6 +491,10 @@ assert.match(dbWriterSource, /sensor_minute_aggregates/);
 assert.match(dbWriterSource, /chamber_temp_avg/);
 assert.match(dbWriterSource, /heartbeatSeconds/);
 assert.match(dbWriterSource, /STCR_FACTORY_MQTT_STORE_RAW_MESSAGES/);
+assert.match(dbWriterSource, /duplicate-message/);
+assert.match(dbWriterSource, /out-of-order-message/);
+assert.match(adapterSource, /STCR_FACTORY_MQTT_SENSOR_RANGES_JSON/);
+assert.match(routerSource, /sensor_minute_aggregates r/);
 assert.match(dbWriterSource, /resolveCycleLifecycle/);
 assert.match(dbWriterSource, /async function applyCycleLifecycle/);
 assert.match(dbWriterSource, /VALUES \(\?, \?, \?, 'recording'/);
@@ -479,6 +505,8 @@ assert.match(dbWriterSource, /state = 'completed'/);
 assert.match(subscriberSource, /factoryMqttMinuteFlushTimer/);
 assert.match(subscriberSource, /stcrMqttHealth/);
 assert.match(routerSource, /mqttHealth/);
+assert.match(routerSource, /INSERT INTO alarms/);
+assert.match(routerSource, /severity='offline'/);
 assert.match(schemaSource, /CREATE TABLE IF NOT EXISTS sensor_minute_aggregates\b/);
 assert.match(schemaSource, /\('oven-11', 'gr', 11/);
 assert.match(schemaSource, /\('oven-26', 'gr', 26/);

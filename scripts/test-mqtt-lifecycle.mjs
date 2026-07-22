@@ -81,6 +81,9 @@ function envelope(startOven, timestamp) {
     sourceTimestamp: timestamp.toISOString(),
     receivedAt: timestamp.toISOString(),
     topic: "sensor",
+    qos: 1,
+    retained: false,
+    duplicateDelivery: false,
     source: { qa: true },
   };
 }
@@ -107,6 +110,10 @@ async function invoke(message) {
 async function cleanup() {
   const writerPool = contextValues.get("stcrMqttDbPool");
   if (writerPool) await writerPool.end();
+  await admin.execute(
+    "DELETE FROM factory_mqtt_messages WHERE company_id='ttn' AND oven_id=?",
+    [qaOvenId],
+  );
   await admin.execute(
     "DELETE FROM sensor_readings WHERE company_id='ttn' AND oven_id=?",
     [qaOvenId],
@@ -160,6 +167,11 @@ try {
   }
 
   await invoke({ _mqttEnvelope: envelope(1, minuteAt) });
+  // Exact QoS retry and an older message must not bias the minute average.
+  await invoke({ _mqttEnvelope: envelope(1, minuteAt) });
+  await invoke({
+    _mqttEnvelope: envelope(1, new Date(minuteAt.getTime() - 10_000)),
+  });
   await invoke({
     _minuteFlushTick: true,
     factoryMqtt: {
@@ -175,6 +187,16 @@ try {
   );
   if (recordingRows[0]?.state !== "recording" || !recordingRows[0]?.reportStartedAt) {
     throw new Error("Sensor data did not remain attached to the recording cycle");
+  }
+
+  const [aggregateRows] = await admin.execute(
+    `SELECT chamber_temp_count AS chamberCount
+     FROM sensor_minute_aggregates
+     WHERE company_id='ttn' AND oven_id=? AND minute_at=?`,
+    [qaOvenId, minuteAt],
+  );
+  if (Number(aggregateRows[0]?.chamberCount) !== 1) {
+    throw new Error("Duplicate or out-of-order MQTT data changed the minute aggregate");
   }
 
   const stopMinute = new Date(minuteAt.getTime() + 60_000);

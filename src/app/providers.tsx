@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useLocation } from "react-router-dom";
 
 import { runtimeConfig } from "../config/runtime";
 import { apiClient } from "../services/apiClient";
@@ -39,6 +40,8 @@ type AppDataContextValue = {
 const AppDataContext = createContext<AppDataContextValue | undefined>(undefined);
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
+  const { pathname } = useLocation();
+  const pauseBackgroundPolling = pathname.startsWith("/reports");
   const [ovens, setOvens] = useState<Oven[]>([]);
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
@@ -138,6 +141,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, [loadInitialData]);
 
   useEffect(() => {
+    if (pauseBackgroundPolling) return;
+    void syncRealtime();
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") void syncRealtime();
     }, runtimeConfig.pollIntervalMs);
@@ -149,15 +154,17 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [syncRealtime]);
+  }, [pauseBackgroundPolling, syncRealtime]);
 
   useEffect(() => {
+    if (pauseBackgroundPolling) return;
+    void syncAlarms();
     const alarmIntervalMs = Math.max(15_000, runtimeConfig.pollIntervalMs);
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") void syncAlarms();
     }, alarmIntervalMs);
     return () => window.clearInterval(timer);
-  }, [syncAlarms]);
+  }, [pauseBackgroundPolling, syncAlarms]);
 
   const saveLimits = useCallback(
     async (ovenId: string, limits: LimitMap) => {
