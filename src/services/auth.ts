@@ -1,5 +1,5 @@
 import { runtimeConfig } from "../config/runtime";
-import { getCompany } from "../config/companies";
+import { getCompany, type CompanyId } from "../config/companies";
 import { COMPANY_STORAGE_KEY } from "../config/preferences";
 import { ApiError } from "./api/errors";
 
@@ -47,7 +47,11 @@ export function clearAuthSession(): void {
   window.sessionStorage.removeItem(AUTH_SESSION_KEY);
 }
 
-export async function login(username: string, password: string): Promise<AuthSession> {
+export async function login(
+  username: string,
+  password: string,
+  expectedCompanyId?: CompanyId,
+): Promise<AuthSession> {
   if (!password) {
     throw new ApiError("กรุณากรอกรหัสผ่าน", { code: "PASSWORD_REQUIRED" });
   }
@@ -56,7 +60,7 @@ export async function login(username: string, password: string): Promise<AuthSes
   const response = await fetch(`${apiBaseUrl}/auth/login`, {
     method: "POST",
     headers: { Accept: "application/json", "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, companyId: expectedCompanyId }),
   });
   const payload = (await response.json().catch(() => null)) as
     | (Partial<AuthSession> & { error?: string })
@@ -66,6 +70,13 @@ export async function login(username: string, password: string): Promise<AuthSes
     throw new ApiError(payload?.error || "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", {
       status: response.status,
       code: "LOGIN_FAILED",
+    });
+  }
+
+  if (expectedCompanyId && payload.companyId !== expectedCompanyId) {
+    throw new ApiError("บัญชีนี้ไม่ใช่ของบริษัทที่เลือก", {
+      status: 403,
+      code: "COMPANY_MISMATCH",
     });
   }
 

@@ -9,6 +9,7 @@ import {
   THEME_STORAGE_KEY,
 } from "../config/preferences";
 import { login, logout, readAuthSession } from "../services/auth";
+import type { CompanyId } from "../config/companies";
 
 const DashboardPage = lazy(() =>
   import("../pages/DashboardPage").then((module) => ({
@@ -51,8 +52,8 @@ export function App() {
     return () => window.removeEventListener("stcr-auth-expired", expireSession);
   }, []);
 
-  async function handleLogin(username: string, password: string) {
-    const session = await login(username, password);
+  async function handleLogin(username: string, password: string, companyId: CompanyId) {
+    const session = await login(username, password, companyId);
     localStorage.setItem(ACCOUNT_STORAGE_KEY, session.username);
     window.location.hash = "/";
     setAuthenticated(true);
