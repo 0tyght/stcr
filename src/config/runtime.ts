@@ -1,4 +1,4 @@
-const DEFAULT_POLL_INTERVAL_MS = 5_000;
+const DEFAULT_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 
 function readPositiveInteger(value: string | undefined, fallback: number): number {
@@ -39,7 +39,8 @@ function isAllowedApiUrl(value: string): boolean {
   try {
     const url = new URL(value);
     return url.protocol === "https:" || (
-      url.protocol === "http:" && ["127.0.0.1", "localhost"].includes(url.hostname)
+      url.protocol === "http:" &&
+      ["127.0.0.1", "localhost"].includes(url.hostname)
     );
   } catch {
     return false;
@@ -48,7 +49,6 @@ function isAllowedApiUrl(value: string): boolean {
 
 export async function loadRuntimeConfig(): Promise<void> {
   if (import.meta.env.DEV) return;
-
   try {
     const response = await fetch(
       `${import.meta.env.BASE_URL}runtime-config.json?t=${Date.now()}`,
@@ -60,16 +60,19 @@ export async function loadRuntimeConfig(): Promise<void> {
     const apiBaseUrl = typeof file.apiBaseUrl === "string"
       ? normalizeBaseUrl(file.apiBaseUrl)
       : runtimeConfig.apiBaseUrl;
-
     if (!isAllowedApiUrl(apiBaseUrl)) return;
 
     runtimeConfig.apiBaseUrl = apiBaseUrl;
     runtimeConfig.pollIntervalMs = readPositiveInteger(
-      typeof file.pollIntervalMs === "number" ? String(file.pollIntervalMs) : undefined,
+      typeof file.pollIntervalMs === "number"
+        ? String(file.pollIntervalMs)
+        : undefined,
       runtimeConfig.pollIntervalMs,
     );
     runtimeConfig.requestTimeoutMs = readPositiveInteger(
-      typeof file.requestTimeoutMs === "number" ? String(file.requestTimeoutMs) : undefined,
+      typeof file.requestTimeoutMs === "number"
+        ? String(file.requestTimeoutMs)
+        : undefined,
       runtimeConfig.requestTimeoutMs,
     );
   } catch {

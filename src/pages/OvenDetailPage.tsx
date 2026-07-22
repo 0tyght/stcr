@@ -109,36 +109,8 @@ export function OvenDetailPage() {
   }, [cycleRecords, selectedDateKey]);
 
   const calendarCells = useMemo(() => getCalendarCells(calendarCursor), [calendarCursor]);
-
-  useEffect(() => {
-    if (!oven) return;
-
-    const defaultCycle = getDefaultHistoricalCycle(oven);
-    const defaultRange = getDetailCycleRange(oven, "historical", defaultCycle);
-
-    setMode(canUseRealtime(oven.status) ? "realtime" : "historical");
-    setHistoryPickMode("cycle");
-    setSelectedCycle(defaultCycle);
-    setSelectedDateKey(toDateKey(defaultRange.end));
-    setCalendarCursor(defaultRange.end);
-  }, [oven?.id]);
-
-  useEffect(() => {
-    if (!oven) return;
-
-    if (!realtimeAvailable && mode === "realtime") {
-      setMode("historical");
-    }
-  }, [oven?.id, mode, realtimeAvailable]);
-
-  useEffect(() => {
-    if (!selectedRecord || historyPickMode !== "cycle") return;
-
-    setSelectedDateKey(selectedRecord.endDateKey);
-    setCalendarCursor(createDateFromKey(selectedRecord.endDateKey));
-  }, [historyPickMode, selectedRecord?.cycle, selectedRecord?.endDateKey]);
-
-  const effectiveMode = realtimeAvailable ? mode : "historical";
+  const effectiveMode =
+    realtimeAvailable ? mode : "historical";
 
   const cycleRange = useMemo(() => {
     if (!oven) return null;
@@ -146,30 +118,78 @@ export function OvenDetailPage() {
     return getDetailCycleRange(
       oven,
       effectiveMode,
-      selectedCycle ?? getDefaultHistoricalCycle(oven),
+      selectedCycle ??
+        getDefaultHistoricalCycle(oven),
     );
-  }, [effectiveMode, oven, selectedCycle]);
+  }, [
+    effectiveMode,
+    oven,
+    selectedCycle,
+  ]);
+  const historyStartAt =
+    cycleRange?.start.toISOString() ?? "";
+  const historyEndAt =
+    effectiveMode === "historical"
+      ? cycleRange?.end.toISOString() ?? ""
+      : "";
+  const historyCycleNumber =
+    effectiveMode === "historical"
+      ? selectedCycle ?? undefined
+      : oven?.cycleCount;
+  const historyIncludeIgnition =
+    effectiveMode === "realtime" &&
+    !oven?.reportStartedAt;
 
   useEffect(() => {
-    if (!oven || !cycleRange) return;
+    if (!oven?.id || !historyStartAt) return;
 
-    void apiClient
-      .getHistory({
+    let cancelled = false;
+
+    const loadHistory = async () => {
+      const nextPoints = await apiClient.getHistory({
         ovenId: oven.id,
         preset: "custom",
         sensors: allSensorKeys,
-        startAt: cycleRange.start.toISOString(),
-        endAt: cycleRange.end.toISOString(),
-        cycleNumber:
-          effectiveMode === "historical"
-            ? selectedCycle ?? undefined
-            : oven.cycleCount,
-        includeIgnition: effectiveMode === "realtime" && !oven.reportStartedAt,
-      })
-      .then(setPoints);
-  }, [cycleRange, effectiveMode, oven, selectedCycle]);
+        startAt: historyStartAt,
+        endAt:
+          effectiveMode === "realtime"
+            ? new Date().toISOString()
+            : historyEndAt,
+        cycleNumber: historyCycleNumber,
+        includeIgnition: historyIncludeIgnition,
+      });
 
-  const ovenAlarms = useMemo(
+      if (!cancelled) {
+        setPoints(nextPoints);
+      }
+    };
+
+    void loadHistory();
+
+    const timer =
+      effectiveMode === "realtime"
+        ? window.setInterval(
+            () => void loadHistory(),
+            60_000,
+          )
+        : null;
+
+    return () => {
+      cancelled = true;
+
+      if (timer !== null) {
+        window.clearInterval(timer);
+      }
+    };
+  }, [
+    effectiveMode,
+    historyCycleNumber,
+    historyEndAt,
+    historyIncludeIgnition,
+    historyStartAt,
+    oven?.id,
+  ]);
+const ovenAlarms = useMemo(
     () => alarms.filter((alarm) => alarm.ovenId === ovenId),
     [alarms, ovenId],
   );

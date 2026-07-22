@@ -99,6 +99,20 @@ const client = mqtt.connect(brokerUrl, {
 context.set("factoryMqttClient", client);
 context.set("factoryMqttMessageCount", 0);
 
+const minuteFlushIntervalMs = Math.max(
+  1000,
+  Number(env.get("STCR_FACTORY_MQTT_FLUSH_INTERVAL_MS") || 5000),
+);
+const minuteFlushTimer = setInterval(() => {
+  node.send({
+    _minuteFlushTick: true,
+    factoryMqtt: {
+      receivedAt: new Date().toISOString(),
+    },
+  });
+}, minuteFlushIntervalMs);
+context.set("factoryMqttMinuteFlushTimer", minuteFlushTimer);
+
 client.on("connect", () => {
   node.log(`Factory MQTT connected: ${brokerUrl}`);
 

@@ -1,23 +1,45 @@
 // factory-mqtt-db-writer.js
-// Receive msg._mqttEnvelope from the MQTT adapter and write to MySQL.
+// Realtime path:
+//   - update the in-memory oven state for every MQTT message.
+// Persistence path:
+//   - persist status immediately only when it changes;
+//   - persist oven heartbeat at most once per minute;
+//   - aggregate sensor values per oven/minute and persist one graph point.
 
 const envelope = msg._mqttEnvelope;
+const isFlushTick = Boolean(msg._minuteFlushTick);
 
-if (!envelope) {
+const BUCKETS_KEY = "stcrMinuteBuckets";
+const FLUSH_LOCK_KEY = "stcrMinuteFlushRunning";
+const PERSIST_STATE_KEY = "stcrOvenPersistState";
+const SENSOR_KEYS = [
+  "chamberTemp",
+  "humidity",
+  "furnaceTemp",
+  "blowerTemp",
+];
+const heartbeatSeconds = Math.max(
+  10,
+  Number(env.get("STCR_FACTORY_MQTT_HEARTBEAT_SECONDS") || 60),
+);
+const flushGraceMs = Math.max(
+  0,
+  Number(env.get("STCR_FACTORY_MQTT_MINUTE_FLUSH_GRACE_MS") || 5000),
+);
+const storeRawMessages =
+  String(
+    env.get("STCR_FACTORY_MQTT_STORE_RAW_MESSAGES") || "false",
+  ).toLowerCase() === "true";
+
+if (!envelope && !isFlushTick) {
   return null;
 }
 
 function getPool() {
   let pool = global.get("stcrMqttDbPool");
+  if (pool) return pool;
 
-  if (pool) {
-    return pool;
-  }
-
-  const password = String(
-    env.get("STCR_DB_PASSWORD") || "",
-  );
-
+  const password = String(env.get("STCR_DB_PASSWORD") || "");
   if (!password) {
     throw new Error("STCR_DB_PASSWORD is required");
   }
@@ -32,9 +54,183 @@ function getPool() {
     connectionLimit: 4,
     timezone: "Z",
   });
-
   global.set("stcrMqttDbPool", pool);
   return pool;
+}
+
+function validDate(value, fallback = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date : fallback;
+}
+
+function fallbackStatus(startOven) {
+  return startOven === 1 ? "open" : "closed";
+}
+
+function findMemoryOven(value) {
+  const rootState = global.get("stcrState");
+  const companyState = rootState?.companies?.[value.companyId];
+  const oven = companyState?.ovens?.find(
+    (item) => item.id === value.ovenId,
+  );
+  return { rootState, companyState, oven };
+}
+
+function updateRealtimeMemory(value, receivedAtDate) {
+  const { rootState, oven } = findMemoryOven(value);
+  if (!rootState || !oven) return;
+
+  const timestamp = receivedAtDate.toISOString();
+
+  if (value.type === "test") {
+    oven.status = value.ovenState === 1 ? "open" : "closed";
+  } else {
+    if (oven.status === "offline") {
+      oven.status = fallbackStatus(value.startOven);
+    }
+
+    for (const reading of value.readings || []) {
+      oven.readings ||= {};
+      oven.readings[reading.sensorKey] = {
+        ...(oven.readings[reading.sensorKey] || {}),
+        value: reading.value,
+        updatedAt: timestamp,
+      };
+    }
+  }
+
+  oven.lastUpdatedAt = timestamp;
+  global.set("stcrState", rootState);
+}
+
+function createMetric() {
+  return {
+    sum: 0,
+    min: null,
+    max: null,
+    last: null,
+    count: 0,
+  };
+}
+
+function addMetric(metric, value) {
+  if (!Number.isFinite(value)) return;
+  metric.sum += value;
+  metric.min = metric.min === null ? value : Math.min(metric.min, value);
+  metric.max = metric.max === null ? value : Math.max(metric.max, value);
+  metric.last = value;
+  metric.count += 1;
+}
+
+function metricValues(metric) {
+  if (!metric || metric.count < 1) {
+    return {
+      avg: null,
+      min: null,
+      max: null,
+      last: null,
+      count: 0,
+    };
+  }
+
+  return {
+    avg: metric.sum / metric.count,
+    min: metric.min,
+    max: metric.max,
+    last: metric.last,
+    count: metric.count,
+  };
+}
+
+function minuteStart(date) {
+  const value = new Date(date);
+  value.setUTCSeconds(0, 0);
+  return value;
+}
+
+function bucketKey(value, minuteAt) {
+  return `${value.companyId}|${value.ovenId}|${minuteAt.toISOString()}`;
+}
+
+function addToMinuteBucket(value, receivedAtDate) {
+  if (!(value.readings || []).length) return;
+
+  const sourceDate = validDate(value.sourceTimestamp, receivedAtDate);
+  // Use server receive time for minute buckets so a stale device clock
+  // cannot force one database write per incoming message.
+  const minuteAt = minuteStart(receivedAtDate);
+  const key = bucketKey(value, minuteAt);
+  const buckets = global.get(BUCKETS_KEY) || {};
+  const bucket = buckets[key] || {
+    key,
+    companyId: value.companyId,
+    ovenId: value.ovenId,
+    ovenNumber: value.ovenNumber,
+    cycleNumber: value.cycleNumber,
+    minuteAt: minuteAt.toISOString(),
+    firstSourceAt: sourceDate.toISOString(),
+    lastSourceAt: sourceDate.toISOString(),
+    firstReceivedAt: receivedAtDate.toISOString(),
+    lastReceivedAt: receivedAtDate.toISOString(),
+    startOven: value.startOven,
+    quality: value.quality || "good",
+    metrics: Object.fromEntries(
+      SENSOR_KEYS.map((sensorKey) => [sensorKey, createMetric()]),
+    ),
+  };
+
+  bucket.cycleNumber = value.cycleNumber;
+  bucket.startOven = value.startOven;
+  bucket.lastSourceAt = sourceDate.toISOString();
+  bucket.lastReceivedAt = receivedAtDate.toISOString();
+  if (value.quality === "suspect") {
+    bucket.quality = "suspect";
+  } else if (value.type === "pending" && bucket.quality === "good") {
+    bucket.quality = "missing";
+  }
+
+  for (const reading of value.readings || []) {
+    if (!bucket.metrics[reading.sensorKey]) continue;
+    addMetric(bucket.metrics[reading.sensorKey], Number(reading.value));
+  }
+
+  buckets[key] = bucket;
+  global.set(BUCKETS_KEY, buckets);
+}
+
+function mergeBuckets(target, source) {
+  if (!target) return source;
+  target.cycleNumber = source.cycleNumber;
+  target.startOven = source.startOven;
+  target.firstSourceAt =
+    target.firstSourceAt < source.firstSourceAt
+      ? target.firstSourceAt
+      : source.firstSourceAt;
+  target.lastSourceAt =
+    target.lastSourceAt > source.lastSourceAt
+      ? target.lastSourceAt
+      : source.lastSourceAt;
+  target.firstReceivedAt =
+    target.firstReceivedAt < source.firstReceivedAt
+      ? target.firstReceivedAt
+      : source.firstReceivedAt;
+  target.lastReceivedAt =
+    target.lastReceivedAt > source.lastReceivedAt
+      ? target.lastReceivedAt
+      : source.lastReceivedAt;
+  if (source.quality === "suspect") target.quality = "suspect";
+
+  for (const sensorKey of SENSOR_KEYS) {
+    const left = target.metrics[sensorKey];
+    const right = source.metrics[sensorKey];
+    if (!right?.count) continue;
+    left.sum += right.sum;
+    left.min = left.min === null ? right.min : Math.min(left.min, right.min);
+    left.max = left.max === null ? right.max : Math.max(left.max, right.max);
+    left.last = right.last;
+    left.count += right.count;
+  }
+  return target;
 }
 
 function makeMessageHash(value) {
@@ -53,14 +249,9 @@ function makeMessageHash(value) {
     .digest("hex");
 }
 
-async function saveFactoryMessage(
-  executor,
-  value,
-  messageHash,
-  normalizationStatus,
-  normalizationDetail,
-  receivedAtDate,
-) {
+async function saveRawMessage(executor, value, receivedAtDate, detail) {
+  if (!storeRawMessages) return;
+
   await executor.execute(
     `INSERT INTO factory_mqtt_messages (
        company_id,
@@ -95,311 +286,294 @@ async function saveFactoryMessage(
       value.duplicateDelivery,
       value.sourceTimestamp,
       JSON.stringify(value.source),
-      messageHash,
-      normalizationStatus,
-      normalizationDetail,
+      makeMessageHash(value),
+      value.type === "pending" ? "pending" : "normalized",
+      detail,
       receivedAtDate,
     ],
   );
 }
 
-function findMemoryOven(value) {
-  const rootState = global.get("stcrState");
-  const companyState =
-    rootState?.companies?.[value.companyId];
-  const oven = companyState?.ovens?.find(
-    (item) => item.id === value.ovenId,
+function persistStateKey(value) {
+  return `${value.companyId}|${value.ovenId}`;
+}
+
+function getPersistStates() {
+  return global.get(PERSIST_STATE_KEY) || {};
+}
+
+function isHeartbeatDue(state, receivedAtDate) {
+  if (!state?.lastSeenAt) return true;
+  return (
+    receivedAtDate.getTime() - Date.parse(state.lastSeenAt) >=
+    heartbeatSeconds * 1000
+  );
+}
+
+async function persistStatus(value, receivedAtDate) {
+  const status = value.ovenState === 1 ? "open" : "closed";
+  const states = getPersistStates();
+  const key = persistStateKey(value);
+  const state = states[key];
+
+  if (state?.status === status && !isHeartbeatDue(state, receivedAtDate)) {
+    return;
+  }
+
+  const pool = getPool();
+  const [result] = await pool.execute(
+    `UPDATE ovens
+     SET status = ?, last_seen_at = ?
+     WHERE company_id = ?
+       AND id = ?
+       AND enabled = TRUE`,
+    [
+      status,
+      receivedAtDate,
+      value.companyId,
+      value.ovenId,
+    ],
   );
 
-  return {
-    rootState,
-    companyState,
-    oven,
+  if (!result.affectedRows) {
+    node.warn(`MQTT status: oven ${value.companyId}/${value.ovenId} not found`);
+    return;
+  }
+
+  states[key] = {
+    status,
+    lastSeenAt: receivedAtDate.toISOString(),
   };
-}
+  global.set(PERSIST_STATE_KEY, states);
 
-function fallbackStatus(startOven) {
-  return startOven === 1 ? "open" : "closed";
-}
-
-const messageHash = makeMessageHash(envelope);
-const receivedAtDate = envelope.receivedAt
-  ? new Date(envelope.receivedAt)
-  : new Date();
-
-if (!Number.isFinite(receivedAtDate.getTime())) {
-  receivedAtDate.setTime(Date.now());
-}
-
-// Topic test: update the authoritative oven state.
-if (envelope.type === "test") {
-  try {
-    const pool = getPool();
-    const status =
-      envelope.ovenState === 1 ? "open" : "closed";
-
-    const [updateResult] = await pool.execute(
-      `UPDATE ovens
-       SET
-         status = ?,
-         last_seen_at = ?
-       WHERE company_id = ?
-         AND id = ?
-         AND enabled = TRUE`,
-      [
-        status,
-        receivedAtDate,
-        envelope.companyId,
-        envelope.ovenId,
-      ],
-    );
-
-    if (!updateResult.affectedRows) {
-      node.warn(
-        `MQTT test: oven ${envelope.companyId}/${envelope.ovenId} not found`,
-      );
-      return null;
-    }
-
-    await saveFactoryMessage(
+  if (storeRawMessages) {
+    await saveRawMessage(
       pool,
-      envelope,
-      messageHash,
-      "normalized",
-      `oven_state=${envelope.ovenState}`,
+      value,
       receivedAtDate,
+      `oven_state=${value.ovenState}`,
     );
+  }
+}
 
-    const {
-      rootState,
-      oven,
-    } = findMemoryOven(envelope);
+async function persistHeartbeat(value, receivedAtDate) {
+  const states = getPersistStates();
+  const key = persistStateKey(value);
+  const state = states[key];
 
-    if (oven) {
-      oven.status = status;
-      oven.lastUpdatedAt =
-        receivedAtDate.toISOString();
-      global.set("stcrState", rootState);
-    }
-
-    node.status({
-      fill: "green",
-      shape: "dot",
-      text: `status saved oven ${envelope.ovenNumber}`,
-    });
-  } catch (error) {
-    node.warn(
-      `MQTT test DB write failed: ${error.message}`,
-    );
-    node.status({
-      fill: "red",
-      shape: "ring",
-      text: `DB error oven ${envelope.ovenNumber}`,
-    });
+  if (!isHeartbeatDue(state, receivedAtDate)) {
+    return;
   }
 
-  return null;
-}
-
-// Incomplete sensor message:
-// keep the raw message and mark the oven as connected.
-// startoven is only a fallback while the DB status is offline.
-if (envelope.type === "pending") {
-  try {
-    const pool = getPool();
-    const status = fallbackStatus(envelope.startOven);
-
-    const [updateResult] = await pool.execute(
-      `UPDATE ovens
-       SET
-         last_seen_at = ?,
-         status = CASE
-           WHEN status = 'offline' THEN ?
-           ELSE status
-         END
-       WHERE company_id = ?
-         AND id = ?
-         AND enabled = TRUE`,
-      [
-        receivedAtDate,
-        status,
-        envelope.companyId,
-        envelope.ovenId,
-      ],
-    );
-
-    if (!updateResult.affectedRows) {
-      node.warn(
-        `MQTT pending: oven ${envelope.companyId}/${envelope.ovenId} not found`,
-      );
-      return null;
-    }
-
-    await saveFactoryMessage(
-      pool,
-      envelope,
-      messageHash,
-      "pending",
-      `missing: ${(envelope.missingSensors || []).join(", ")}`,
+  const currentMemoryStatus =
+    findMemoryOven(value).oven?.status || fallbackStatus(value.startOven);
+  const pool = getPool();
+  const [result] = await pool.execute(
+    `UPDATE ovens
+     SET
+       status = CASE
+         WHEN status = 'offline' THEN ?
+         ELSE status
+       END,
+       last_seen_at = ?
+     WHERE company_id = ?
+       AND id = ?
+       AND enabled = TRUE`,
+    [
+      fallbackStatus(value.startOven),
       receivedAtDate,
-    );
-
-    const {
-      rootState,
-      oven,
-    } = findMemoryOven(envelope);
-
-    if (oven) {
-      if (oven.status === "offline") {
-        oven.status = status;
-      }
-
-      oven.lastUpdatedAt =
-        receivedAtDate.toISOString();
-      global.set("stcrState", rootState);
-    }
-
-    node.status({
-      fill: "yellow",
-      shape: "dot",
-      text: `partial data oven ${envelope.ovenNumber}`,
-    });
-  } catch (error) {
-    node.warn(
-      `MQTT pending DB write failed: ${error.message}`,
-    );
-    node.status({
-      fill: "red",
-      shape: "ring",
-      text: `DB error oven ${envelope.ovenNumber}`,
-    });
-  }
-
-  return null;
-}
-
-// Complete sensor message.
-if (envelope.type === "sensor") {
-  const recordedAt =
-    new Date(envelope.sourceTimestamp);
-  const bySensor = Object.fromEntries(
-    envelope.readings.map((reading) => [
-      reading.sensorKey,
-      reading,
-    ]),
+      value.companyId,
+      value.ovenId,
+    ],
   );
 
+  if (!result.affectedRows) {
+    node.warn(`MQTT heartbeat: oven ${value.companyId}/${value.ovenId} not found`);
+    return;
+  }
+
+  states[key] = {
+    status: currentMemoryStatus,
+    lastSeenAt: receivedAtDate.toISOString(),
+  };
+  global.set(PERSIST_STATE_KEY, states);
+}
+
+async function persistMinuteBucket(bucket) {
+  const pool = getPool();
+  const connection = await pool.getConnection();
+
+  const chamber = metricValues(bucket.metrics.chamberTemp);
+  const humidity = metricValues(bucket.metrics.humidity);
+  const furnace = metricValues(bucket.metrics.furnaceTemp);
+  const blower = metricValues(bucket.metrics.blowerTemp);
+  const minuteAt = validDate(bucket.minuteAt);
+  const firstSourceAt = validDate(bucket.firstSourceAt, minuteAt);
+  const lastSourceAt = validDate(bucket.lastSourceAt, minuteAt);
+  const firstReceivedAt = validDate(bucket.firstReceivedAt, minuteAt);
+  const lastReceivedAt = validDate(bucket.lastReceivedAt, minuteAt);
+
   try {
-    const pool = getPool();
-    const connection = await pool.getConnection();
+    await connection.beginTransaction();
 
-    try {
-      await connection.beginTransaction();
+    const [ovenRows] = await connection.execute(
+      `SELECT id
+       FROM ovens
+       WHERE company_id = ?
+         AND id = ?
+         AND enabled = TRUE
+       LIMIT 1`,
+      [bucket.companyId, bucket.ovenId],
+    );
 
-      const [ovenRows] = await connection.execute(
-        `SELECT id, status
-         FROM ovens
-         WHERE company_id = ?
-           AND id = ?
-           AND enabled = TRUE
-         LIMIT 1`,
-        [
-          envelope.companyId,
-          envelope.ovenId,
-        ],
+    if (!ovenRows[0]) {
+      throw new Error(
+        `Oven ${bucket.companyId}/${bucket.ovenId} not found`,
       );
+    }
 
-      if (!ovenRows[0]) {
-        await connection.rollback();
-        node.warn(
-          `MQTT sensor: oven ${envelope.companyId}/${envelope.ovenId} not found`,
-        );
-        return null;
-      }
+    const [cycleRows] = await connection.execute(
+      `SELECT id, state
+       FROM oven_cycles
+       WHERE company_id = ?
+         AND oven_id = ?
+         AND cycle_number = ?
+       LIMIT 1`,
+      [bucket.companyId, bucket.ovenId, bucket.cycleNumber],
+    );
 
-      await saveFactoryMessage(
-        connection,
-        envelope,
-        messageHash,
-        "normalized",
-        "All four sensors normalized",
-        receivedAtDate,
-      );
+    const cycle = cycleRows[0] || null;
+    const cyclePhase =
+      cycle?.state === "recording"
+        ? "recording"
+        : cycle?.state === "ignition"
+          ? "ignition"
+          : cycle?.state === "completed"
+            ? "cooldown"
+            : "idle";
+    const includedInReport = cyclePhase === "recording";
 
-      const [cycleRows] = await connection.execute(
-        `SELECT id, state
-         FROM oven_cycles
-         WHERE company_id = ?
-           AND oven_id = ?
-           AND cycle_number = ?
-         LIMIT 1`,
-        [
-          envelope.companyId,
-          envelope.ovenId,
-          envelope.cycleNumber,
-        ],
-      );
+    await connection.execute(
+      `INSERT INTO sensor_minute_aggregates (
+         company_id,
+         oven_id,
+         cycle_id,
+         cycle_number,
+         minute_at,
+         chamber_temp_avg,
+         chamber_temp_min,
+         chamber_temp_max,
+         chamber_temp_last,
+         chamber_temp_count,
+         humidity_avg,
+         humidity_min,
+         humidity_max,
+         humidity_last,
+         humidity_count,
+         furnace_temp_avg,
+         furnace_temp_min,
+         furnace_temp_max,
+         furnace_temp_last,
+         furnace_temp_count,
+         blower_temp_avg,
+         blower_temp_min,
+         blower_temp_max,
+         blower_temp_last,
+         blower_temp_count,
+         cycle_phase,
+         included_in_report,
+         quality,
+         first_source_at,
+         last_source_at,
+         first_received_at,
+         last_received_at,
+         created_at,
+         updated_at
+       )
+       VALUES (
+         ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?, ?, ?, ?, ?
+       )
+       ON DUPLICATE KEY UPDATE
+         cycle_id = VALUES(cycle_id),
+         cycle_number = VALUES(cycle_number),
+         chamber_temp_avg = VALUES(chamber_temp_avg),
+         chamber_temp_min = VALUES(chamber_temp_min),
+         chamber_temp_max = VALUES(chamber_temp_max),
+         chamber_temp_last = VALUES(chamber_temp_last),
+         chamber_temp_count = VALUES(chamber_temp_count),
+         humidity_avg = VALUES(humidity_avg),
+         humidity_min = VALUES(humidity_min),
+         humidity_max = VALUES(humidity_max),
+         humidity_last = VALUES(humidity_last),
+         humidity_count = VALUES(humidity_count),
+         furnace_temp_avg = VALUES(furnace_temp_avg),
+         furnace_temp_min = VALUES(furnace_temp_min),
+         furnace_temp_max = VALUES(furnace_temp_max),
+         furnace_temp_last = VALUES(furnace_temp_last),
+         furnace_temp_count = VALUES(furnace_temp_count),
+         blower_temp_avg = VALUES(blower_temp_avg),
+         blower_temp_min = VALUES(blower_temp_min),
+         blower_temp_max = VALUES(blower_temp_max),
+         blower_temp_last = VALUES(blower_temp_last),
+         blower_temp_count = VALUES(blower_temp_count),
+         cycle_phase = VALUES(cycle_phase),
+         included_in_report = VALUES(included_in_report),
+         quality = VALUES(quality),
+         first_source_at = VALUES(first_source_at),
+         last_source_at = VALUES(last_source_at),
+         first_received_at = VALUES(first_received_at),
+         last_received_at = VALUES(last_received_at),
+         updated_at = VALUES(updated_at)`,
+      [
+        bucket.companyId,
+        bucket.ovenId,
+        cycle?.id || null,
+        bucket.cycleNumber,
+        minuteAt,
+        chamber.avg,
+        chamber.min,
+        chamber.max,
+        chamber.last,
+        chamber.count,
+        humidity.avg,
+        humidity.min,
+        humidity.max,
+        humidity.last,
+        humidity.count,
+        furnace.avg,
+        furnace.min,
+        furnace.max,
+        furnace.last,
+        furnace.count,
+        blower.avg,
+        blower.min,
+        blower.max,
+        blower.last,
+        blower.count,
+        cyclePhase,
+        includedInReport,
+        bucket.quality || "good",
+        firstSourceAt,
+        lastSourceAt,
+        firstReceivedAt,
+        lastReceivedAt,
+        lastReceivedAt,
+        lastReceivedAt,
+      ],
+    );
 
-      const cycle = cycleRows[0] || null;
-
-      const cyclePhase =
-        cycle?.state === "recording"
-          ? "recording"
-          : cycle?.state === "ignition"
-            ? "ignition"
-            : cycle?.state === "completed"
-              ? "cooldown"
-              : "idle";
-
-      const includedInReport =
-        cyclePhase === "recording";
-
-      for (const reading of envelope.readings) {
-        await connection.execute(
-          `INSERT INTO telemetry_events (
-             company_id,
-             oven_id,
-             batch_id,
-             topic,
-             device_id,
-             sensor_id,
-             sensor_key,
-             sequence_number,
-             numeric_value,
-             unit_symbol,
-             quality,
-             quality_reasons,
-             source_timestamp,
-             gateway_timestamp,
-             received_at
-           )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE
-             numeric_value = VALUES(numeric_value),
-             quality = VALUES(quality),
-             quality_reasons = VALUES(quality_reasons),
-             gateway_timestamp = VALUES(gateway_timestamp),
-             received_at = VALUES(received_at)`,
-          [
-            envelope.companyId,
-            envelope.ovenId,
-            envelope.batchId,
-            `stcr/${envelope.companyId}/${envelope.ovenId}/telemetry/${reading.sensorKey}`,
-            envelope.deviceId,
-            reading.sensorId,
-            reading.sensorKey,
-            reading.sequence,
-            reading.rawValue,
-            reading.unit,
-            reading.quality,
-            JSON.stringify(reading.qualityReasons),
-            reading.sourceTimestamp,
-            receivedAtDate,
-            receivedAtDate,
-          ],
-        );
-      }
-
+    // Keep the existing history API compatible: one average point per minute.
+    // The three core values are required by the current sensor_readings schema.
+    if (
+      chamber.count > 0 &&
+      humidity.count > 0 &&
+      furnace.count > 0
+    ) {
       await connection.execute(
         `INSERT INTO sensor_readings (
            company_id,
@@ -429,118 +603,139 @@ if (envelope.type === "sensor") {
            source_timestamp = VALUES(source_timestamp),
            received_at = VALUES(received_at)`,
         [
-          envelope.companyId,
-          envelope.ovenId,
+          bucket.companyId,
+          bucket.ovenId,
           cycle?.id || null,
-          recordedAt,
-          bySensor.chamberTemp.value,
-          bySensor.humidity.value,
-          bySensor.furnaceTemp.value,
-          bySensor.blowerTemp.value,
+          minuteAt,
+          chamber.avg,
+          humidity.avg,
+          furnace.avg,
+          blower.avg,
           cyclePhase,
           includedInReport,
-          envelope.quality,
-          recordedAt,
-          receivedAtDate,
+          bucket.quality || "good",
+          lastSourceAt,
+          lastReceivedAt,
         ],
       );
-
-      const fallback =
-        fallbackStatus(envelope.startOven);
-
-      await connection.execute(
-        `UPDATE ovens
-         SET
-           last_seen_at = ?,
-           status = CASE
-             WHEN status = 'offline' THEN ?
-             ELSE status
-           END
-         WHERE company_id = ?
-           AND id = ?
-           AND enabled = TRUE`,
-        [
-          receivedAtDate,
-          fallback,
-          envelope.companyId,
-          envelope.ovenId,
-        ],
-      );
-
-      await connection.commit();
-
-      const {
-        rootState,
-        companyState,
-        oven,
-      } = findMemoryOven(envelope);
-
-      if (oven) {
-        const timestamp =
-          recordedAt.toISOString();
-
-        for (const reading of envelope.readings) {
-          oven.readings[reading.sensorKey] = {
-            ...oven.readings[reading.sensorKey],
-            value: reading.value,
-            updatedAt: timestamp,
-          };
-        }
-
-        if (oven.status === "offline") {
-          oven.status = fallback;
-        }
-
-        oven.lastUpdatedAt =
-          receivedAtDate.toISOString();
-
-        const point = {
-          timestamp,
-          chamberTemp:
-            bySensor.chamberTemp.value,
-          humidity:
-            bySensor.humidity.value,
-          furnaceTemp:
-            bySensor.furnaceTemp.value,
-          blowerTemp:
-            bySensor.blowerTemp.value,
-        };
-
-        companyState.history[envelope.ovenId] = [
-          ...(companyState.history[envelope.ovenId] || []),
-          point,
-        ].slice(-10000);
-
-        global.set("stcrState", rootState);
-      }
-
-      node.status({
-        fill: "green",
-        shape: "dot",
-        text: `saved oven ${envelope.ovenNumber}`,
-      });
-    } catch (error) {
-      await connection.rollback();
-      throw error;
-    } finally {
-      connection.release();
     }
-  } catch (error) {
-    node.warn(
-      `MQTT sensor DB write failed: ${error.message}`,
-    );
-    node.status({
-      fill: "red",
-      shape: "ring",
-      text: `DB error oven ${envelope.ovenNumber}`,
-    });
-  }
 
+    await connection.commit();
+
+    const { rootState, companyState, oven } = findMemoryOven(bucket);
+    if (rootState && companyState && oven && chamber.count && humidity.count && furnace.count) {
+      const point = {
+        timestamp: minuteAt.toISOString(),
+        chamberTemp: chamber.avg,
+        humidity: humidity.avg,
+        furnaceTemp: furnace.avg,
+        blowerTemp: blower.avg,
+      };
+      companyState.history ||= {};
+      companyState.history[bucket.ovenId] = [
+        ...(companyState.history[bucket.ovenId] || []).filter(
+          (item) => item.timestamp !== point.timestamp,
+        ),
+        point,
+      ].slice(-10000);
+      global.set("stcrState", rootState);
+    }
+
+    node.status({
+      fill: "green",
+      shape: "dot",
+      text: `minute saved oven ${bucket.ovenNumber}`,
+    });
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function flushCompletedBuckets(referenceDate) {
+  if (global.get(FLUSH_LOCK_KEY)) return;
+  global.set(FLUSH_LOCK_KEY, true);
+
+  const cutoffMs = referenceDate.getTime() - flushGraceMs;
+  const buckets = global.get(BUCKETS_KEY) || {};
+  const ready = [];
+
+  for (const [key, bucket] of Object.entries(buckets)) {
+    const minuteEndMs = validDate(bucket.minuteAt).getTime() + 60_000;
+    if (minuteEndMs <= cutoffMs) {
+      ready.push(bucket);
+      delete buckets[key];
+    }
+  }
+  global.set(BUCKETS_KEY, buckets);
+
+  try {
+    ready.sort((left, right) =>
+      left.minuteAt.localeCompare(right.minuteAt),
+    );
+
+    for (const bucket of ready) {
+      try {
+        await persistMinuteBucket(bucket);
+      } catch (error) {
+        node.warn(
+          `Minute aggregate write failed for ${bucket.companyId}/${bucket.ovenId}/${bucket.minuteAt}: ${error.message}`,
+        );
+        const current = global.get(BUCKETS_KEY) || {};
+        current[bucket.key] = mergeBuckets(current[bucket.key], bucket);
+        global.set(BUCKETS_KEY, current);
+      }
+    }
+  } finally {
+    global.set(FLUSH_LOCK_KEY, false);
+  }
+}
+
+const referenceDate = isFlushTick
+  ? validDate(msg.factoryMqtt?.receivedAt, new Date())
+  : validDate(envelope.receivedAt, new Date());
+
+if (isFlushTick) {
+  await flushCompletedBuckets(referenceDate);
   return null;
 }
 
-node.warn(
-  `Unknown MQTT envelope type: ${String(envelope.type)}`,
-);
+updateRealtimeMemory(envelope, referenceDate);
+
+try {
+  if (envelope.type === "test") {
+    await persistStatus(envelope, referenceDate);
+    await flushCompletedBuckets(referenceDate);
+    return null;
+  }
+
+  if (envelope.type === "sensor" || envelope.type === "pending") {
+    addToMinuteBucket(envelope, referenceDate);
+    await persistHeartbeat(envelope, referenceDate);
+
+    if (storeRawMessages && envelope.type === "pending") {
+      await saveRawMessage(
+        getPool(),
+        envelope,
+        referenceDate,
+        `missing: ${(envelope.missingSensors || []).join(", ")}`,
+      );
+    }
+
+    await flushCompletedBuckets(referenceDate);
+    return null;
+  }
+
+  node.warn(`Unknown MQTT envelope type: ${String(envelope.type)}`);
+} catch (error) {
+  node.warn(`MQTT processing failed: ${error.message}`);
+  node.status({
+    fill: "red",
+    shape: "ring",
+    text: `DB error oven ${envelope.ovenNumber}`,
+  });
+}
 
 return null;

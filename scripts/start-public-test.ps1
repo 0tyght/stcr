@@ -226,7 +226,7 @@ if (-not $url) {
 $runtimeConfig = [ordered]@{
   dataSource = 'node-red'
   apiBaseUrl = "$url/stcr/api"
-  pollIntervalMs = 5000
+  pollIntervalMs = 1000
   requestTimeoutMs = 15000
   updatedAt = (Get-Date).ToUniversalTime().ToString('o')
 } | ConvertTo-Json

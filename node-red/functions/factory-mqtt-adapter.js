@@ -1,6 +1,18 @@
 // factory-mqtt-adapter.js
 // Validate and normalize factory MQTT messages.
-// The database write is handled by factory-mqtt-db-writer.js.
+// Every valid sensor value is forwarded immediately for realtime display.
+// Minute aggregation and database persistence are handled by the DB writer.
+
+if (msg._minuteFlushTick) {
+  msg.topic = "stcr/factory-mqtt/minute-flush";
+  msg.payload = {
+    status: "flush",
+    detail: "Flush completed minute buckets",
+    receivedAt:
+      msg.factoryMqtt?.receivedAt || new Date().toISOString(),
+  };
+  return msg;
+}
 
 const allowedTopics = new Set(["test", "sensor"]);
 const companyId = String(
@@ -17,8 +29,6 @@ const sourceUtcOffsetMinutes = Number(
 );
 
 function inspection(status, detail, extra = {}) {
-  // IMPORTANT:
-  // Return the original msg so _mqttEnvelope reaches the DB writer node.
   msg.topic = `stcr/factory-mqtt/${status}`;
   msg.payload = {
     status,
@@ -43,7 +53,6 @@ if (!["gr", "ttn"].includes(companyId)) {
     shape: "ring",
     text: "company mapping missing",
   });
-
   return reject("STCR_FACTORY_MQTT_COMPANY_ID is missing");
 }
 
@@ -53,7 +62,6 @@ if (!allowedTopics.has(sourceTopic)) {
     shape: "ring",
     text: "unknown MQTT topic",
   });
-
   return reject("Unknown MQTT topic");
 }
 
@@ -66,7 +74,6 @@ if (!rawText || Buffer.byteLength(rawText, "utf8") > 8192) {
 }
 
 let source;
-
 try {
   source = JSON.parse(rawText);
 } catch {
@@ -75,7 +82,6 @@ try {
     shape: "ring",
     text: "invalid MQTT JSON",
   });
-
   return reject("MQTT payload is not valid JSON");
 }
 
@@ -85,7 +91,6 @@ const rawSourceTimestampMs = Date.parse(source.time_stamp);
 const validSourceOffset =
   Number.isInteger(sourceUtcOffsetMinutes) &&
   Math.abs(sourceUtcOffsetMinutes) <= 840;
-
 const sourceTimestampMs =
   rawSourceTimestampMs - sourceUtcOffsetMinutes * 60 * 1000;
 
@@ -104,34 +109,27 @@ if (
     shape: "ring",
     text: "invalid MQTT identity",
   });
-
   return reject("Invalid oven, cycle, or timestamp", {
     rawPayload: source,
   });
 }
 
 let ovenMap = {};
-
 try {
   ovenMap = JSON.parse(
     String(env.get("STCR_FACTORY_MQTT_OVEN_MAP_JSON") || "{}"),
   );
 } catch {
-  return reject(
-    "STCR_FACTORY_MQTT_OVEN_MAP_JSON is invalid JSON",
-  );
+  return reject("STCR_FACTORY_MQTT_OVEN_MAP_JSON is invalid JSON");
 }
 
 const explicitOvenId =
   typeof ovenMap[String(ovenNumber)] === "string"
     ? ovenMap[String(ovenNumber)].trim()
     : "";
-
 const ovenId =
   explicitOvenId ||
-  (deploymentMode === "production"
-    ? ""
-    : `oven-${ovenNumber}`);
+  (deploymentMode === "production" ? "" : `oven-${ovenNumber}`);
 
 if (
   !ovenId ||
@@ -143,23 +141,15 @@ if (
     shape: "ring",
     text: `oven ${ovenNumber} unmapped`,
   });
-
   delete msg._mqttEnvelope;
-
-  return inspection(
-    "pending",
-    "Oven mapping is required",
-    {
-      ovenNumber,
-      cycleNumber,
-      rawPayload: source,
-    },
-  );
+  return inspection("pending", "Oven mapping is required", {
+    ovenNumber,
+    cycleNumber,
+    rawPayload: source,
+  });
 }
 
-const sourceTimestamp =
-  new Date(sourceTimestampMs).toISOString();
-
+const sourceTimestamp = new Date(sourceTimestampMs).toISOString();
 const commonEnvelope = {
   companyId,
   ovenId,
@@ -174,26 +164,20 @@ const commonEnvelope = {
   source,
 };
 
-// Topic: test
 if (sourceTopic === "test") {
   const ovenState = Number(source.oven_state);
-
   if (![0, 1].includes(ovenState)) {
     node.status({
       fill: "yellow",
       shape: "ring",
       text: `oven ${ovenNumber} bad state`,
     });
-
-    return reject(
-      "oven_state must be 0 or 1",
-      {
-        ovenNumber,
-        ovenId,
-        cycleNumber,
-        rawPayload: source,
-      },
-    );
+    return reject("oven_state must be 0 or 1", {
+      ovenNumber,
+      ovenId,
+      cycleNumber,
+      rawPayload: source,
+    });
   }
 
   msg._mqttEnvelope = {
@@ -221,19 +205,14 @@ if (sourceTopic === "test") {
   );
 }
 
-// Topic: sensor
 const startOven = Number(source.startoven);
-
 if (![0, 1].includes(startOven)) {
-  return reject(
-    "startoven must be 0 or 1",
-    {
-      ovenNumber,
-      ovenId,
-      cycleNumber,
-      rawPayload: source,
-    },
-  );
+  return reject("startoven must be 0 or 1", {
+    ovenNumber,
+    ovenId,
+    cycleNumber,
+    rawPayload: source,
+  });
 }
 
 const definitions = [
@@ -243,102 +222,74 @@ const definitions = [
   ["blowerTemp", "blower", "C"],
 ];
 
-const missingSensors = definitions
-  .filter(([, sourceKey]) => {
-    const value = source[sourceKey];
-
-    return (
-      value === null ||
-      value === undefined ||
-      value === "" ||
-      !Number.isFinite(Number(value))
-    );
-  })
-  .map(([sensorKey]) => sensorKey);
-
-if (missingSensors.length) {
-  msg._mqttEnvelope = {
-    ...commonEnvelope,
-    type: "pending",
-    startOven,
-    missingSensors,
-  };
-
-  node.status({
-    fill: "yellow",
-    shape: "ring",
-    text: `${missingSensors.join(", ")} missing`,
-  });
-
-  return inspection(
-    "pending",
-    "Sensor values are incomplete",
-    {
-      ovenNumber,
-      ovenId,
-      cycleNumber,
-      startOven,
-      missingSensors,
-      rawPayload: source,
-    },
-  );
-}
-
 const now = Date.now();
-const stale =
-  now - sourceTimestampMs > 2 * 60 * 1000;
-const future =
-  sourceTimestampMs - now > 30 * 1000;
-
+const stale = now - sourceTimestampMs > 2 * 60 * 1000;
+const future = sourceTimestampMs - now > 30 * 1000;
 const qualityReasons = [
   ...(stale ? ["stale"] : []),
   ...(future ? ["future-timestamp"] : []),
 ];
-
-const quality =
-  qualityReasons.length ? "suspect" : "good";
+const quality = qualityReasons.length ? "suspect" : "good";
 const sequence = sourceTimestampMs;
 
-const readings = definitions.map(
-  ([sensorKey, sourceKey, unit]) => ({
+const readings = [];
+const missingSensors = [];
+for (const [sensorKey, sourceKey, unit] of definitions) {
+  const rawValue = source[sourceKey];
+  const numericValue = Number(rawValue);
+  const missing =
+    rawValue === null ||
+    rawValue === undefined ||
+    rawValue === "" ||
+    !Number.isFinite(numericValue);
+
+  if (missing) {
+    missingSensors.push(sensorKey);
+    continue;
+  }
+
+  readings.push({
     sensorKey,
-    sensorId:
-      `factory-${companyId}-${ovenId}-${sensorKey}`,
+    sensorId: `factory-${companyId}-${ovenId}-${sensorKey}`,
     sequence,
-    value: Number(source[sourceKey]),
-    rawValue: Number(source[sourceKey]),
+    value: numericValue,
+    rawValue: numericValue,
     unit,
     quality,
     qualityReasons,
     sourceTimestamp,
-  }),
-);
+  });
+}
 
-const batchId =
-  `mqtt-${ovenNumber}-${cycleNumber}-${sourceTimestampMs}`;
-const deviceId =
-  `factory-${companyId}-oven-${ovenNumber}`;
+const batchId = `mqtt-${ovenNumber}-${cycleNumber}-${sourceTimestampMs}`;
+const deviceId = `factory-${companyId}-oven-${ovenNumber}`;
+const incomplete = missingSensors.length > 0;
 
 msg._mqttEnvelope = {
   ...commonEnvelope,
-  type: "sensor",
+  type: incomplete ? "pending" : "sensor",
   startOven,
   quality,
   qualityReasons,
   readings,
+  missingSensors,
   batchId,
   deviceId,
 };
 
 node.status({
-  fill: "green",
-  shape: "dot",
-  text: `normalized oven ${ovenNumber}`,
+  fill: incomplete ? "yellow" : "green",
+  shape: incomplete ? "ring" : "dot",
+  text: incomplete
+    ? `${missingSensors.join(", ")} missing`
+    : `normalized oven ${ovenNumber}`,
 });
 
 return inspection(
-  "validated",
-  "Sensor data normalized; queued for database write",
+  incomplete ? "pending" : "validated",
+  incomplete
+    ? "Available sensor values accepted; missing values ignored"
+    : "Sensor data normalized for realtime display and minute aggregation",
   {
     ovenNumber,
     ovenId,
@@ -346,6 +297,7 @@ return inspection(
     startOven,
     page: source.page,
     pageUsed: false,
+    missingSensors,
     originalSourceTimestamp: source.time_stamp,
     normalizedSourceTimestamp: sourceTimestamp,
     normalizedPayload: {

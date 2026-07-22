@@ -250,6 +250,21 @@ const env = {
     missing._mqttEnvelope.startOven,
     1,
   );
+  assert.deepEqual(
+    missing._mqttEnvelope.readings.map(({ sensorKey }) => sensorKey),
+    ["chamberTemp", "humidity", "furnaceTemp"],
+  );
+}
+
+// Minute flush ticks pass through the adapter without MQTT validation.
+{
+  const tick = {
+    _minuteFlushTick: true,
+    factoryMqtt: { receivedAt: sampleTimestamp },
+  };
+  const result = runAdapter(tick, env, adapterNode, Buffer);
+  assert.equal(result, tick);
+  assert.equal(result.payload.status, "flush");
 }
 
 // Status topic.
@@ -412,6 +427,14 @@ assert.match(
   routerSource,
   /companyId/,
 );
+
+
+assert.match(dbWriterSource, /sensor_minute_aggregates/);
+assert.match(dbWriterSource, /chamber_temp_avg/);
+assert.match(dbWriterSource, /heartbeatSeconds/);
+assert.match(dbWriterSource, /STCR_FACTORY_MQTT_STORE_RAW_MESSAGES/);
+assert.match(subscriberSource, /factoryMqttMinuteFlushTimer/);
+assert.match(schemaSource, /CREATE TABLE IF NOT EXISTS sensor_minute_aggregates\b/);
 
 console.log(
   "Node-RED production flow validation passed.",

@@ -7,10 +7,18 @@ import {
   useRef,
   useState,
 } from "react";
+
 import { runtimeConfig } from "../config/runtime";
 import { apiClient } from "../services/apiClient";
 import { getErrorMessage } from "../services/api/errors";
-import type { Alarm, AlarmFilter, AuditEvent, LimitMap, Oven, OvenUpdateInput } from "../types";
+import type {
+  Alarm,
+  AlarmFilter,
+  AuditEvent,
+  LimitMap,
+  Oven,
+  OvenUpdateInput,
+} from "../types";
 
 type AppDataContextValue = {
   ovens: Oven[];
@@ -40,6 +48,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [lastSuccessfulSyncAt, setLastSuccessfulSyncAt] = useState<string | null>(null);
   const mountedRef = useRef(true);
   const realtimeRequestRef = useRef<Promise<void> | null>(null);
+  const alarmRequestRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -56,14 +65,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   const loadInitialData = useCallback(async (showLoading = false) => {
     if (mountedRef.current && showLoading) setLoading(true);
-
     try {
       const [nextOvens, nextAlarms, nextAuditEvents] = await Promise.all([
         apiClient.getOvens(),
         apiClient.getAlarms(),
         apiClient.getAuditEvents(),
       ]);
-
       if (!mountedRef.current) return;
       setOvens(nextOvens);
       setAlarms(nextAlarms);
@@ -76,19 +83,15 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     }
   }, [markSuccess]);
 
+  // Poll only the lightweight realtime oven endpoint every second.
   const syncRealtime = useCallback((): Promise<void> => {
     if (realtimeRequestRef.current) return realtimeRequestRef.current;
 
     const request = (async () => {
       try {
-        const [nextOvens, nextAlarms] = await Promise.all([
-          apiClient.getRealtimeOvens(),
-          apiClient.getAlarms(),
-        ]);
-
+        const nextOvens = await apiClient.getRealtimeOvens();
         if (!mountedRef.current) return;
         setOvens(nextOvens);
-        setAlarms(nextAlarms);
         markSuccess();
       } catch (nextError) {
         if (mountedRef.current) setError(getErrorMessage(nextError));
@@ -101,14 +104,34 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     return request;
   }, [markSuccess]);
 
+  // Alarms do not need one-second polling; keep their database load lower.
+  const syncAlarms = useCallback((): Promise<void> => {
+    if (alarmRequestRef.current) return alarmRequestRef.current;
+
+    const request = (async () => {
+      try {
+        const nextAlarms = await apiClient.getAlarms();
+        if (!mountedRef.current) return;
+        setAlarms(nextAlarms);
+      } catch (nextError) {
+        if (mountedRef.current) setError(getErrorMessage(nextError));
+      } finally {
+        alarmRequestRef.current = null;
+      }
+    })();
+
+    alarmRequestRef.current = request;
+    return request;
+  }, []);
+
   const refresh = useCallback(async () => {
     if (mountedRef.current) setRefreshing(true);
     try {
-      await syncRealtime();
+      await Promise.all([syncRealtime(), syncAlarms()]);
     } finally {
       if (mountedRef.current) setRefreshing(false);
     }
-  }, [syncRealtime]);
+  }, [syncAlarms, syncRealtime]);
 
   useEffect(() => {
     void loadInitialData(true);
@@ -118,14 +141,23 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     const timer = window.setInterval(() => {
       void syncRealtime();
     }, runtimeConfig.pollIntervalMs);
-
     return () => window.clearInterval(timer);
   }, [syncRealtime]);
+
+  useEffect(() => {
+    const alarmIntervalMs = Math.max(5_000, runtimeConfig.pollIntervalMs * 5);
+    const timer = window.setInterval(() => {
+      void syncAlarms();
+    }, alarmIntervalMs);
+    return () => window.clearInterval(timer);
+  }, [syncAlarms]);
 
   const saveLimits = useCallback(
     async (ovenId: string, limits: LimitMap) => {
       const updated = await apiClient.saveLimits(ovenId, limits);
-      setOvens((current) => current.map((oven) => (oven.id === ovenId ? updated : oven)));
+      setOvens((current) =>
+        current.map((oven) => (oven.id === ovenId ? updated : oven)),
+      );
       await loadInitialData();
     },
     [loadInitialData],
@@ -134,7 +166,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const updateOven = useCallback(
     async (ovenId: string, input: OvenUpdateInput) => {
       const updated = await apiClient.updateOven(ovenId, input);
-      setOvens((current) => current.map((oven) => (oven.id === ovenId ? updated : oven)));
+      setOvens((current) =>
+        current.map((oven) => (oven.id === ovenId ? updated : oven)),
+      );
       await loadInitialData();
     },
     [loadInitialData],

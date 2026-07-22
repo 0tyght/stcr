@@ -1,3 +1,9 @@
+const minuteFlushTimer = context.get("factoryMqttMinuteFlushTimer");
+if (minuteFlushTimer) {
+  clearInterval(minuteFlushTimer);
+  context.set("factoryMqttMinuteFlushTimer", undefined);
+}
+
 const client = context.get("factoryMqttClient");
 if (client) {
   client.removeAllListeners();
@@ -5,9 +11,10 @@ if (client) {
   context.set("factoryMqttClient", undefined);
 }
 
-// ปิด DB pool ของ MQTT adapter ด้วย
 const mqttPool = global.get("stcrMqttDbPool");
 if (mqttPool) {
   mqttPool.end().catch(() => {});
   global.set("stcrMqttDbPool", undefined);
 }
+
+global.set("stcrMinuteFlushRunning", false);
