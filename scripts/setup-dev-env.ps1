@@ -192,7 +192,6 @@ $settings = [ordered]@{
 
     # The current publisher sends Bangkok wall-clock time with a trailing Z.
     STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES = "420"
-    STCR_REPORT_READY_HOLD_SECONDS = "1800"
 
     # This broker currently uses mqtt:// in the test environment.
     STCR_FACTORY_MQTT_TLS_REJECT_UNAUTHORIZED = "false"

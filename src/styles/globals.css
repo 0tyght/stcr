@@ -2288,6 +2288,11 @@ tbody tr:hover {
     height: 290px;
   }
 }
+
+.gauge-meta small.is-stale {
+  color: #f59e0b;
+  font-weight: 800;
+}
 .data-connection-banner {
   display: grid;
   grid-template-columns: auto 1fr auto;

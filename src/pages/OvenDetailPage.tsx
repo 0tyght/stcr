@@ -366,14 +366,10 @@ const ovenAlarms = useMemo(
                 type="button"
                 onClick={handleDownloadCurrentReport}
                 disabled={!oven.reportStartedAt}
-                title={
-                  oven.reportStartedAt
-                    ? "ดาวน์โหลดรายงานรอบปัจจุบัน"
-                    : "รายงานจะพร้อมเมื่ออุณหภูมิห้องอบถึงช่วงที่กำหนดและเริ่มบันทึกรอบ"
-                }
+                title={oven.reportStartedAt ? "ดาวน์โหลดรายงานรอบปัจจุบัน" : "รอข้อมูลเปิดเตาจาก MQTT"}
               >
                 <FileDown size={17} />
-                {oven.reportStartedAt ? "โหลดรายงานปัจจุบัน" : "ยังไม่เริ่มบันทึกรอบ"}
+                {oven.reportStartedAt ? "โหลดรายงานปัจจุบัน" : "รอข้อมูลเปิดเตา"}
               </button>
             ) : (
               <Link
@@ -414,8 +410,8 @@ const ovenAlarms = useMemo(
                   <Thermometer size={16} />
                   ช่วงอุณหภูมิ
                 </p>
-                <strong>กำลังจุดไฟ / อุ่นระบบ</strong>
-                <span>ยังไม่ประเมิน Upper/Lower จนกว่าจะเริ่มบันทึกรอบ</span>
+                <strong>รอข้อมูลเปิดเตา</strong>
+                <span>ระบบจะเริ่มบันทึกรอบทันทีเมื่อ MQTT แจ้งว่าเตาเปิด</span>
               </div>
             )
           ) : null}
@@ -451,6 +447,7 @@ const ovenAlarms = useMemo(
                 key={sensor}
                 sensor={sensor}
                 value={oven.readings[sensor].value}
+                updatedAt={oven.readings[sensor].updatedAt}
                 limit={getGaugeLimit(oven, sensor)}
                 showLimit={Boolean(oven.reportStartedAt) && sensor !== "humidity"}
               />

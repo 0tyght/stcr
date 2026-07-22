@@ -67,7 +67,6 @@ function Import-RequiredEnvironment {
     STCR_FACTORY_MQTT_TLS_REJECT_UNAUTHORIZED = 'false'
     STCR_FACTORY_MQTT_STORE_RAW_MESSAGES = 'false'
     STCR_OFFLINE_THRESHOLD_SECONDS = '180'
-    STCR_REPORT_READY_HOLD_SECONDS = '1800'
     STCR_HTTP_INGEST_ENABLED = 'false'
     STCR_INGEST_URL = 'http://127.0.0.1:1880/stcr/api/telemetry'
   }
@@ -282,7 +281,7 @@ if (-not $url) {
 $runtimeConfig = [ordered]@{
   dataSource = 'node-red'
   apiBaseUrl = "$url/stcr/api"
-  pollIntervalMs = 5000
+  pollIntervalMs = 1000
   requestTimeoutMs = 15000
   updatedAt = (Get-Date).ToUniversalTime().ToString('o')
 } | ConvertTo-Json

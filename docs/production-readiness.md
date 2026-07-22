@@ -33,7 +33,7 @@ Decision: **NO-GO for factory production**
 ## Completed on 2026-07-22
 
 - Added one-minute sensor aggregation and changed history/report queries to use the same stored averages.
-- Implemented the real MQTT cycle lifecycle: ignition, 30-minute ready hold, recording and completed report boundaries.
+- Implemented the real MQTT cycle lifecycle: an open oven starts recording immediately and a closed oven completes the report boundary.
 - Verified the lifecycle with an automated MySQL integration test and observed real TTN messages create ignition cycles.
 - Corrected the factory timestamp by 420 minutes and confirmed new source/receive timestamps have zero-second offset.
 - Added offline status persistence after 180 seconds without data and corrected rejected CORS origins to return HTTP 403.

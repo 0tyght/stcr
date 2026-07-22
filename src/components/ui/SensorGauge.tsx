@@ -1,5 +1,5 @@
 import type { LimitRule, SensorKey } from "../../types";
-import { formatNumber } from "../../utils/format";
+import { formatNumber, formatTime } from "../../utils/format";
 import { sensorByKey } from "../../utils/sensors";
 
 type GaugeTone = "normal" | "warning" | "danger";
@@ -19,17 +19,22 @@ const INNER_STROKE_WIDTH = 18;
 export function SensorGauge({
   sensor,
   value,
+  updatedAt,
   limit,
   showLimit = true,
 }: {
   sensor: SensorKey;
   value: number;
+  updatedAt: string;
   limit?: LimitRule;
   showLimit?: boolean;
 }) {
   const definition = sensorByKey[sensor];
   const unit = definition.unit === "C" ? "°C" : "%";
-  const formattedValue = formatNumber(value, sensor === "furnaceTemp" ? 0 : 1);
+  const precision = sensor === "chamberTemp" || sensor === "humidity" ? 2 : 0;
+  const formattedValue = formatNumber(value, precision);
+  const readingAgeMs = Date.now() - Date.parse(updatedAt);
+  const readingIsStale = !Number.isFinite(readingAgeMs) || readingAgeMs > 180_000;
 
   const hasLimit = showLimit && !!limit;
   const scale = hasLimit ? getLimitScale(limit) : getDefaultScale(sensor, value);
@@ -197,6 +202,10 @@ export function SensorGauge({
               )}${unit}`
             : "ไม่มี Upper/Lower สำหรับค่านี้"}
         </span>
+        <small className={readingIsStale ? "is-stale" : ""}>
+          {readingIsStale ? "ข้อมูลล่าสุด " : "อัปเดต "}
+          {formatTime(updatedAt)}
+        </small>
       </div>
     </article>
   );

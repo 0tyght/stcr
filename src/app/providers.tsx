@@ -83,7 +83,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     }
   }, [markSuccess]);
 
-  // Poll the realtime oven endpoint every five seconds.
+  // Poll the realtime oven endpoint every second.
   const syncRealtime = useCallback((): Promise<void> => {
     if (realtimeRequestRef.current) return realtimeRequestRef.current;
 

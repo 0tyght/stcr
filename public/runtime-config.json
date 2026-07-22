@@ -1,7 +1,7 @@
 {
     "dataSource":  "node-red",
-    "apiBaseUrl":  "https://petite-critics-movie-varieties.trycloudflare.com/stcr/api",
-    "pollIntervalMs":  5000,
+    "apiBaseUrl":  "https://smoking-courts-resort-mail.trycloudflare.com/stcr/api",
+    "pollIntervalMs":  1000,
     "requestTimeoutMs":  15000,
-    "updatedAt":  "2026-07-22T12:29:50.7618984Z"
+    "updatedAt":  "2026-07-22T13:10:27.5586461Z"
 }

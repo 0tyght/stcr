@@ -33,7 +33,6 @@ const environment = new Map([
   ["STCR_FACTORY_MQTT_HEARTBEAT_SECONDS", "10"],
   ["STCR_FACTORY_MQTT_MINUTE_FLUSH_GRACE_MS", "0"],
   ["STCR_FACTORY_MQTT_STORE_RAW_MESSAGES", "false"],
-  ["STCR_REPORT_READY_HOLD_SECONDS", "60"],
 ]);
 const env = { get: (key) => environment.get(key) };
 const node = {
