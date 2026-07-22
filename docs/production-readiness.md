@@ -5,9 +5,9 @@ Decision: **NO-GO for factory production**
 
 ## Blocking items
 
-1. Confirm why the broker currently publishes only ovens 1-6 although TTN has ovens 1-9. Oven numbers map directly, `oven_state` and `startoven` agree in observed messages, and `page` is currently ignored because it was always `1` and has no confirmed business meaning.
+1. Confirm why TTN still publishes only ovens 1-6 although TTN has ovens 1-9. GR now publishes ovens 11-26 through `status_gr` and `sensor_gr`; some GR sensor messages contain empty `oventemp`/`blower` values and must be confirmed with the publisher.
 2. Enable MQTT TLS on port 8883, rotate the credential that was shared in plaintext, and re-test certificate validation.
-3. Generate and activate separate GR and TTN ingestion API keys, scoped to the correct company/oven, then execute replay and cross-tenant rejection tests for HTTP ingestion.
+3. Keep HTTP ingestion disabled while MQTT writes directly to MySQL. If HTTP ingestion is enabled later, generate separate GR and TTN keys and run cross-tenant rejection tests first.
 4. Create the least-privilege production MySQL account and verify its grants. Never run Node-RED as MySQL root.
 5. Establish retention jobs for raw MQTT, telemetry and audit data.
 6. Finish alarm creation/resolution and offline-sensor monitoring from real telemetry, then test restart recovery from MySQL.
@@ -34,10 +34,13 @@ Decision: **NO-GO for factory production**
 
 - Added one-minute sensor aggregation and changed history/report queries to use the same stored averages.
 - Implemented the real MQTT cycle lifecycle: an open oven starts recording immediately and a closed oven completes the report boundary.
-- Verified the lifecycle with an automated MySQL integration test and observed real TTN messages create ignition cycles.
+- Verified the lifecycle with an automated MySQL integration test and observed real TTN/GR status messages create recording cycles immediately.
 - Corrected the factory timestamp by 420 minutes and confirmed new source/receive timestamps have zero-second offset.
 - Added offline status persistence after 180 seconds without data and corrected rejected CORS origins to return HTTP 403.
 - Added GR ovens 11-26 to clean installs and existing-install migration without overwriting local settings.
+- Added exact topic routing for TTN `test`/`sensor` and GR `status_gr`/`sensor_gr` over one broker connection.
+- Added per-topic MQTT health counters without exposing raw payloads or credentials.
+- Disabled unused HTTP ingestion routes when direct MQTT mode is active, reduced session-validation database traffic, and paused frontend polling in hidden tabs.
 
 ## Guardrails already present
 

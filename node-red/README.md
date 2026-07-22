@@ -12,13 +12,14 @@ Flow ชุดนี้รับข้อมูลจริงจาก MQTT ข
 ## Environment ที่ต้องมี
 
 - `STCR_FACTORY_MQTT_ENABLED=true`
-- `STCR_FACTORY_MQTT_FORWARD_ENABLED=true`
 - `STCR_FACTORY_MQTT_URL`
 - `STCR_FACTORY_MQTT_USERNAME`
 - `STCR_FACTORY_MQTT_PASSWORD`
 - `STCR_FACTORY_MQTT_COMPANY_ID=ttn`
 - `STCR_FACTORY_MQTT_TOPICS=test,sensor`
 - `STCR_FACTORY_MQTT_OVEN_MAP_JSON`
+- `STCR_FACTORY_MQTT_TOPIC_ROUTES_JSON` maps each exact topic to `companyId` and `messageType`. Current routes are TTN `test`/`sensor` and GR `status_gr`/`sensor_gr`.
+- `STCR_FACTORY_MQTT_OVEN_MAPS_JSON` contains separate oven-number maps for `ttn` and `gr`. These two multi-company settings take precedence over the legacy single-company settings above.
 - `STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES=420`
 - `STCR_TTN_INGEST_API_KEY`
 - `STCR_OFFLINE_THRESHOLD_SECONDS=180`

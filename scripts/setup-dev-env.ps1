@@ -171,6 +171,23 @@ $ovenMap = [ordered]@{
     "9" = "oven-9"
 } | ConvertTo-Json -Compress
 
+$grOvenMap = [ordered]@{}
+foreach ($ovenNumber in 11..26) {
+    $grOvenMap[[string]$ovenNumber] = "oven-$ovenNumber"
+}
+
+$topicRoutes = [ordered]@{
+    "test" = [ordered]@{ companyId = "ttn"; messageType = "status" }
+    "sensor" = [ordered]@{ companyId = "ttn"; messageType = "sensor" }
+    "status_gr" = [ordered]@{ companyId = "gr"; messageType = "status" }
+    "sensor_gr" = [ordered]@{ companyId = "gr"; messageType = "sensor" }
+} | ConvertTo-Json -Compress
+
+$ovenMaps = [ordered]@{
+    "ttn" = ($ovenMap | ConvertFrom-Json)
+    "gr" = $grOvenMap
+} | ConvertTo-Json -Compress
+
 $settings = [ordered]@{
     STCR_DB_HOST = $DbHost
     STCR_DB_PORT = [string]$DbPort
@@ -187,8 +204,10 @@ $settings = [ordered]@{
     STCR_FACTORY_MQTT_URL = $MqttUrl
     STCR_FACTORY_MQTT_COMPANY_ID = $MqttCompanyId
     STCR_FACTORY_MQTT_TOPICS = "test,sensor"
-    STCR_FACTORY_MQTT_CLIENT_ID = ("stcr-" + $MqttCompanyId + "-server")
+    STCR_FACTORY_MQTT_CLIENT_ID = "stcr-multi-company-server"
     STCR_FACTORY_MQTT_OVEN_MAP_JSON = $ovenMap
+    STCR_FACTORY_MQTT_TOPIC_ROUTES_JSON = $topicRoutes
+    STCR_FACTORY_MQTT_OVEN_MAPS_JSON = $ovenMaps
 
     # The current publisher sends Bangkok wall-clock time with a trailing Z.
     STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES = "420"
@@ -196,9 +215,7 @@ $settings = [ordered]@{
     # This broker currently uses mqtt:// in the test environment.
     STCR_FACTORY_MQTT_TLS_REJECT_UNAUTHORIZED = "false"
 
-    STCR_FACTORY_MQTT_FORWARD_ENABLED = "false"
     STCR_HTTP_INGEST_ENABLED = "false"
-    STCR_INGEST_URL = "http://127.0.0.1:1880/stcr/api/telemetry"
 }
 
 Write-Host ""
@@ -230,8 +247,8 @@ $null = Import-OrCreate-StcrSecret `
 
 Write-Host ""
 Write-Host "STCR environment is ready." -ForegroundColor Green
-Write-Host ("MQTT company : " + $env:STCR_FACTORY_MQTT_COMPANY_ID)
 Write-Host ("MQTT topics  : " + $env:STCR_FACTORY_MQTT_TOPICS)
+Write-Host "MQTT routes  : TTN=test,sensor | GR=status_gr,sensor_gr"
 Write-Host ("MQTT URL     : " + $env:STCR_FACTORY_MQTT_URL)
 Write-Host ("Allowed CORS : " + $env:STCR_ALLOWED_ORIGINS)
 Write-Host ""

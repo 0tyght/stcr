@@ -14,16 +14,51 @@ if (msg._minuteFlushTick) {
   return msg;
 }
 
-const allowedTopics = new Set(["test", "sensor"]);
-const companyId = String(
-  env.get("STCR_FACTORY_MQTT_COMPANY_ID") || "",
-).trim().toLowerCase();
 const deploymentMode = String(
   env.get("STCR_DEPLOYMENT_MODE") || "development",
 ).toLowerCase();
 const sourceTopic = String(msg.topic || "").trim();
 const receivedAt =
   msg.factoryMqtt?.receivedAt || new Date().toISOString();
+
+function resolveTopicRoute() {
+  const forwarded = msg.factoryMqtt?.route;
+  if (forwarded && typeof forwarded === "object") {
+    return {
+      companyId: String(forwarded.companyId || "").trim().toLowerCase(),
+      messageType: String(forwarded.messageType || "").trim().toLowerCase(),
+    };
+  }
+
+  const rawRoutes = String(
+    env.get("STCR_FACTORY_MQTT_TOPIC_ROUTES_JSON") || "",
+  ).trim();
+  if (rawRoutes) {
+    const parsed = JSON.parse(rawRoutes);
+    const route = parsed?.[sourceTopic];
+    return {
+      companyId: String(route?.companyId || "").trim().toLowerCase(),
+      messageType: String(route?.messageType || "").trim().toLowerCase(),
+    };
+  }
+
+  const legacyCompanyId = String(
+    env.get("STCR_FACTORY_MQTT_COMPANY_ID") || "",
+  ).trim().toLowerCase();
+  return {
+    companyId: legacyCompanyId,
+    messageType: sourceTopic === "test" ? "status" : sourceTopic === "sensor" ? "sensor" : "",
+  };
+}
+
+let topicRoute;
+try {
+  topicRoute = resolveTopicRoute();
+} catch {
+  topicRoute = null;
+}
+const companyId = topicRoute?.companyId || "";
+const messageType = topicRoute?.messageType || "";
 const sourceUtcOffsetMinutes = Number(
   env.get("STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES") || 0,
 );
@@ -47,22 +82,16 @@ function reject(detail, extra = {}) {
   return inspection("rejected", detail, extra);
 }
 
-if (!["gr", "ttn"].includes(companyId)) {
+if (
+  !["gr", "ttn"].includes(companyId) ||
+  !["status", "sensor"].includes(messageType)
+) {
   node.status({
     fill: "red",
     shape: "ring",
-    text: "company mapping missing",
+    text: "topic route missing",
   });
-  return reject("STCR_FACTORY_MQTT_COMPANY_ID is missing");
-}
-
-if (!allowedTopics.has(sourceTopic)) {
-  node.status({
-    fill: "yellow",
-    shape: "ring",
-    text: "unknown MQTT topic",
-  });
-  return reject("Unknown MQTT topic");
+  return reject("MQTT topic is not mapped to a company and message type");
 }
 
 const rawText = Buffer.isBuffer(msg.payload)
@@ -116,11 +145,19 @@ if (
 
 let ovenMap = {};
 try {
-  ovenMap = JSON.parse(
-    String(env.get("STCR_FACTORY_MQTT_OVEN_MAP_JSON") || "{}"),
-  );
+  const allMapsText = String(
+    env.get("STCR_FACTORY_MQTT_OVEN_MAPS_JSON") || "",
+  ).trim();
+  if (allMapsText) {
+    const allMaps = JSON.parse(allMapsText);
+    ovenMap = allMaps?.[companyId] || {};
+  } else {
+    ovenMap = JSON.parse(
+      String(env.get("STCR_FACTORY_MQTT_OVEN_MAP_JSON") || "{}"),
+    );
+  }
 } catch {
-  return reject("STCR_FACTORY_MQTT_OVEN_MAP_JSON is invalid JSON");
+  return reject("MQTT oven mapping is invalid JSON");
 }
 
 const explicitOvenId =
@@ -164,7 +201,7 @@ const commonEnvelope = {
   source,
 };
 
-if (sourceTopic === "test") {
+if (messageType === "status") {
   const ovenState = Number(source.oven_state);
   if (![0, 1].includes(ovenState)) {
     node.status({

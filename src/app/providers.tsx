@@ -139,15 +139,22 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      void syncRealtime();
+      if (document.visibilityState === "visible") void syncRealtime();
     }, runtimeConfig.pollIntervalMs);
-    return () => window.clearInterval(timer);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void syncRealtime();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [syncRealtime]);
 
   useEffect(() => {
-    const alarmIntervalMs = Math.max(5_000, runtimeConfig.pollIntervalMs);
+    const alarmIntervalMs = Math.max(15_000, runtimeConfig.pollIntervalMs);
     const timer = window.setInterval(() => {
-      void syncAlarms();
+      if (document.visibilityState === "visible") void syncAlarms();
     }, alarmIntervalMs);
     return () => window.clearInterval(timer);
   }, [syncAlarms]);

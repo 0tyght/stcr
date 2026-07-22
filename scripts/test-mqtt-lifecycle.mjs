@@ -85,6 +85,21 @@ function envelope(startOven, timestamp) {
   };
 }
 
+function statusEnvelope(ovenState, timestamp) {
+  return {
+    companyId: "ttn",
+    ovenId: qaOvenId,
+    ovenNumber: qaOvenNumber,
+    cycleNumber: qaCycleNumber,
+    type: "test",
+    ovenState,
+    sourceTimestamp: timestamp.toISOString(),
+    receivedAt: timestamp.toISOString(),
+    topic: "test",
+    source: { qa: true },
+  };
+}
+
 async function invoke(message) {
   await runWriter(message, env, runtimeGlobal, node, mysql, crypto, Buffer);
 }
@@ -132,6 +147,18 @@ try {
     },
   });
 
+  await invoke({ _mqttEnvelope: statusEnvelope(1, minuteAt) });
+
+  const [openedRows] = await admin.execute(
+    `SELECT state, fired_at AS firedAt, report_started_at AS reportStartedAt
+     FROM oven_cycles
+     WHERE company_id='ttn' AND oven_id=? AND cycle_number=?`,
+    [qaOvenId, qaCycleNumber],
+  );
+  if (openedRows[0]?.state !== "recording" || !openedRows[0]?.reportStartedAt) {
+    throw new Error("Open status did not start recording immediately");
+  }
+
   await invoke({ _mqttEnvelope: envelope(1, minuteAt) });
   await invoke({
     _minuteFlushTick: true,
@@ -147,17 +174,11 @@ try {
     [qaOvenId, qaCycleNumber],
   );
   if (recordingRows[0]?.state !== "recording" || !recordingRows[0]?.reportStartedAt) {
-    throw new Error("Cycle did not transition from ignition to recording");
+    throw new Error("Sensor data did not remain attached to the recording cycle");
   }
 
   const stopMinute = new Date(minuteAt.getTime() + 60_000);
-  await invoke({ _mqttEnvelope: envelope(0, stopMinute) });
-  await invoke({
-    _minuteFlushTick: true,
-    factoryMqtt: {
-      receivedAt: new Date(stopMinute.getTime() + 61_000).toISOString(),
-    },
-  });
+  await invoke({ _mqttEnvelope: statusEnvelope(0, stopMinute) });
 
   const [completedRows] = await admin.execute(
     `SELECT state, stopped_at AS stoppedAt
@@ -166,7 +187,7 @@ try {
     [qaOvenId, qaCycleNumber],
   );
   if (completedRows[0]?.state !== "completed" || !completedRows[0]?.stoppedAt) {
-    throw new Error("Cycle did not transition from recording to completed");
+    throw new Error("Closed status did not complete the recording cycle immediately");
   }
 
   console.log("MQTT lifecycle integration test passed.");

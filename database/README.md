@@ -30,4 +30,6 @@ Use a dedicated database account and environment variables outside source contro
 
 The local XAMPP setup uses the limited `stcr_app@127.0.0.1` account. Production must set `STCR_DB_HOST`, `STCR_DB_PORT`, `STCR_DB_USER`, `STCR_DB_PASSWORD`, and `STCR_DB_NAME` before starting Node-RED.
 
+The runtime account needs only `SELECT`, `INSERT`, `UPDATE`, and `DELETE` on `stcr.*`. Run schema migrations with a separate administrator account; do not grant `CREATE`, `ALTER`, `DROP`, or `GRANT OPTION` to the Node-RED runtime user.
+
 Apply `database/migrations/005_identity_api_keys_and_gr_report.sql` to an existing installation. It assigns `F01-05-05 R07` and `22/06/67` only to `company_id='gr'`; TTN keeps its own report metadata.

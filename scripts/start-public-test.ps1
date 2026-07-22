@@ -57,10 +57,12 @@ function Import-RequiredEnvironment {
     STCR_TRUST_PROXY = 'true'
     STCR_DEPLOYMENT_MODE = 'test'
     STCR_FACTORY_MQTT_ENABLED = 'true'
-    STCR_FACTORY_MQTT_FORWARD_ENABLED = 'false'
     STCR_FACTORY_MQTT_TOPICS = 'test,sensor'
     STCR_FACTORY_MQTT_COMPANY_ID = 'ttn'
+    STCR_FACTORY_MQTT_CLIENT_ID = 'stcr-multi-company-server'
     STCR_FACTORY_MQTT_OVEN_MAP_JSON = '{"1":"oven-1","2":"oven-2","3":"oven-3","4":"oven-4","5":"oven-5","6":"oven-6","7":"oven-7","8":"oven-8","9":"oven-9"}'
+    STCR_FACTORY_MQTT_TOPIC_ROUTES_JSON = '{"test":{"companyId":"ttn","messageType":"status"},"sensor":{"companyId":"ttn","messageType":"sensor"},"status_gr":{"companyId":"gr","messageType":"status"},"sensor_gr":{"companyId":"gr","messageType":"sensor"}}'
+    STCR_FACTORY_MQTT_OVEN_MAPS_JSON = '{"ttn":{"1":"oven-1","2":"oven-2","3":"oven-3","4":"oven-4","5":"oven-5","6":"oven-6","7":"oven-7","8":"oven-8","9":"oven-9"},"gr":{"11":"oven-11","12":"oven-12","13":"oven-13","14":"oven-14","15":"oven-15","16":"oven-16","17":"oven-17","18":"oven-18","19":"oven-19","20":"oven-20","21":"oven-21","22":"oven-22","23":"oven-23","24":"oven-24","25":"oven-25","26":"oven-26"}}'
     # The factory currently sends Bangkok wall-clock time with a trailing Z.
     # Remove this correction after the publisher sends a real UTC/offset timestamp.
     STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES = '420'
@@ -68,14 +70,23 @@ function Import-RequiredEnvironment {
     STCR_FACTORY_MQTT_STORE_RAW_MESSAGES = 'false'
     STCR_OFFLINE_THRESHOLD_SECONDS = '180'
     STCR_HTTP_INGEST_ENABLED = 'false'
-    STCR_INGEST_URL = 'http://127.0.0.1:1880/stcr/api/telemetry'
   }
 
+  $forceTestDefaults = @(
+    'STCR_TRUST_PROXY',
+    'STCR_DEPLOYMENT_MODE',
+    'STCR_HTTP_INGEST_ENABLED',
+    'STCR_FACTORY_MQTT_CLIENT_ID',
+    'STCR_FACTORY_MQTT_TOPIC_ROUTES_JSON',
+    'STCR_FACTORY_MQTT_OVEN_MAPS_JSON'
+  )
+
   foreach ($key in $defaults.Keys) {
-    $value = [Environment]::GetEnvironmentVariable(
-      $key,
-      'User'
-    )
+    $value = if ($forceTestDefaults -contains $key) {
+      [string]$defaults[$key]
+    } else {
+      [Environment]::GetEnvironmentVariable($key, 'User')
+    }
 
     if ([string]::IsNullOrWhiteSpace($value)) {
       $value = [string]$defaults[$key]

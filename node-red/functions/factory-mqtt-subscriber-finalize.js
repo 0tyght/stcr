@@ -18,3 +18,9 @@ if (mqttPool) {
 }
 
 global.set("stcrMinuteFlushRunning", false);
+const mqttHealth = global.get("stcrMqttHealth") || { topics: {} };
+global.set("stcrMqttHealth", {
+  ...mqttHealth,
+  connected: false,
+  disconnectedAt: new Date().toISOString(),
+});

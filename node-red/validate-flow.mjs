@@ -111,6 +111,7 @@ assert.match(
   subscriberSource,
   /deploymentMode === "production"/,
 );
+assert.match(subscriberSource, /STCR_FACTORY_MQTT_TOPIC_ROUTES_JSON/);
 
 const adapterNode = {
   status: () => undefined,
@@ -150,16 +151,17 @@ const sample = {
 
 const values = {
   STCR_FACTORY_MQTT_COMPANY_ID: "ttn",
-  STCR_FACTORY_MQTT_FORWARD_ENABLED: "false",
   STCR_FACTORY_MQTT_OVEN_MAP_JSON:
     '{"1":"oven-1","2":"oven-2","3":"oven-3","4":"oven-4","5":"oven-5","6":"oven-6","7":"oven-7","8":"oven-8","9":"oven-9"}',
+  STCR_FACTORY_MQTT_TOPIC_ROUTES_JSON:
+    '{"test":{"companyId":"ttn","messageType":"status"},"sensor":{"companyId":"ttn","messageType":"sensor"},"status_gr":{"companyId":"gr","messageType":"status"},"sensor_gr":{"companyId":"gr","messageType":"sensor"}}',
+  STCR_FACTORY_MQTT_OVEN_MAPS_JSON:
+    '{"ttn":{"1":"oven-1","2":"oven-2","3":"oven-3","4":"oven-4","5":"oven-5","6":"oven-6","7":"oven-7","8":"oven-8","9":"oven-9"},"gr":{"11":"oven-11","12":"oven-12","13":"oven-13","14":"oven-14","15":"oven-15","16":"oven-16","17":"oven-17","18":"oven-18","19":"oven-19","20":"oven-20","21":"oven-21","22":"oven-22","23":"oven-23","24":"oven-24","25":"oven-25","26":"oven-26"}}',
   STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES:
     "0",
   STCR_DEPLOYMENT_MODE: "production",
   STCR_TTN_INGEST_API_KEY:
     `stcr_ttn_${"a".repeat(32)}`,
-  STCR_INGEST_URL:
-    "http://127.0.0.1:1880/stcr/api/telemetry",
 };
 
 const env = {
@@ -212,6 +214,40 @@ const env = {
       ["blowerTemp", 201],
     ],
   );
+}
+
+// GR uses the same payload contract on separate topics.
+{
+  const msg = {
+    ...structuredClone(sample),
+    topic: "sensor_gr",
+    payload: JSON.stringify({
+      ...JSON.parse(sample.payload),
+      oven: 11,
+    }),
+  };
+  const inspected = runAdapter(msg, env, adapterNode, Buffer);
+  assert.equal(inspected.payload.status, "validated");
+  assert.equal(inspected._mqttEnvelope.companyId, "gr");
+  assert.equal(inspected._mqttEnvelope.ovenId, "oven-11");
+  assert.equal(inspected._mqttEnvelope.type, "sensor");
+}
+
+{
+  const msg = {
+    topic: "status_gr",
+    payload: JSON.stringify({
+      oven: 11,
+      cycle: 1,
+      oven_state: 1,
+      time_stamp: sampleTimestamp,
+    }),
+    factoryMqtt: sample.factoryMqtt,
+  };
+  const inspected = runAdapter(msg, env, adapterNode, Buffer);
+  assert.equal(inspected.payload.status, "validated");
+  assert.equal(inspected._mqttEnvelope.companyId, "gr");
+  assert.equal(inspected._mqttEnvelope.type, "test");
 }
 
 // Incomplete sensor:
@@ -338,11 +374,10 @@ const env = {
 
 // Unmapped oven in production.
 {
-  const savedMap =
-    values.STCR_FACTORY_MQTT_OVEN_MAP_JSON;
+  const savedMaps = values.STCR_FACTORY_MQTT_OVEN_MAPS_JSON;
 
-  values.STCR_FACTORY_MQTT_OVEN_MAP_JSON =
-    '{"1":"oven-1"}';
+  values.STCR_FACTORY_MQTT_OVEN_MAPS_JSON =
+    '{"ttn":{"1":"oven-1"},"gr":{"11":"oven-11"}}';
 
   const msg = structuredClone(sample);
   const unmapped = runAdapter(
@@ -361,8 +396,7 @@ const env = {
     undefined,
   );
 
-  values.STCR_FACTORY_MQTT_OVEN_MAP_JSON =
-    savedMap;
+  values.STCR_FACTORY_MQTT_OVEN_MAPS_JSON = savedMaps;
 }
 
 assert.match(
@@ -427,6 +461,8 @@ assert.match(
   routerSource,
   /companyId/,
 );
+assert.match(routerSource, /HTTP ingestion is disabled/);
+assert.match(routerSource, /sessionAccountRecheckMs/);
 
 
 assert.match(dbWriterSource, /sensor_minute_aggregates/);
@@ -434,11 +470,15 @@ assert.match(dbWriterSource, /chamber_temp_avg/);
 assert.match(dbWriterSource, /heartbeatSeconds/);
 assert.match(dbWriterSource, /STCR_FACTORY_MQTT_STORE_RAW_MESSAGES/);
 assert.match(dbWriterSource, /resolveCycleLifecycle/);
-assert.match(dbWriterSource, /an open oven starts report recording immediately/);
-assert.match(dbWriterSource, /ready_hold_seconds/);
+assert.match(dbWriterSource, /async function applyCycleLifecycle/);
+assert.match(dbWriterSource, /VALUES \(\?, \?, \?, 'recording'/);
+assert.match(dbWriterSource, /state = IF\(state = 'ignition', 'recording', state\)/);
 assert.match(dbWriterSource, /report_started_at/);
+assert.match(dbWriterSource, /ready_hold_seconds/);
 assert.match(dbWriterSource, /state = 'completed'/);
 assert.match(subscriberSource, /factoryMqttMinuteFlushTimer/);
+assert.match(subscriberSource, /stcrMqttHealth/);
+assert.match(routerSource, /mqttHealth/);
 assert.match(schemaSource, /CREATE TABLE IF NOT EXISTS sensor_minute_aggregates\b/);
 assert.match(schemaSource, /\('oven-11', 'gr', 11/);
 assert.match(schemaSource, /\('oven-26', 'gr', 26/);

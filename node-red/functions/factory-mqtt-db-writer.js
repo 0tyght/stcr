@@ -316,32 +316,55 @@ async function persistStatus(value, receivedAtDate) {
   const key = persistStateKey(value);
   const state = states[key];
 
-  if (state?.status === status && !isHeartbeatDue(state, receivedAtDate)) {
+  if (
+    state?.status === status &&
+    state?.cycleNumber === value.cycleNumber &&
+    !isHeartbeatDue(state, receivedAtDate)
+  ) {
     return;
   }
 
   const pool = getPool();
-  const [result] = await pool.execute(
-    `UPDATE ovens
-     SET status = ?, last_seen_at = ?
-     WHERE company_id = ?
-       AND id = ?
-       AND enabled = TRUE`,
-    [
-      status,
-      receivedAtDate,
-      value.companyId,
-      value.ovenId,
-    ],
-  );
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [ovenRows] = await connection.execute(
+      `SELECT chamber_lower AS chamberLower
+       FROM ovens
+       WHERE company_id = ? AND id = ? AND enabled = TRUE
+       LIMIT 1 FOR UPDATE`,
+      [value.companyId, value.ovenId],
+    );
+    if (!ovenRows[0]) {
+      await connection.rollback();
+      node.warn(`MQTT status: oven ${value.companyId}/${value.ovenId} not found`);
+      return;
+    }
 
-  if (!result.affectedRows) {
-    node.warn(`MQTT status: oven ${value.companyId}/${value.ovenId} not found`);
-    return;
+    await connection.execute(
+      `UPDATE ovens SET status = ?, last_seen_at = ?
+       WHERE company_id = ? AND id = ?`,
+      [status, receivedAtDate, value.companyId, value.ovenId],
+    );
+    await applyCycleLifecycle(connection, {
+      companyId: value.companyId,
+      ovenId: value.ovenId,
+      cycleNumber: value.cycleNumber,
+      isOpen: value.ovenState === 1,
+      eventAt: validDate(value.sourceTimestamp, receivedAtDate),
+      readyTemperature: Number(ovenRows[0].chamberLower),
+    });
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
   }
 
   states[key] = {
     status,
+    cycleNumber: value.cycleNumber,
     lastSeenAt: receivedAtDate.toISOString(),
   };
   global.set(PERSIST_STATE_KEY, states);
@@ -354,6 +377,49 @@ async function persistStatus(value, receivedAtDate) {
       `oven_state=${value.ovenState}`,
     );
   }
+}
+
+async function applyCycleLifecycle(
+  connection,
+  { companyId, ovenId, cycleNumber, isOpen, eventAt, readyTemperature },
+) {
+  if (!isOpen) {
+    await connection.execute(
+      `UPDATE oven_cycles
+       SET state = 'completed', stopped_at = COALESCE(stopped_at, ?)
+       WHERE company_id = ? AND oven_id = ?
+         AND state IN ('ignition', 'recording')`,
+      [eventAt, companyId, ovenId],
+    );
+    return;
+  }
+
+  if (!Number.isSafeInteger(cycleNumber) || cycleNumber < 1) return;
+
+  await connection.execute(
+    `UPDATE oven_cycles
+     SET state = 'completed', stopped_at = COALESCE(stopped_at, ?)
+     WHERE company_id = ? AND oven_id = ? AND cycle_number <> ?
+       AND state IN ('ignition', 'recording')`,
+    [eventAt, companyId, ovenId, cycleNumber],
+  );
+  await connection.execute(
+    `INSERT INTO oven_cycles (
+       company_id, oven_id, cycle_number, state, fired_at,
+       report_started_at, ready_temperature, ready_hold_seconds
+     ) VALUES (?, ?, ?, 'recording', ?, ?, ?, 0)
+     ON DUPLICATE KEY UPDATE
+       report_started_at = IF(state = 'ignition', COALESCE(report_started_at, fired_at), report_started_at),
+       state = IF(state = 'ignition', 'recording', state)`,
+    [
+      companyId,
+      ovenId,
+      cycleNumber,
+      eventAt,
+      eventAt,
+      readyTemperature,
+    ],
+  );
 }
 
 async function persistHeartbeat(value, receivedAtDate) {
@@ -409,75 +475,14 @@ async function resolveCycleLifecycle(
     return null;
   }
 
-  if (bucket.startOven === 1) {
-    // A new cycle number is authoritative. Close an older active cycle first.
-    await connection.execute(
-      `UPDATE oven_cycles
-       SET state = 'completed',
-           stopped_at = COALESCE(stopped_at, ?)
-       WHERE company_id = ?
-         AND oven_id = ?
-         AND cycle_number <> ?
-         AND state IN ('ignition', 'recording')`,
-      [
-        firstSourceAt,
-        bucket.companyId,
-        bucket.ovenId,
-        bucket.cycleNumber,
-      ],
-    );
-
-    await connection.execute(
-      `INSERT INTO oven_cycles (
-         company_id,
-         oven_id,
-         cycle_number,
-         state,
-         fired_at,
-         report_started_at,
-         ready_temperature,
-         ready_hold_seconds
-       ) VALUES (?, ?, ?, 'recording', ?, ?, ?, 0)
-       ON DUPLICATE KEY UPDATE
-         cycle_number = VALUES(cycle_number)`,
-      [
-        bucket.companyId,
-        bucket.ovenId,
-        bucket.cycleNumber,
-        firstSourceAt,
-        firstSourceAt,
-        Number(ovenRow.chamberLower),
-      ],
-    );
-
-    // Business rule: an open oven starts report recording immediately.
-    await connection.execute(
-      `UPDATE oven_cycles
-       SET state = 'recording',
-           report_started_at = COALESCE(report_started_at, fired_at)
-       WHERE company_id = ?
-         AND oven_id = ?
-         AND cycle_number = ?
-         AND state = 'ignition'`,
-      [bucket.companyId, bucket.ovenId, bucket.cycleNumber],
-    );
-  } else if (bucket.startOven === 0) {
-    await connection.execute(
-      `UPDATE oven_cycles
-       SET state = 'completed',
-           stopped_at = COALESCE(stopped_at, ?)
-       WHERE company_id = ?
-         AND oven_id = ?
-         AND cycle_number = ?
-         AND state IN ('ignition', 'recording')`,
-      [
-        firstSourceAt,
-        bucket.companyId,
-        bucket.ovenId,
-        bucket.cycleNumber,
-      ],
-    );
-  }
+  await applyCycleLifecycle(connection, {
+    companyId: bucket.companyId,
+    ovenId: bucket.ovenId,
+    cycleNumber: bucket.cycleNumber,
+    isOpen: bucket.startOven === 1,
+    eventAt: firstSourceAt,
+    readyTemperature: Number(ovenRow.chamberLower),
+  });
 
   const [cycleRows] = await connection.execute(
     `SELECT id, state, fired_at AS firedAt,

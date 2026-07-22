@@ -1,4 +1,3 @@
-import JSZip from "jszip";
 import { Download, FileArchive, FileDown, Lock, RefreshCw, Unlock } from "lucide-react";
 import {
   useCallback,
@@ -16,10 +15,6 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { PageHeader } from "../components/ui/PageHeader";
 import { getCurrentCompany, type CompanyConfig } from "../config/companies";
 import { apiClient } from "../services/apiClient";
-import {
-  createLandscapePdfBlobFromSvg,
-  downloadBlob,
-} from "../services/pdfExport";
 import type { Oven, ReportCycleMeta, SensorKey, TimeSeriesPoint } from "../types";
 import { clampCycleStart, getHistoricalCycleRange, REPORT_CYCLE_MS } from "../utils/reportCycle";
 import { allSensorKeys } from "../utils/sensors";
@@ -365,6 +360,23 @@ async function saveBlob(
   return true;
 }
 
+async function createReportPdfBlob(svgElement: SVGSVGElement): Promise<Blob> {
+  const { createLandscapePdfBlobFromSvg } = await import("../services/pdfExport");
+  return createLandscapePdfBlobFromSvg(svgElement);
+}
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 function createCsvBlob(points: TimeSeriesPoint[], sensors: SensorKey[]): Blob {
   const header = ["timestamp", ...sensors];
   const rows = points.map((point) => [
@@ -521,7 +533,7 @@ export function ReportPage() {
 
     if (mode === "current" && !oven.reportStartedAt) {
       setPoints([]);
-      setReportError("รอบปัจจุบันยังอยู่ในช่วงจุดไฟและยังไม่เริ่มบันทึกรายงาน");
+      setReportError("ยังไม่ได้รับสถานะเปิดเตาสำหรับรอบปัจจุบัน");
       return;
     }
 
@@ -603,7 +615,7 @@ export function ReportPage() {
 
       const filename = createPdfFilename(company, safeCycle, range.start);
 
-      const blob = await createLandscapePdfBlobFromSvg(reportRef.current);
+      const blob = await createReportPdfBlob(reportRef.current);
 
       return { blob, filename };
     },
@@ -650,7 +662,7 @@ export function ReportPage() {
 
         if (!reportRef.current) return;
 
-        const blob = await createLandscapePdfBlobFromSvg(reportRef.current);
+        const blob = await createReportPdfBlob(reportRef.current);
         await saveBlob(blob, filename, fileHandle);
       } finally {
         setDownloadMessage("");
@@ -681,6 +693,7 @@ export function ReportPage() {
     setDownloadingPdf(true);
 
     try {
+      const { default: JSZip } = await import("jszip");
       const zip = new JSZip();
       const folder = zip.folder(`${company.shortName}-เตา-${oven.number}`) ?? zip;
 
@@ -773,8 +786,8 @@ export function ReportPage() {
           onCycleChange={setSelectedCycle}
         />
         <EmptyState
-          title="ยังไม่เริ่มบันทึกรอบรายงาน"
-          description="เตากำลังอยู่ในช่วงจุดไฟหรืออุ่นระบบ กราฟเรียลไทม์ยังดูได้ตามปกติ และรายงานจะพร้อมเมื่ออุณหภูมิห้องอบถึงช่วงที่กำหนด"
+          title="ยังไม่พบรอบที่กำลังบันทึก"
+          description="ระบบจะเริ่มบันทึกรายงานทันทีเมื่อได้รับสถานะเปิดเตาจาก MQTT"
         />
       </main>
     );

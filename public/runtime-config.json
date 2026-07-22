@@ -1,7 +1,7 @@
 {
     "dataSource":  "node-red",
-    "apiBaseUrl":  "https://consent-calculate-aurora-complimentary.trycloudflare.com/stcr/api",
+    "apiBaseUrl":  "https://theatre-late-instructor-habitat.trycloudflare.com/stcr/api",
     "pollIntervalMs":  1000,
     "requestTimeoutMs":  15000,
-    "updatedAt":  "2026-07-22T13:22:15.5867796Z"
+    "updatedAt":  "2026-07-22T14:02:06.4083110Z"
 }

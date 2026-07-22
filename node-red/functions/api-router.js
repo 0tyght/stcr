@@ -18,6 +18,9 @@ const configuredOfflineSeconds = Number(env.get("STCR_OFFLINE_THRESHOLD_SECONDS"
 const offlineThresholdMs = Number.isFinite(configuredOfflineSeconds) && configuredOfflineSeconds >= 30
   ? configuredOfflineSeconds * 1000
   : 180 * 1000;
+const sessionAccountRecheckMs = 60 * 1000;
+const httpIngestEnabled =
+  String(env.get("STCR_HTTP_INGEST_ENABLED") || "false").toLowerCase() === "true";
 
 function responseHeaders(contentType = "application/json; charset=utf-8") {
   return {
@@ -213,7 +216,14 @@ async function createSession(user, ttlMinutes) {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAtMs = Date.now() + ttlMinutes * 60 * 1000;
   const expiresAt = new Date(expiresAtMs).toISOString();
-  const session = { userId: user.id, username: user.username, companyId: user.companyId, roles: user.roles, expiresAtMs };
+  const session = {
+    userId: user.id,
+    username: user.username,
+    companyId: user.companyId,
+    roles: user.roles,
+    expiresAtMs,
+    accountCheckedAtMs: Date.now(),
+  };
 
   // เขียนลง DB ก่อน แล้วค่อย cache ใน memory
   const pool = getDatabasePool();
@@ -246,6 +256,13 @@ getDatabasePool().execute(`DELETE FROM sessions WHERE expires_at <= UTC_TIMESTAM
 
 async function validateSessionAccount(session) {
   if (!session?.userId) return false;
+  const now = Date.now();
+  if (
+    Number.isFinite(session.accountCheckedAtMs) &&
+    now - session.accountCheckedAtMs < sessionAccountRecheckMs
+  ) {
+    return true;
+  }
   const pool = getDatabasePool();
   const [rows] = await pool.execute(
     `SELECT id FROM users
@@ -254,7 +271,9 @@ async function validateSessionAccount(session) {
      LIMIT 1`,
     [session.userId, session.companyId, session.username],
   );
-  return Boolean(rows[0]);
+  const active = Boolean(rows[0]);
+  if (active) session.accountCheckedAtMs = now;
+  return active;
 }
 
 async function addAudit(state, session, action, target, detail) {
@@ -1041,7 +1060,19 @@ if (method === "POST" && path === "/stcr/api/auth/login") {
 if (method === "GET" && path === "/stcr/api/health") {
   try {
     const rootState = await ensureRuntimeState();
-    return jsonResponse({ ok: Boolean(rootState?.companies), timestamp: new Date().toISOString() });
+    const mqttHealth = global.get("stcrMqttHealth") || null;
+    return jsonResponse({
+      ok: Boolean(rootState?.companies),
+      timestamp: new Date().toISOString(),
+      mqtt: mqttHealth
+        ? {
+            connected: Boolean(mqttHealth.connected),
+            lastMessageAt: mqttHealth.lastMessageAt || null,
+            totalMessages: Number(mqttHealth.totalMessages || 0),
+            topics: mqttHealth.topics || {},
+          }
+        : null,
+    });
   } catch (error) {
     node.warn(`Runtime database initialization failed: ${error.message}`);
     return jsonResponse({ ok: false, timestamp: new Date().toISOString() }, 503);
@@ -1049,6 +1080,9 @@ if (method === "GET" && path === "/stcr/api/health") {
 }
 
 if (method === "POST" && path === "/stcr/api/factory-mqtt/raw") {
+  if (!httpIngestEnabled) {
+    return errorResponse("HTTP ingestion is disabled", 404, "INGEST_DISABLED");
+  }
   const envelope = normalizeFactoryMqttRaw(requestBody());
   if (!envelope) return errorResponse("รูปแบบข้อมูล MQTT ต้นฉบับไม่ถูกต้อง", 400, "INVALID_FACTORY_MQTT");
   const apiKey = String(requestHeaders["x-api-key"] || "").trim();
@@ -1092,6 +1126,9 @@ if (method === "POST" && path === "/stcr/api/factory-mqtt/raw") {
 }
 
 if (method === "POST" && path === "/stcr/api/telemetry") {
+  if (!httpIngestEnabled) {
+    return errorResponse("HTTP ingestion is disabled", 404, "INGEST_DISABLED");
+  }
   const batch = normalizeTelemetryBatch(requestBody());
   if (!batch) return errorResponse("รูปแบบข้อมูล telemetry ไม่ถูกต้อง", 400, "INVALID_TELEMETRY");
   const apiKey = String(requestHeaders["x-api-key"] || "").trim();

@@ -25,15 +25,26 @@ const thaiTime = new Intl.DateTimeFormat("th-TH", {
 });
 
 export function formatDate(value: string | Date): string {
-  return thaiDate.format(new Date(value));
+  const date = displayDate(value);
+  return date ? thaiDate.format(date) : "-";
 }
 
 export function formatDateTime(value: string | Date): string {
-  return thaiDateTime.format(new Date(value));
+  const date = displayDate(value);
+  return date ? thaiDateTime.format(date) : "-";
 }
 
 export function formatTime(value: string | Date): string {
-  return thaiTime.format(new Date(value));
+  const date = displayDate(value);
+  return date ? thaiTime.format(date) : "-";
+}
+
+function displayDate(value: string | Date): Date | null {
+  const date = value instanceof Date ? value : new Date(value);
+  const timestamp = date.getTime();
+  return Number.isFinite(timestamp) && timestamp >= Date.UTC(2000, 0, 1)
+    ? date
+    : null;
 }
 
 export function formatNumber(value: number, digits = 1): string {
