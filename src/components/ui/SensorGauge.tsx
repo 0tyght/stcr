@@ -46,10 +46,6 @@ export function SensorGauge({
     (INNER_STROKE_WIDTH / 2) / (Math.PI * INNER_RADIUS);
   const progressArcEndRatio =
     ratio > 0 ? Math.max(0, ratio - progressCapRatio) : 0;
-  const progressEndPoint = pointOnGauge(
-    INNER_RADIUS,
-    progressArcEndRatio,
-  );
   const outerStartPoint = pointOnGauge(OUTER_RADIUS, 0);
   const outerEndPoint = pointOnGauge(OUTER_RADIUS, 1);
 
@@ -150,20 +146,18 @@ export function SensorGauge({
               />
             );
           })}
-
-
           {hasLimit ? (
             <>
               <circle
                 cx={outerStartPoint.x}
                 cy={outerStartPoint.y}
-                r={OUTER_STROKE_WIDTH / 2}
+                r={OUTER_STROKE_WIDTH / 2 + 0.35}
                 fill={outerSegments[0]?.color}
               />
               <circle
                 cx={outerEndPoint.x}
                 cy={outerEndPoint.y}
-                r={OUTER_STROKE_WIDTH / 2}
+                r={OUTER_STROKE_WIDTH / 2 + 0.35}
                 fill={outerSegments[outerSegments.length - 1]?.color}
               />
             </>
@@ -176,25 +170,17 @@ export function SensorGauge({
             strokeLinecap="round"
           />
           {ratio > 0 ? (
-            <>
-              <path
-                d={describeGaugeArc(
-                  INNER_RADIUS,
-                  0,
-                  progressArcEndRatio,
-                )}
-                fill="none"
-                stroke={progressColor}
-                strokeWidth={INNER_STROKE_WIDTH}
-                strokeLinecap="butt"
-              />
-              <circle
-                cx={progressEndPoint.x}
-                cy={progressEndPoint.y}
-                r={INNER_STROKE_WIDTH / 2}
-                fill={progressColor}
-              />
-            </>
+            <path
+              d={describeGaugeArc(
+                INNER_RADIUS,
+                0,
+                progressArcEndRatio,
+              )}
+              fill="none"
+              stroke={progressColor}
+              strokeWidth={INNER_STROKE_WIDTH}
+              strokeLinecap="round"
+            />
           ) : null}
 
           <text
