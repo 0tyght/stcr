@@ -63,7 +63,7 @@ function responseHeaders(contentType = "application/json; charset=utf-8") {
     "Content-Type": contentType,
     ...(allowedOrigin ? { "Access-Control-Allow-Origin": allowedOrigin } : {}),
     "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
-    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "Cache-Control": "no-store",
     "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
@@ -801,6 +801,94 @@ async function readReportHistory(companyId, ovenId, historyQuery) {
   }));
 }
 
+async function readOvenDeleteCheck(
+  companyId,
+  ovenId,
+  executor = getDatabasePool(),
+) {
+  const [ovenRows] = await executor.query(
+    `SELECT id, oven_number, name, status
+       FROM ovens
+      WHERE company_id = ?
+        AND id = ?
+      LIMIT 1`,
+    [companyId, ovenId],
+  );
+
+  if (!ovenRows.length) {
+    return null;
+  }
+
+  const checks = [
+    {
+      key: "cycles",
+      label: "รอบอบ",
+      sql: "SELECT COUNT(*) AS count FROM oven_cycles WHERE company_id = ? AND oven_id = ?",
+    },
+    {
+      key: "minuteAggregates",
+      label: "ข้อมูลรายนาที",
+      sql: "SELECT COUNT(*) AS count FROM sensor_minute_aggregates WHERE company_id = ? AND oven_id = ?",
+    },
+    {
+      key: "sensorReadings",
+      label: "ข้อมูลเซนเซอร์",
+      sql: "SELECT COUNT(*) AS count FROM sensor_readings WHERE company_id = ? AND oven_id = ?",
+    },
+    {
+      key: "telemetry",
+      label: "ข้อมูล Telemetry",
+      sql: "SELECT COUNT(*) AS count FROM telemetry_events WHERE company_id = ? AND oven_id = ?",
+    },
+    {
+      key: "mqttMessages",
+      label: "ข้อความ MQTT",
+      sql: "SELECT COUNT(*) AS count FROM factory_mqtt_messages WHERE company_id = ? AND oven_id = ?",
+    },
+    {
+      key: "alarms",
+      label: "Alarm",
+      sql: "SELECT COUNT(*) AS count FROM alarms WHERE company_id = ? AND oven_id = ?",
+    },
+    {
+      key: "apiKeys",
+      label: "API Key",
+      sql: "SELECT COUNT(*) AS count FROM api_keys WHERE company_id = ? AND allowed_oven_id = ?",
+    },
+  ];
+
+  const blockers = [];
+
+  if (ovenRows[0].status === "open") {
+    blockers.push({
+      key: "open",
+      label: "เตากำลังเปิด",
+      count: 1,
+    });
+  }
+
+  for (const check of checks) {
+    const [rows] = await executor.query(check.sql, [companyId, ovenId]);
+    const count = Number(rows[0]?.count || 0);
+
+    if (count > 0) {
+      blockers.push({
+        key: check.key,
+        label: check.label,
+        count,
+      });
+    }
+  }
+
+  return {
+    ovenId,
+    ovenNumber: Number(ovenRows[0].oven_number),
+    ovenName: String(ovenRows[0].name),
+    canDelete: blockers.length === 0,
+    blockers,
+  };
+}
+
 async function readAuditEvents(companyId) {
   const pool = getDatabasePool();
   const [rows] = await pool.execute(
@@ -1330,7 +1418,227 @@ try {
   return errorResponse("ระบบยืนยันสิทธิ์ไม่พร้อมใช้งาน", 503, "AUTH_DATABASE_UNAVAILABLE");
 }
 
-if (method === "POST" && path === "/stcr/api/auth/logout") {
+const ovenDeleteCheckMatch = path.match(
+    /^\/ovens\/([^/]+)\/delete-check$/,
+  );
+
+  if (method === "GET" && ovenDeleteCheckMatch) {
+    if (!hasAnyRole(session, ["admin"])) {
+      return errorResponse(
+        "ไม่มีสิทธิ์ตรวจสอบการลบเตา",
+        403,
+        "FORBIDDEN",
+      );
+    }
+
+    const ovenId = decodeURIComponent(ovenDeleteCheckMatch[1]);
+    const result = await readOvenDeleteCheck(
+      session.companyId,
+      ovenId,
+    );
+
+    if (!result) {
+      return errorResponse("ไม่พบเตาที่ต้องการ", 404, "OVEN_NOT_FOUND");
+    }
+
+    return jsonResponse(result);
+  }
+
+  const ovenDeleteMatch = path.match(
+    /^\/ovens\/([^/]+)\/delete$/,
+  );
+
+  if (method === "POST" && ovenDeleteMatch) {
+    if (!hasAnyRole(session, ["admin"])) {
+      return errorResponse("ไม่มีสิทธิ์ลบเตา", 403, "FORBIDDEN");
+    }
+
+    const ovenId = decodeURIComponent(ovenDeleteMatch[1]);
+    const pool = getDatabasePool();
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const [lockedRows] = await connection.query(
+        `SELECT id
+           FROM ovens
+          WHERE company_id = ?
+            AND id = ?
+          FOR UPDATE`,
+        [session.companyId, ovenId],
+      );
+
+      if (!lockedRows.length) {
+        await connection.rollback();
+        return errorResponse(
+          "ไม่พบเตาที่ต้องการ",
+          404,
+          "OVEN_NOT_FOUND",
+        );
+      }
+
+      const check = await readOvenDeleteCheck(
+        session.companyId,
+        ovenId,
+        connection,
+      );
+
+      if (!check?.canDelete) {
+        await connection.rollback();
+
+        const detail = (check?.blockers || [])
+          .map((item) => `${item.label} ${item.count} รายการ`)
+          .join(", ");
+
+        return errorResponse(
+          `ไม่สามารถลบเตาได้ เนื่องจากพบ ${detail}`,
+          409,
+          "OVEN_HAS_RELATED_DATA",
+        );
+      }
+
+      await connection.query(
+        "DELETE FROM ovens WHERE company_id = ? AND id = ?",
+        [session.companyId, ovenId],
+      );
+      await connection.commit();
+    } catch (error) {
+      try {
+        await connection.rollback();
+      } catch {
+        // Keep the original error.
+      }
+
+      throw error;
+    } finally {
+      connection.release();
+    }
+
+    const rootState = await loadRuntimeStateFromDatabase();
+    const companyState = rootState.companies[session.companyId];
+
+    await addAudit(
+      companyState,
+      session,
+      "ลบเตา",
+      ovenId,
+      "ลบเตาที่ไม่มีข้อมูลอ้างอิง",
+    );
+
+    return jsonResponse({
+      deleted: true,
+      ovenId,
+    });
+  }
+
+  if (method === "POST" && path === "/ovens") {
+    if (!hasAnyRole(session, ["admin"])) {
+      return errorResponse("ไม่มีสิทธิ์เพิ่มเตา", 403, "FORBIDDEN");
+    }
+
+    const body = requestBody();
+    const ovenNumber = Number(body.number);
+    const name = safeText(body.name, 160);
+    const zone = safeText(body.zone, 120);
+    const line = safeText(body.line, 120);
+
+    if (!Number.isInteger(ovenNumber) || ovenNumber <= 0) {
+      return errorResponse(
+        "หมายเลขเตาต้องเป็นจำนวนเต็มมากกว่า 0",
+        400,
+        "INVALID_OVEN_NUMBER",
+      );
+    }
+
+    if (!name || !zone || !line) {
+      return errorResponse(
+        "กรุณากรอกชื่อเตา โซน และไลน์ผลิตให้ครบ",
+        400,
+        "OVEN_FIELDS_REQUIRED",
+      );
+    }
+
+    const pool = getDatabasePool();
+    const [duplicateRows] = await pool.query(
+      `SELECT oven_number, name
+         FROM ovens
+        WHERE company_id = ?
+          AND (oven_number = ? OR LOWER(name) = LOWER(?))
+        LIMIT 1`,
+      [session.companyId, ovenNumber, name],
+    );
+
+    if (duplicateRows.length) {
+      const duplicate = duplicateRows[0];
+      const sameNumber = Number(duplicate.oven_number) === ovenNumber;
+
+      return errorResponse(
+        sameNumber
+          ? `มีเตาหมายเลข ${ovenNumber} อยู่แล้ว`
+          : `มีชื่อเตา ${name} อยู่แล้ว`,
+        409,
+        sameNumber ? "OVEN_NUMBER_EXISTS" : "OVEN_NAME_EXISTS",
+      );
+    }
+
+    const ovenId = `oven-${ovenNumber}`;
+
+    await pool.query(
+      `INSERT INTO ovens (
+         id,
+         company_id,
+         oven_number,
+         name,
+         zone_name,
+         line_name,
+         status,
+         enabled,
+         chamber_lower,
+         chamber_upper,
+         furnace_lower,
+         furnace_upper,
+         blower_lower,
+         blower_upper,
+         humidity_lower,
+         humidity_upper
+       ) VALUES (?, ?, ?, ?, ?, ?, 'offline', TRUE, 35, 60, 450, 550, 0, 1000, 0, 100)`,
+      [
+        ovenId,
+        session.companyId,
+        ovenNumber,
+        name,
+        zone,
+        line,
+      ],
+    );
+
+    const rootState = await loadRuntimeStateFromDatabase();
+    const companyState = rootState.companies[session.companyId];
+    const created = companyState.ovens.find(
+      (oven) => oven.id === ovenId,
+    );
+
+    if (!created) {
+      return errorResponse(
+        "เพิ่มเตาแล้วแต่ไม่สามารถโหลดข้อมูลเตาใหม่ได้",
+        500,
+        "OVEN_RELOAD_FAILED",
+      );
+    }
+
+    await addAudit(
+      companyState,
+      session,
+      "เพิ่มเตา",
+      ovenId,
+      `เพิ่ม ${name} หมายเลข ${ovenNumber}`,
+    );
+
+    return jsonResponse(created, 201);
+  }
+
+  if (method === "POST" && path === "/stcr/api/auth/logout") {
   const token = String(requestHeaders.authorization).slice(7).trim();
   await deleteSession(token);
   return jsonResponse({ ok: true });

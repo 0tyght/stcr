@@ -405,10 +405,9 @@ export function ReportPage() {
   const autoPdf = searchParams.get("auto") === "pdf";
   const requestedCycle = Number(searchParams.get("cycle"));
 
-  const oven =
-    ovens.find((item) => item.id === ovenId) ??
-    ovens.find((item) => item.number === 18) ??
-    ovens[0];
+  const oven = ovenId
+    ? ovens.find((item) => item.id === ovenId)
+    : ovens[0];
 
   const [selectedCycle, setSelectedCycle] = useState<number | null>(null);
   const [rangeFromCycle, setRangeFromCycle] = useState<number | null>(null);
@@ -432,6 +431,7 @@ export function ReportPage() {
   const reportRef = useRef<SVGSVGElement | null>(null);
   const reportRequestIdRef = useRef(0);
   const lastAutoLoadKeyRef = useRef("");
+  const reportFormHydratedRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -485,7 +485,11 @@ export function ReportPage() {
         (oven.limits.chamberTemp.upper + oven.limits.chamberTemp.lower) / 2,
       ),
     }));
-  }, [oven?.id]);
+  }, [
+    oven?.id,
+    oven?.limits.chamberTemp.lower,
+    oven?.limits.chamberTemp.upper,
+  ]);
 
   useEffect(() => {
     if (!oven) return;
@@ -503,7 +507,9 @@ export function ReportPage() {
 
   useEffect(() => {
     if (!oven || selectedCycle == null) return;
+
     let active = true;
+    reportFormHydratedRef.current = false;
     setCycleMeta(null);
     setReportForm((current) => ({
       ...current,
@@ -519,17 +525,53 @@ export function ReportPage() {
     void apiClient
       .getReportCycleMeta(oven.id, selectedCycle)
       .then((meta) => {
-        if (active) {
-          setCycleMeta(meta);
-          setReportForm((current) => ({ ...current, ...reportFormFromCycleMeta(meta) }));
-        }
+        if (!active) return;
+
+        setCycleMeta(meta);
+        setReportForm((current) => ({
+          ...current,
+          ...reportFormFromCycleMeta(meta),
+        }));
+        reportFormHydratedRef.current = true;
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (active) {
+          reportFormHydratedRef.current = true;
+        }
+      });
 
     return () => {
       active = false;
     };
   }, [oven?.id, selectedCycle]);
+
+  useEffect(() => {
+    if (
+      !oven ||
+      selectedCycle == null ||
+      !reportFormHydratedRef.current
+    ) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void apiClient
+        .saveReportCycleMeta(
+          oven.id,
+          selectedCycle,
+          reportCycleMetaFromForm(reportForm),
+        )
+        .catch((error) => {
+          setReportError(
+            error instanceof Error
+              ? `บันทึกข้อมูลรอบอัตโนมัติไม่สำเร็จ: ${error.message}`
+              : "บันทึกข้อมูลรอบอัตโนมัติไม่สำเร็จ",
+          );
+        });
+    }, 800);
+
+    return () => window.clearTimeout(timer);
+  }, [oven?.id, reportForm, selectedCycle]);
 
   const cycleRange = useMemo(() => {
     if (!oven || selectedCycle == null) return null;
