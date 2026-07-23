@@ -1532,7 +1532,118 @@ const ovenDeleteCheckMatch = path.match(
     });
   }
 
-  if (method === "POST" && path === "/ovens") {
+    if (method === "PUT" && path === "/limits") {
+    if (!hasAnyRole(session, ["admin"])) {
+      return errorResponse(
+        "ไม่มีสิทธิ์เปลี่ยนค่า Limit",
+        403,
+        "FORBIDDEN",
+      );
+    }
+
+    const body = requestBody();
+    if (!body) {
+      return errorResponse(
+        "ไม่พบข้อมูล Limit",
+        400,
+        "INVALID_LIMITS",
+      );
+    }
+
+    const globalLimitSensors = [
+      "chamberTemp",
+      "humidity",
+      "furnaceTemp",
+      "blowerTemp",
+    ];
+    const physicalRanges = {
+      chamberTemp: [-20, 150],
+      humidity: [0, 100],
+      furnaceTemp: [-20, 1200],
+      blowerTemp: [-20, 500],
+    };
+
+    const valid = globalLimitSensors.every((sensor) => {
+      const lower = Number(body[sensor]?.lower);
+      const upper = Number(body[sensor]?.upper);
+      const [minimum, maximum] = physicalRanges[sensor];
+
+      return (
+        Number.isFinite(lower) &&
+        Number.isFinite(upper) &&
+        lower >= minimum &&
+        upper <= maximum &&
+        lower <= upper
+      );
+    });
+
+    if (!valid) {
+      return errorResponse(
+        "ข้อมูล Limit ไม่ถูกต้อง",
+        400,
+        "INVALID_LIMITS",
+      );
+    }
+
+    const normalizedLimits = Object.fromEntries(
+      globalLimitSensors.map((sensor) => [
+        sensor,
+        {
+          sensor,
+          lower: Number(body[sensor].lower),
+          upper: Number(body[sensor].upper),
+        },
+      ]),
+    );
+
+    const pool = getDatabasePool();
+    await pool.execute(
+      `UPDATE ovens
+          SET chamber_lower=?,
+              chamber_upper=?,
+              humidity_lower=?,
+              humidity_upper=?,
+              furnace_lower=?,
+              furnace_upper=?,
+              blower_lower=?,
+              blower_upper=?
+        WHERE company_id=?`,
+      [
+        normalizedLimits.chamberTemp.lower,
+        normalizedLimits.chamberTemp.upper,
+        normalizedLimits.humidity.lower,
+        normalizedLimits.humidity.upper,
+        normalizedLimits.furnaceTemp.lower,
+        normalizedLimits.furnaceTemp.upper,
+        normalizedLimits.blowerTemp.lower,
+        normalizedLimits.blowerTemp.upper,
+        session.companyId,
+      ],
+    );
+
+    const rootState = await loadRuntimeStateFromDatabase();
+    const companyState = rootState.companies[session.companyId];
+
+    if (!companyState) {
+      return errorResponse(
+        "ไม่พบข้อมูลบริษัท",
+        404,
+        "COMPANY_NOT_FOUND",
+      );
+    }
+
+    await addAudit(
+      companyState,
+      session,
+      "เปลี่ยนค่า Limit ทั้งระบบ",
+      session.companyId,
+      `ใช้ค่าเดียวกันกับเตาทั้งหมด ${companyState.ovens.length} เตา`,
+    );
+
+    return jsonResponse(companyState.ovens);
+  }
+
+if (method === "POST" && path === "/ovens") {
     if (!hasAnyRole(session, ["admin"])) {
       return errorResponse("ไม่มีสิทธิ์เพิ่มเตา", 403, "FORBIDDEN");
     }
@@ -1583,6 +1694,31 @@ const ovenDeleteCheckMatch = path.match(
     }
 
     const ovenId = `oven-${ovenNumber}`;
+    const [limitRows] = await pool.query(
+      `SELECT chamber_lower,
+              chamber_upper,
+              furnace_lower,
+              furnace_upper,
+              blower_lower,
+              blower_upper,
+              humidity_lower,
+              humidity_upper
+         FROM ovens
+        WHERE company_id = ?
+        ORDER BY oven_number
+        LIMIT 1`,
+      [session.companyId],
+    );
+    const inheritedLimits = limitRows[0] || {
+      chamber_lower: 35,
+      chamber_upper: 60,
+      furnace_lower: 450,
+      furnace_upper: 550,
+      blower_lower: 0,
+      blower_upper: 1000,
+      humidity_lower: 0,
+      humidity_upper: 100,
+    };
 
     await pool.query(
       `INSERT INTO ovens (
@@ -1602,7 +1738,7 @@ const ovenDeleteCheckMatch = path.match(
          blower_upper,
          humidity_lower,
          humidity_upper
-       ) VALUES (?, ?, ?, ?, ?, ?, 'offline', TRUE, 35, 60, 450, 550, 0, 1000, 0, 100)`,
+       ) VALUES (?, ?, ?, ?, ?, ?, 'offline', TRUE, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         ovenId,
         session.companyId,
@@ -1610,6 +1746,14 @@ const ovenDeleteCheckMatch = path.match(
         name,
         zone,
         line,
+        Number(inheritedLimits.chamber_lower),
+        Number(inheritedLimits.chamber_upper),
+        Number(inheritedLimits.furnace_lower),
+        Number(inheritedLimits.furnace_upper),
+        Number(inheritedLimits.blower_lower),
+        Number(inheritedLimits.blower_upper),
+        Number(inheritedLimits.humidity_lower),
+        Number(inheritedLimits.humidity_upper),
       ],
     );
 

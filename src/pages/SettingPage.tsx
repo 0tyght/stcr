@@ -10,6 +10,7 @@ import {
   type FormEvent,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -19,7 +20,7 @@ import { PageHeader } from "../components/ui/PageHeader";
 import { StatusBadge } from "../components/ui/StatusBadge";
 import type { OvenCreateInput } from "../services/api/contracts";
 import { getErrorMessage } from "../services/api/errors";
-import type { LimitRule, Oven, SensorKey } from "../types";
+import type { LimitMap, LimitRule, Oven, SensorKey } from "../types";
 import { formatDateTime } from "../utils/format";
 import { sensorByKey } from "../utils/sensors";
 
@@ -119,19 +120,44 @@ function parseLimit(
   return { sensor, lower, upper };
 }
 
+function buildGlobalLimitMap(
+  base: LimitMap,
+  draft: LimitDraft,
+): LimitMap | string {
+  const chamberLimit = parseLimit(draft, "chamberTemp");
+  if (typeof chamberLimit === "string") return chamberLimit;
+
+  const furnaceLimit = parseLimit(draft, "furnaceTemp");
+  if (typeof furnaceLimit === "string") return furnaceLimit;
+
+  return {
+    ...base,
+    chamberTemp: chamberLimit,
+    furnaceTemp: furnaceLimit,
+  };
+}
+
+function editableLimitSignature(oven: Oven): string {
+  return JSON.stringify({
+    chamberTemp: oven.limits.chamberTemp,
+    furnaceTemp: oven.limits.furnaceTemp,
+  });
+}
+
 export function SettingPage() {
   const {
     ovens,
     auditEvents,
-    saveLimits,
+    saveGlobalLimits,
     updateOven,
     addOven,
-    getOvenDeleteCheck,
     deleteOven,
   } = useAppData();
 
   const [ovenId, setOvenId] = useState("");
   const oven = ovens.find((item) => item.id === ovenId) ?? null;
+  const globalLimitSource = ovens[0] ?? null;
+  const limitDirtyRef = useRef(false);
 
   const [ovenForm, setOvenForm] =
     useState<OvenFormDraft>(emptyOvenForm);
@@ -171,6 +197,15 @@ export function SettingPage() {
     [limitBaseline, limitDraft],
   );
 
+  const hasMixedLimits = useMemo(() => {
+    if (!globalLimitSource) return false;
+
+    const signature = editableLimitSignature(globalLimitSource);
+    return ovens.some(
+      (item) => editableLimitSignature(item) !== signature,
+    );
+  }, [globalLimitSource, ovens]);
+
   const hasUnsavedChanges = isOvenDirty || isLimitDirty;
 
   useEffect(() => {
@@ -189,14 +224,29 @@ export function SettingPage() {
     if (!selected) return;
 
     const nextOvenForm = createOvenForm(selected);
-    const nextLimitDraft = createLimitDraft(selected);
-
     setOvenForm(nextOvenForm);
     setOvenBaseline(nextOvenForm);
-    setLimitDraft(nextLimitDraft);
-    setLimitBaseline(nextLimitDraft);
     setMessage(null);
   }, [ovenId]);
+
+  useEffect(() => {
+    limitDirtyRef.current = isLimitDirty;
+  }, [isLimitDirty]);
+
+  useEffect(() => {
+    if (limitDirtyRef.current) return;
+
+    const source = ovens[0];
+    if (!source) {
+      setLimitDraft(null);
+      setLimitBaseline(null);
+      return;
+    }
+
+    const nextLimitDraft = createLimitDraft(source);
+    setLimitDraft(nextLimitDraft);
+    setLimitBaseline(nextLimitDraft);
+  }, [ovens]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -217,6 +267,7 @@ export function SettingPage() {
     return auditEvents
       .filter(
         (event) =>
+          event.action.includes("Limit") ||
           event.target === oven.id ||
           event.target.includes(oven.id) ||
           event.detail.includes(oven.name),
@@ -290,17 +341,15 @@ export function SettingPage() {
     event: FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
-    if (!oven || !limitDraft) return;
+    if (!globalLimitSource || !limitDraft) return;
 
-    const chamberLimit = parseLimit(limitDraft, "chamberTemp");
-    if (typeof chamberLimit === "string") {
-      setMessage({ kind: "error", text: chamberLimit });
-      return;
-    }
+    const nextLimits = buildGlobalLimitMap(
+      globalLimitSource.limits,
+      limitDraft,
+    );
 
-    const furnaceLimit = parseLimit(limitDraft, "furnaceTemp");
-    if (typeof furnaceLimit === "string") {
-      setMessage({ kind: "error", text: furnaceLimit });
+    if (typeof nextLimits === "string") {
+      setMessage({ kind: "error", text: nextLimits });
       return;
     }
 
@@ -308,18 +357,16 @@ export function SettingPage() {
     setMessage(null);
 
     try {
-      const updated = await saveLimits(oven.id, {
-        ...oven.limits,
-        chamberTemp: chamberLimit,
-        furnaceTemp: furnaceLimit,
-      });
+      const updatedOvens = await saveGlobalLimits(nextLimits);
+      const nextDraft = updatedOvens[0]
+        ? createLimitDraft(updatedOvens[0])
+        : limitDraft;
 
-      const nextDraft = createLimitDraft(updated);
       setLimitDraft(nextDraft);
       setLimitBaseline(nextDraft);
       setMessage({
         kind: "success",
-        text: "บันทึกค่า Limit เรียบร้อยแล้ว",
+        text: `บันทึกค่า Limit กลางให้เตาทั้งหมด ${updatedOvens.length} เตาเรียบร้อยแล้ว`,
       });
     } catch (nextError) {
       setMessage({
@@ -420,12 +467,38 @@ export function SettingPage() {
 
     try {
       const created = await addOven(input);
+      let limitWarning: string | null = null;
+
+      if (globalLimitSource && limitDraft) {
+        const nextLimits = buildGlobalLimitMap(
+          globalLimitSource.limits,
+          limitDraft,
+        );
+
+        if (typeof nextLimits === "string") {
+          limitWarning = nextLimits;
+        } else {
+          try {
+            await saveGlobalLimits(nextLimits);
+          } catch (nextError) {
+            limitWarning = getErrorMessage(nextError);
+          }
+        }
+      }
+
       setAddDialogOpen(false);
       setOvenId(created.id);
-      setMessage({
-        kind: "success",
-        text: `เพิ่ม ${created.name} เรียบร้อยแล้ว`,
-      });
+      setMessage(
+        limitWarning
+          ? {
+              kind: "warning",
+              text: `เพิ่ม ${created.name} แล้ว แต่ยังใช้ค่า Limit กลางไม่สำเร็จ: ${limitWarning}`,
+            }
+          : {
+              kind: "success",
+              text: `เพิ่ม ${created.name} และใช้ค่า Limit กลางเรียบร้อยแล้ว`,
+            },
+      );
     } catch (nextError) {
       setAddError(getErrorMessage(nextError));
     } finally {
@@ -444,30 +517,16 @@ export function SettingPage() {
       return;
     }
 
+    const confirmed = window.confirm(
+      `ยืนยันลบ ${oven.name} หมายเลข ${oven.number} หรือไม่\n\nลบได้เฉพาะเตาที่เพิ่มผิดและยังไม่มีข้อมูลการใช้งาน`,
+    );
+
+    if (!confirmed) return;
+
     setDeletingOven(true);
     setMessage(null);
 
     try {
-      const check = await getOvenDeleteCheck(oven.id);
-
-      if (!check.canDelete) {
-        const blockerText = check.blockers
-          .map((blocker) => `${blocker.label} ${blocker.count} รายการ`)
-          .join(", ");
-
-        setMessage({
-          kind: "error",
-          text: `ไม่สามารถลบ ${oven.name} ได้ เนื่องจากพบ ${blockerText}`,
-        });
-        return;
-      }
-
-      const confirmed = window.confirm(
-        `ยืนยันลบ ${oven.name} หมายเลข ${oven.number} หรือไม่\n\nการดำเนินการนี้ย้อนกลับไม่ได้`,
-      );
-
-      if (!confirmed) return;
-
       await deleteOven(oven.id);
       setOvenId("");
       setMessage({
@@ -488,7 +547,7 @@ export function SettingPage() {
     <>
       <PageHeader
         title="Setting"
-        description="จัดการข้อมูลเตา ค่า Limit และประวัติการตั้งค่าที่สำคัญ"
+        description="จัดการข้อมูลเตาและกำหนดค่า Limit กลางที่ใช้พร้อมกันทุกเตา"
         actions={
           <button
             className="button button-primary"
@@ -627,8 +686,8 @@ export function SettingPage() {
                 <div>
                   <h2>ลบเตา</h2>
                   <p>
-                    ลบได้เฉพาะเตาที่ไม่เคยมีข้อมูล รอบอบ Alarm
-                    หรือการอ้างอิงอื่น
+                    เตาที่เพิ่มผิดและยังไม่มีรอบอบ ข้อมูลเซนเซอร์ หรือ Alarm
+                    สามารถลบออกได้ทันที
                   </p>
                 </div>
               </div>
@@ -639,7 +698,7 @@ export function SettingPage() {
                 onClick={() => void handleDeleteOven()}
               >
                 <Trash2 size={17} />
-                {deletingOven ? "กำลังตรวจสอบ..." : "ตรวจสอบและลบเตา"}
+                {deletingOven ? "กำลังลบ..." : "ลบเตานี้"}
               </button>
             </section>
           </div>
@@ -648,13 +707,22 @@ export function SettingPage() {
             <form className="panel" onSubmit={handleLimitSubmit}>
               <div className="panel-heading">
                 <div>
-                  <h2>Upper / Lower Limit</h2>
+                  <h2>Upper / Lower Limit กลาง</h2>
                   <p>
-                    ใช้กับกราฟ Alarm และรายงาน โดย Blower
-                    ไม่มีค่า Lower/Upper
+                    ตั้งค่าครั้งเดียวและใช้พร้อมกันทุกเตาในบริษัท
+                    โดย Blower ไม่มีค่า Lower/Upper
                   </p>
                 </div>
               </div>
+
+              {hasMixedLimits ? (
+                <div className="settings-message is-warning">
+                  <AlertTriangle size={18} />
+                  <span>
+                    พบค่า Limit ของบางเตาไม่ตรงกัน กดบันทึกเพื่อปรับให้ทุกเตาใช้ค่าเดียวกัน
+                  </span>
+                </div>
+              ) : null}
 
               <div className="limit-form">
                 {editableLimitSensors.map((sensor) => (
@@ -707,12 +775,12 @@ export function SettingPage() {
                 <button
                   className="button button-primary"
                   type="submit"
-                  disabled={!isLimitDirty || savingLimits}
+                  disabled={(!isLimitDirty && !hasMixedLimits) || savingLimits}
                 >
                   <Save size={17} />
                   {savingLimits
-                    ? "กำลังบันทึก..."
-                    : "บันทึกค่า Limit"}
+                    ? "กำลังบันทึกทุกเตา..."
+                    : "บันทึกค่า Limit ทุกเตา"}
                 </button>
               </div>
             </form>
@@ -722,7 +790,7 @@ export function SettingPage() {
                 <div>
                   <h2>ประวัติการตั้งค่า</h2>
                   <p>
-                    แสดงเหตุการณ์ที่อ้างอิงเตาที่เลือกโดยตรง
+                    แสดงการแก้ข้อมูลเตาที่เลือกและการเปลี่ยนค่า Limit ทั้งระบบ
                   </p>
                 </div>
               </div>

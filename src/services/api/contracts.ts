@@ -47,6 +47,7 @@ export interface AppApi {
     meta: ReportCycleMeta,
   ): Promise<ReportCycleMeta>;
   saveLimits(ovenId: string, limits: LimitMap): Promise<Oven>;
+  saveGlobalLimits(limits: LimitMap): Promise<Oven[]>;
   updateOven(ovenId: string, input: OvenUpdateInput): Promise<Oven>;
   addOven(input: OvenCreateInput): Promise<Oven>;
   getOvenDeleteCheck(ovenId: string): Promise<OvenDeleteCheck>;

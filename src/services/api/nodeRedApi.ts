@@ -97,6 +97,14 @@ export const nodeRedApi: AppApi = {
       method: "PUT",
       body: limits,
     }),
+  saveGlobalLimits: async (limits) =>
+    requireArray<Oven>(
+      await requestJson("/limits", {
+        method: "PUT",
+        body: limits,
+      }),
+      "/limits",
+    ),
   updateOven: (ovenId, input) =>
     requestJson<Oven>(`/ovens/${encodeURIComponent(ovenId)}`, {
       method: "PATCH",

@@ -35,6 +35,7 @@ type AppDataContextValue = {
   lastSuccessfulSyncAt: string | null;
   refresh: () => Promise<void>;
   saveLimits: (ovenId: string, limits: LimitMap) => Promise<Oven>;
+  saveGlobalLimits: (limits: LimitMap) => Promise<Oven[]>;
   updateOven: (ovenId: string, input: OvenUpdateInput) => Promise<Oven>;
   addOven: (input: OvenCreateInput) => Promise<Oven>;
   getOvenDeleteCheck: (ovenId: string) => Promise<OvenDeleteCheck>;
@@ -307,6 +308,20 @@ export function AppDataProvider({
     [loadAuditEvents],
   );
 
+  const saveGlobalLimits = useCallback(
+    async (limits: LimitMap) => {
+      const updated = await apiClient.saveGlobalLimits(limits);
+
+      if (mountedRef.current) {
+        setOvens(updated);
+      }
+
+      void loadAuditEvents();
+      return updated;
+    },
+    [loadAuditEvents],
+  );
+
   const updateOven = useCallback(
     async (ovenId: string, input: OvenUpdateInput) => {
       const updated = await apiClient.updateOven(ovenId, input);
@@ -404,6 +419,7 @@ export function AppDataProvider({
       lastSuccessfulSyncAt,
       refresh,
       saveLimits,
+      saveGlobalLimits,
       updateOven,
       addOven,
       getOvenDeleteCheck,
@@ -426,6 +442,7 @@ export function AppDataProvider({
       refresh,
       refreshing,
       saveLimits,
+      saveGlobalLimits,
       updateOven,
     ],
   );
