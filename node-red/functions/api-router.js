@@ -1418,7 +1418,11 @@ try {
   return errorResponse("ระบบยืนยันสิทธิ์ไม่พร้อมใช้งาน", 503, "AUTH_DATABASE_UNAVAILABLE");
 }
 
-const ovenDeleteCheckMatch = path.match(
+const settingsRoutePath = path.startsWith("/stcr/api")
+    ? path.slice("/stcr/api".length) || "/"
+    : path;
+
+  const ovenDeleteCheckMatch = settingsRoutePath.match(
     /^\/ovens\/([^/]+)\/delete-check$/,
   );
 
@@ -1444,7 +1448,7 @@ const ovenDeleteCheckMatch = path.match(
     return jsonResponse(result);
   }
 
-  const ovenDeleteMatch = path.match(
+  const ovenDeleteMatch = settingsRoutePath.match(
     /^\/ovens\/([^/]+)\/delete$/,
   );
 
@@ -1532,7 +1536,7 @@ const ovenDeleteCheckMatch = path.match(
     });
   }
 
-    if (method === "PUT" && path === "/limits") {
+    if (method === "PUT" && settingsRoutePath === "/limits") {
     if (!hasAnyRole(session, ["admin"])) {
       return errorResponse(
         "ไม่มีสิทธิ์เปลี่ยนค่า Limit",
@@ -1643,7 +1647,7 @@ const ovenDeleteCheckMatch = path.match(
     return jsonResponse(companyState.ovens);
   }
 
-if (method === "POST" && path === "/ovens") {
+if (method === "POST" && settingsRoutePath === "/ovens") {
     if (!hasAnyRole(session, ["admin"])) {
       return errorResponse("ไม่มีสิทธิ์เพิ่มเตา", 403, "FORBIDDEN");
     }
