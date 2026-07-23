@@ -37,7 +37,7 @@ export function SensorGauge({
   const readingIsStale = !Number.isFinite(readingAgeMs) || readingAgeMs > 180_000;
 
   const hasLimit = showLimit && !!limit;
-  const scale = hasLimit ? getLimitScale(limit) : getDefaultScale(sensor, value);
+  const scale = getSensorScale(sensor);
   const ratio = clamp((value - scale.min) / Math.max(scale.max - scale.min, 1), 0, 1);
 
   const tone = hasLimit ? getGaugeTone(value, limit.lower, limit.upper) : "normal";
@@ -75,7 +75,7 @@ export function SensorGauge({
         <span>{definition.label}</span>
 
         <strong style={{ color: hasLimit ? getToneColor(tone) : definition.color }}>
-          {hasLimit ? getToneLabel(tone) : "ปกติ"}
+          {hasLimit ? getToneLabel(value, limit.lower, limit.upper) : "ปกติ"}
         </strong>
       </div>
 
@@ -211,28 +211,14 @@ export function SensorGauge({
   );
 }
 
-function getLimitScale(limit: LimitRule): { min: number; max: number } {
-  const range = Math.max(limit.upper - limit.lower, 1);
-  const padding = Math.max(range * 0.28, 8);
-
-  return {
-    min: Math.max(0, limit.lower - padding),
-    max: limit.upper + padding,
-  };
-}
-
-function getDefaultScale(sensor: SensorKey, value: number): { min: number; max: number } {
-  if (sensor === "humidity") {
-    return {
-      min: 0,
-      max: 100,
-    };
+function getSensorScale(
+  sensor: SensorKey,
+): { min: number; max: number } {
+  if (sensor === "furnaceTemp" || sensor === "blowerTemp") {
+    return { min: 0, max: 1000 };
   }
 
-  return {
-    min: 0,
-    max: Math.max(100, Math.ceil(value * 1.25)),
-  };
+  return { min: 0, max: 100 };
 }
 
 function getGaugeTone(value: number, lower: number, upper: number): GaugeTone {
@@ -249,9 +235,21 @@ function getGaugeTone(value: number, lower: number, upper: number): GaugeTone {
   return "normal";
 }
 
-function getToneLabel(tone: GaugeTone): string {
-  if (tone === "danger") return "เกิน limit";
-  if (tone === "warning") return "ใกล้ limit";
+function getToneLabel(
+  value: number,
+  lower: number,
+  upper: number,
+): string {
+  if (value > upper) return "เกิน limit";
+  if (value < lower) return "ต่ำกว่า limit";
+
+  const range = Math.max(upper - lower, 1);
+  const warningGap = range * 0.08;
+
+  if (value >= upper - warningGap || value <= lower + warningGap) {
+    return "ใกล้ limit";
+  }
+
   return "ปกติ";
 }
 
