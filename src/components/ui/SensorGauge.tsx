@@ -185,7 +185,7 @@ export function SensorGauge({
 
           <text
             x={CENTER_X}
-            y="75"
+            y="81"
             textAnchor="middle"
             dominantBaseline="middle"
             style={{
@@ -209,7 +209,7 @@ export function SensorGauge({
 
           <text
             x={CENTER_X}
-            y="98"
+            y="103"
             textAnchor="middle"
             dominantBaseline="middle"
             style={{

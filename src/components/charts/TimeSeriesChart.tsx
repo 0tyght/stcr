@@ -51,8 +51,8 @@ export function TimeSeriesChart({
   rightAxisName = "%",
   limitSensors,
   theme,
-  showDataZoom,
-  timeRange,
+  showDataZoom,  timeRange,
+  resetViewKey,
 }: {
   points: TimeSeriesPoint[];
   sensors: SensorKey[];
@@ -64,13 +64,14 @@ export function TimeSeriesChart({
   rightAxisName?: string;
   limitSensors?: SensorKey[];
   theme?: ChartTheme;
-  showDataZoom?: boolean;
-  timeRange?: { start: Date; end: Date };
+  showDataZoom?: boolean;  timeRange?: { start: Date; end: Date };
+  resetViewKey?: number;
 }) {
   const chartRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<ECharts | null>(null);
   const updateOverlayRef = useRef<() => void>(() => undefined);
 
+  const appliedResetViewKeyRef = useRef(resetViewKey);
   const [pageTheme, setPageTheme] = useState<"dark" | "company">(() => getCurrentPageTheme());
   const [overlayBox, setOverlayBox] = useState({ width: 0, height: 0 });
   const [overlayLines, setOverlayLines] = useState<OverlayLine[]>([]);
@@ -481,15 +482,25 @@ export function TimeSeriesChart({
   }, [resolvedTheme]);
 
   useEffect(() => {
-    if (!instanceRef.current) return;
+    const chart = instanceRef.current;
+    if (!chart) return;
 
-    instanceRef.current.setOption(option, true);
-    instanceRef.current.resize();
+    const shouldResetView =
+      appliedResetViewKeyRef.current !== resetViewKey;
 
+    // auto refresh ใช้ merge เพื่อรักษาปุ่มซ่อน/แสดงเส้นและช่วง dataZoom
+    // manual refresh เปลี่ยน resetViewKey จึงค่อย notMerge และรีเซ็ตมุมมอง
+    chart.setOption(option, shouldResetView);
+
+    if (shouldResetView) {
+      appliedResetViewKeyRef.current = resetViewKey;
+    }
+
+    chart.resize();
     window.requestAnimationFrame(() => {
       updateOverlayRef.current();
     });
-  }, [option]);
+  }, [option, resetViewKey]);
 
   return (
     <div
@@ -707,23 +718,23 @@ function getChartPalette(theme: ChartTheme) {
   }
 
   return {
-    background: "transparent",
-    text: "#d8dce3",
-    muted: "#9aa3b2",
-    grid: "#2a3038",
-    gridOpacity: 1,
-    axis: "#3a424f",
-    axisPointerOpacity: 0.58,
-    tooltipBackground: "#111820",
-    tooltipBorder: "#3a424f",
-    markLabelBackground: "rgba(8, 13, 20, 0.92)",
-    markLabelBorder: "rgba(255, 255, 255, 0.16)",
-    markLineOpacity: 0.72,
-    areaAlpha: 0.06,
-    zoomBackground: "#111820",
-    zoomBorder: "#2a3038",
-    zoomFiller: "rgba(87, 148, 242, 0.18)",
-    zoomArea: "rgba(154, 163, 178, 0.12)",
+    background: "#0d141d",
+    text: "#e5eaf1",
+    muted: "#96a2b3",
+    grid: "#263443",
+    gridOpacity: 0.82,
+    axis: "#43536a",
+    axisPointerOpacity: 0.68,
+    tooltipBackground: "#17212d",
+    tooltipBorder: "#46586e",
+    markLabelBackground: "rgba(12, 19, 28, 0.96)",
+    markLabelBorder: "rgba(148, 163, 184, 0.3)",
+    markLineOpacity: 0.8,
+    areaAlpha: 0.075,
+    zoomBackground: "#111a25",
+    zoomBorder: "#2b3949",
+    zoomFiller: "rgba(87, 148, 242, 0.22)",
+    zoomArea: "rgba(150, 162, 179, 0.14)",
   };
 }
 

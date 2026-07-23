@@ -67,6 +67,7 @@ export function OvenDetailPage() {
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [calendarCursor, setCalendarCursor] = useState<Date>(() => new Date());
   const [points, setPoints] = useState<TimeSeriesPoint[]>([]);
+  const [chartViewResetKey, setChartViewResetKey] = useState(0);
   const [currentReportFrameSrc, setCurrentReportFrameSrc] = useState<string | null>(null);
 
   const realtimeAvailable = oven ? canUseRealtime(oven.status) : false;
@@ -188,6 +189,7 @@ export function OvenDetailPage() {
     historyIncludeIgnition,
     historyStartAt,
     oven?.id,
+    chartViewResetKey,
   ]);
 const ovenAlarms = useMemo(
     () => alarms.filter((alarm) => alarm.ovenId === ovenId),
@@ -200,7 +202,12 @@ const ovenAlarms = useMemo(
 
   if (!oven) {
     return <Navigate to="/" replace />;
+  }  function handleManualRefresh() {
+    setChartViewResetKey((current) => current + 1);
+    void refresh();
   }
+
+
 
   function handleSelectCycle(cycle: number) {
     const record = cycleRecords.find((item) => item.cycle === cycle);
@@ -289,7 +296,7 @@ const ovenAlarms = useMemo(
             <button
               className="button"
               type="button"
-              onClick={() => void refresh()}
+              onClick={handleManualRefresh}
               disabled={refreshing}
             >
               <RefreshCw size={17} />
@@ -480,7 +487,8 @@ const ovenAlarms = useMemo(
               rightAxisName="ความชื้น %"
               limitSensors={["chamberTemp"]}
               timeRange={cycleRange ?? undefined}
-            />
+                    resetViewKey={chartViewResetKey}
+      />
 
             <ChartPanel
               title="อุณหภูมิเตาเผาและ Blower"
@@ -495,7 +503,8 @@ const ovenAlarms = useMemo(
               limitSensors={["furnaceTemp"]}
               limitLabel="เตาเผา"
               timeRange={cycleRange ?? undefined}
-            />
+                    resetViewKey={chartViewResetKey}
+      />
           </section>
         </>
       ) : (
@@ -521,6 +530,7 @@ const ovenAlarms = useMemo(
             setHistoryPickMode("date");
             setSelectedCycle(cycle);
           }}
+          resetViewKey={chartViewResetKey}
         />
       )}
 
@@ -595,6 +605,7 @@ function HistoricalChartSection({
   onReset,
   onShiftMonth,
   onSelectDateCycle,
+  resetViewKey,
 }: {
   cycleRecords: CycleRecord[];
   historyPickMode: HistoryPickMode;
@@ -612,6 +623,7 @@ function HistoricalChartSection({
   onReset: () => void;
   onShiftMonth: (direction: number) => void;
   onSelectDateCycle: (cycle: number) => void;
+  resetViewKey: number;
 }) {
   return (
     <section className="panel" style={styles.historicalShell}>
@@ -742,7 +754,8 @@ function HistoricalChartSection({
           leftAxisName="อุณหภูมิ °C"
           rightAxisName="ความชื้น %"
           limitSensors={["chamberTemp"]}
-        />
+                resetViewKey={resetViewKey}
+      />
 
         <ChartPanel
           title="อุณหภูมิเตาเผาและ Blower"
@@ -756,7 +769,8 @@ function HistoricalChartSection({
           rightAxisName=""
           limitSensors={["furnaceTemp"]}
           limitLabel="เตาเผา"
-        />
+                resetViewKey={resetViewKey}
+      />
       </div>
     </section>
   );
@@ -864,6 +878,7 @@ function ChartPanel({
   limitSensors,
   limitLabel,
   timeRange,
+  resetViewKey,
 }: {
   title: string;
   description: string;
@@ -877,6 +892,7 @@ function ChartPanel({
   limitSensors: SensorKey[];
   limitLabel?: string;
   timeRange?: { start: Date; end: Date };
+  resetViewKey: number;
 }) {
   return (
     <section className="panel chart-panel grafana-chart-panel" style={styles.chartPanel}>
@@ -906,6 +922,7 @@ function ChartPanel({
         rightAxisName={rightAxisName}
         limitSensors={limitSensors}
         timeRange={timeRange}
+      resetViewKey={resetViewKey}
       />
     </section>
   );
