@@ -38,8 +38,7 @@ type SensorChartData = {
   gaps: Array<[number, number | null]>;
 };
 
-const MIN_GAP_THRESHOLD_MS = 5 * 60 * 1000;
-const MAX_GAP_THRESHOLD_MS = 30 * 60 * 1000;
+const GAP_THRESHOLD_MS = 30 * 60 * 1000;
 
 export function TimeSeriesChart({
   points,
@@ -106,13 +105,12 @@ export function TimeSeriesChart({
   const effectiveShowDataZoom = showDataZoom ?? resolvedTheme !== "print";
   const palette = useMemo(() => getChartPalette(resolvedTheme), [resolvedTheme]);
   const axisDescription = useMemo(() => getAxisDescription(sensors), [sensors]);
-  const gapThresholdMs = useMemo(() => getGapThresholdMs(points), [points]);
   const hasDataGaps = useMemo(
     () =>
       sensors.some(
-        (sensor) => buildSensorChartData(points, sensor, gapThresholdMs).gaps.length > 0,
+        (sensor) => buildSensorChartData(points, sensor).gaps.length > 0,
       ),
-    [gapThresholdMs, points, sensors],
+    [points, sensors],
   );
 
   const option = useMemo<EChartsCoreOption>(() => {
@@ -126,7 +124,7 @@ export function TimeSeriesChart({
     const series = sensors.flatMap((sensor) => {
       const definition = sensorByKey[sensor];
       const useRightAxis = rightAxisSensors.includes(sensor);
-      const chartData = buildSensorChartData(points, sensor, gapThresholdMs);
+      const chartData = buildSensorChartData(points, sensor);
 
       return [
         {
@@ -376,7 +374,6 @@ export function TimeSeriesChart({
   }, [
     axisDescription,
     effectiveShowDataZoom,
-    gapThresholdMs,
     limitSensors,
     limits,
     palette,
@@ -752,55 +749,24 @@ function withAlpha(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-function getGapThresholdMs(points: TimeSeriesPoint[]): number {
-  const timestamps = points
-    .map((point) => Date.parse(point.timestamp))
-    .filter(Number.isFinite)
-    .sort((left, right) => left - right);
-  const intervals = timestamps
-    .slice(1)
-    .map((timestamp, index) => timestamp - timestamps[index])
-    .filter((interval) => interval > 0 && interval <= 60 * 60 * 1000)
-    .sort((left, right) => left - right);
-
-  if (!intervals.length) return MIN_GAP_THRESHOLD_MS;
-
-  const middle = Math.floor(intervals.length / 2);
-  const median =
-    intervals.length % 2
-      ? intervals[middle]
-      : (intervals[middle - 1] + intervals[middle]) / 2;
-
-  return Math.min(
-    MAX_GAP_THRESHOLD_MS,
-    Math.max(MIN_GAP_THRESHOLD_MS, median * 3),
-  );
-}
-
 function buildSensorChartData(
   points: TimeSeriesPoint[],
   sensor: SensorKey,
-  gapThresholdMs: number,
 ): SensorChartData {
   const actual: SensorChartData["actual"] = [];
   const gaps: SensorChartData["gaps"] = [];
   let previous: { timestamp: number; value: number } | null = null;
-  let missingSincePrevious = false;
 
   for (const point of points) {
     const timestamp = Date.parse(point.timestamp);
     const rawValue = point[sensor] as number | null | undefined;
     const value = rawValue == null ? Number.NaN : Number(rawValue);
 
-    if (!Number.isFinite(timestamp) || !Number.isFinite(value)) {
-      if (Number.isFinite(timestamp)) actual.push([timestamp, null]);
-      missingSincePrevious = true;
-      continue;
-    }
+    if (!Number.isFinite(timestamp) || !Number.isFinite(value)) continue;
 
     const hasGap =
       previous !== null &&
-      (missingSincePrevious || timestamp - previous.timestamp > gapThresholdMs);
+      timestamp - previous.timestamp > GAP_THRESHOLD_MS;
 
     if (hasGap && previous) {
       const breakAt = previous.timestamp + (timestamp - previous.timestamp) / 2;
@@ -814,7 +780,6 @@ function buildSensorChartData(
 
     actual.push([timestamp, value]);
     previous = { timestamp, value };
-    missingSincePrevious = false;
   }
 
   return { actual, gaps };
