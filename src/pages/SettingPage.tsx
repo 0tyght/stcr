@@ -518,7 +518,7 @@ export function SettingPage() {
     }
 
     const confirmed = window.confirm(
-      `ยืนยันลบ ${oven.name} หมายเลข ${oven.number} หรือไม่\n\nลบได้เฉพาะเตาที่เพิ่มผิดและยังไม่มีข้อมูลการใช้งาน`,
+      `ยืนยันลบ ${oven.name} หมายเลข ${oven.number} หรือไม่`,
     );
 
     if (!confirmed) return;
@@ -685,10 +685,7 @@ export function SettingPage() {
               <div className="panel-heading">
                 <div>
                   <h2>ลบเตา</h2>
-                  <p>
-                    เตาที่เพิ่มผิดและยังไม่มีรอบอบ ข้อมูลเซนเซอร์ หรือ Alarm
-                    สามารถลบออกได้ทันที
-                  </p>
+                  <p>ลบเตาที่ไม่ต้องการออกจากระบบ</p>
                 </div>
               </div>
               <button

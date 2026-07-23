@@ -40,6 +40,9 @@ const endpoints = [
   ["patch", "/stcr/api/ovens/:ovenId",                                       "แก้ไขข้อมูลเตา"],
   ["post",  "/stcr/api/ovens",                                               "เพิ่มเตา"],
   ["post",  "/stcr/api/alarms/:alarmId/acknowledge",                         "รับทราบ Alarm"],
+  ["put", "/stcr/api/limits", "บันทึกค่า Limit กลางทุกเตา"],
+  ["get", "/stcr/api/ovens/:ovenId/delete-check", "ตรวจสอบการลบเตา"],
+  ["post", "/stcr/api/ovens/:ovenId/delete", "ลบเตา"],
 ];
 
 function fnNode({ id, z, name, func, x, y, wires, libs = [], outputs = 1, initialize = "", finalize = "" }) {

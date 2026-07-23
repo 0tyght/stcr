@@ -389,6 +389,23 @@ const ovenAlarms = useMemo(
         </div>
       ) : null}
 
+      {historyLoading || historyError ? (
+        <div
+          className={`history-load-state ${
+            historyError ? "is-error" : "is-loading"
+          }`}
+        >
+          {historyError
+            ? `โหลดข้อมูลกราฟไม่สำเร็จ: ${historyError}`
+            : "กำลังโหลดข้อมูลกราฟ..."}
+          {historyError && lastHistorySuccessAt
+            ? ` ข้อมูลที่แสดงสำเร็จล่าสุดเมื่อ ${formatDateTime(
+                lastHistorySuccessAt,
+              )}`
+            : ""}
+        </div>
+      ) : null}
+
       {effectiveMode === "realtime" ? (
           <p className="mode-note">
             <CalendarClock size={16} />

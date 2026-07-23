@@ -347,6 +347,57 @@
     ]
   },
   {
+    "id": "stcr-http-20",
+    "type": "http in",
+    "z": "stcr-platform-tab",
+    "name": "บันทึกค่า Limit กลางทุกเตา",
+    "url": "/stcr/api/limits",
+    "method": "put",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 180,
+    "y": 898,
+    "wires": [
+      [
+        "stcr-api-router"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-http-21",
+    "type": "http in",
+    "z": "stcr-platform-tab",
+    "name": "ตรวจสอบการลบเตา",
+    "url": "/stcr/api/ovens/:ovenId/delete-check",
+    "method": "get",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 180,
+    "y": 940,
+    "wires": [
+      [
+        "stcr-api-router"
+      ]
+    ]
+  },
+  {
+    "id": "stcr-http-22",
+    "type": "http in",
+    "z": "stcr-platform-tab",
+    "name": "ลบเตา",
+    "url": "/stcr/api/ovens/:ovenId/delete",
+    "method": "post",
+    "upload": false,
+    "swaggerDoc": "",
+    "x": 180,
+    "y": 982,
+    "wires": [
+      [
+        "stcr-api-router"
+      ]
+    ]
+  },
+  {
     "id": "stcr-api-router",
     "type": "function",
     "z": "stcr-platform-tab",
