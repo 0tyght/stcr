@@ -77,6 +77,8 @@ export function TimeSeriesChart({
   showDataZoom?: boolean;  timeRange?: { start: Date; end: Date };
   resetViewKey?: number;
 }) {
+  // STCR_SCALE_ALIGNED_LIMITS_V14: keep the animated limit overlay in the same coordinate space as ECharts.
+  const chartWrapRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<ECharts | null>(null);
   const updateOverlayRef = useRef<() => void>(() => undefined);
@@ -129,9 +131,15 @@ export function TimeSeriesChart({
     const leftSensors = sensors.filter((sensor) => !rightAxisSensors.includes(sensor));
     const rightSensors = sensors.filter((sensor) => rightAxisSensors.includes(sensor));
     const shownLimitSensors = limitSensors ?? sensors;
+    const leftLimitSensors = shownLimitSensors.filter((sensor) =>
+      leftSensors.includes(sensor),
+    );
+    const rightLimitSensors = shownLimitSensors.filter((sensor) =>
+      rightSensors.includes(sensor),
+    );
 
-    const leftBounds = getAxisBounds(points, leftSensors, limits, shownLimitSensors);
-    const rightBounds = getAxisBounds(points, rightSensors, limits, []);
+    const leftBounds = getAxisBounds(points, leftSensors, limits, leftLimitSensors);
+    const rightBounds = getAxisBounds(points, rightSensors, limits, rightLimitSensors);
 
     const series = sensors.flatMap((sensor) => {
       const definition = sensorByKey[sensor];
@@ -399,25 +407,28 @@ export function TimeSeriesChart({
   const updateOverlayLines = useCallback(() => {
     const chart = instanceRef.current;
     const element = chartRef.current;
-
-    if (!chart || !element) {
+    const wrapper = chartWrapRef.current;
+    if (!chart || !element || !wrapper) {
       setOverlayLines([]);
       return;
     }
 
-    const rect = element.getBoundingClientRect();
-
-    if (!rect.width || !rect.height) {
+    const chartRect = element.getBoundingClientRect();
+    const wrapperRect = wrapper.getBoundingClientRect();
+    if (!chartRect.width || !chartRect.height || !wrapperRect.width || !wrapperRect.height) {
       setOverlayLines([]);
       return;
     }
+
+    const offsetX = chartRect.left - wrapperRect.left;
+    const offsetY = chartRect.top - wrapperRect.top;
 
     const rightSensors = sensors.filter((sensor) => rightAxisSensors.includes(sensor));
     const shownLimitSensors = limitSensors ?? sensors;
     const legendSelected = getLegendSelectedMap(chart);
 
-    const x1 = 78;
-    const x2 = rect.width - (rightSensors.length ? 64 : 54);
+    const x1 = offsetX + 78;
+    const x2 = offsetX + chartRect.width - (rightSensors.length ? 64 : 54);
 
     if (x2 <= x1) {
       setOverlayLines([]);
@@ -433,8 +444,10 @@ export function TimeSeriesChart({
       const definition = sensorByKey[sensor];
       const yAxisIndex = rightAxisSensors.includes(sensor) ? 1 : 0;
 
-      const upperY = Number(chart.convertToPixel({ yAxisIndex }, limit.upper));
-      const lowerY = Number(chart.convertToPixel({ yAxisIndex }, limit.lower));
+      const upperPixel = Number(chart.convertToPixel({ yAxisIndex }, limit.upper));
+      const lowerPixel = Number(chart.convertToPixel({ yAxisIndex }, limit.lower));
+      const upperY = Number.isFinite(upperPixel) ? offsetY + upperPixel : Number.NaN;
+      const lowerY = Number.isFinite(lowerPixel) ? offsetY + lowerPixel : Number.NaN;
 
       if (Number.isFinite(upperY)) {
         lines.push(createOverlayLine(sensor, "Upper", upperY, x1, x2, definition.color));
@@ -446,8 +459,8 @@ export function TimeSeriesChart({
     });
 
     setOverlayBox({
-      width: rect.width,
-      height: rect.height,
+      width: wrapperRect.width,
+      height: wrapperRect.height,
     });
 
     setOverlayLines(lines);
@@ -527,6 +540,7 @@ export function TimeSeriesChart({
   return (
     <div
       className="time-series-chart-wrap"
+      ref={chartWrapRef}
       style={{
         position: "relative",
       }}
@@ -618,15 +632,15 @@ function createOverlayLine(
   x2: number,
   color: string,
 ): OverlayLine {
-  const safeY = Math.max(18, y);
+  const lineY = y;
   const labelX = Math.max(x1 + 8, x2 - 48);
-  const labelY = Math.max(18, safeY - 8);
+  const labelY = Math.max(18, lineY - 8);
 
   return {
     id: `${sensor}-${label}`,
     x1,
     x2,
-    y: safeY,
+    y: lineY,
     color,
     label,
     labelX,
@@ -872,25 +886,27 @@ function getAxisBounds(
   limits: LimitMap,
   limitSensors: SensorKey[],
 ): { min: number; max: number } {
+  const values: number[] = [];
+
+  for (const sensor of sensors) {
+    for (const point of points) {
+      const value = Number(point[sensor]);
+      if (Number.isFinite(value)) {
+        values.push(value);
+      }
+    }
+  }
+
+  for (const sensor of limitSensors) {
+    const lower = Number(limits[sensor]?.lower);
+    const upper = Number(limits[sensor]?.upper);
+    if (Number.isFinite(lower)) values.push(lower);
+    if (Number.isFinite(upper)) values.push(upper);
+  }
+
   if (sensors.length === 1 && sensors[0] === "humidity") {
-    return { min: 40, max: 90 };
+    values.push(40, 90);
   }
-
-  if (!sensors.length && !limitSensors.length) {
-    return { min: 0, max: 100 };
-  }
-
-  const values = [
-    ...sensors.flatMap((sensor) =>
-      points.map((point) => point[sensor]),
-    ),
-    ...limitSensors.flatMap((sensor) => [
-      limits[sensor].lower,
-      limits[sensor].upper,
-    ]),
-  ]
-    .map((value) => Number(value))
-    .filter((value) => Number.isFinite(value));
 
   if (!values.length) {
     return { min: 0, max: 100 };
@@ -899,7 +915,8 @@ function getAxisBounds(
   const minValue = Math.min(...values);
   const maxValue = Math.max(...values);
   const spread = Math.max(maxValue - minValue, 1);
-  const pad = spread * 0.08;
+  const minimumPadding = sensors.includes("furnaceTemp") ? 10 : 2;
+  const pad = Math.max(spread * 0.08, minimumPadding);
 
   return {
     min: Math.max(0, Math.floor(minValue - pad)),
