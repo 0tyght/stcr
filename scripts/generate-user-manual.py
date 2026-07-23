@@ -378,4 +378,9 @@ def create_manual() -> None:
 
 
 if __name__ == "__main__":
-    create_manual()
+    import runpy
+
+    runpy.run_path(
+        str(Path(__file__).with_name("generate-user-manual-full.py")),
+        run_name="__main__",
+    )

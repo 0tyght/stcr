@@ -18,3 +18,4 @@ MQTT.txt
 *.zip
 .env.*
 !.env.example
+output/manual-assets/annotated/
