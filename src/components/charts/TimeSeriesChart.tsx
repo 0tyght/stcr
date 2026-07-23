@@ -33,6 +33,14 @@ type OverlayLine = {
   labelY: number;
 };
 
+type SensorChartData = {
+  actual: Array<[number, number | null]>;
+  gaps: Array<[number, number | null]>;
+};
+
+const MIN_GAP_THRESHOLD_MS = 5 * 60 * 1000;
+const MAX_GAP_THRESHOLD_MS = 30 * 60 * 1000;
+
 export function TimeSeriesChart({
   points,
   sensors,
@@ -98,6 +106,14 @@ export function TimeSeriesChart({
   const effectiveShowDataZoom = showDataZoom ?? resolvedTheme !== "print";
   const palette = useMemo(() => getChartPalette(resolvedTheme), [resolvedTheme]);
   const axisDescription = useMemo(() => getAxisDescription(sensors), [sensors]);
+  const gapThresholdMs = useMemo(() => getGapThresholdMs(points), [points]);
+  const hasDataGaps = useMemo(
+    () =>
+      sensors.some(
+        (sensor) => buildSensorChartData(points, sensor, gapThresholdMs).gaps.length > 0,
+      ),
+    [gapThresholdMs, points, sensors],
+  );
 
   const option = useMemo<EChartsCoreOption>(() => {
     const leftSensors = sensors.filter((sensor) => !rightAxisSensors.includes(sensor));
@@ -107,34 +123,65 @@ export function TimeSeriesChart({
     const leftBounds = getAxisBounds(points, leftSensors, limits, shownLimitSensors);
     const rightBounds = getAxisBounds(points, rightSensors, limits, []);
 
-    const series = sensors.map((sensor) => {
+    const series = sensors.flatMap((sensor) => {
       const definition = sensorByKey[sensor];
       const useRightAxis = rightAxisSensors.includes(sensor);
+      const chartData = buildSensorChartData(points, sensor, gapThresholdMs);
 
-      return {
-        name: definition.shortLabel,
-        type: "line" as const,
-        showSymbol: false,
-        smooth: true,
-        hoverAnimation: false,
-        yAxisIndex: useRightAxis ? 1 : 0,
-        data: points.map((point) => [point.timestamp, point[sensor]]),
-        lineStyle: {
-          width: 2.2,
-          color: definition.color,
-          opacity: 1,
+      return [
+        {
+          name: definition.shortLabel,
+          type: "line" as const,
+          showSymbol: false,
+          smooth: true,
+          connectNulls: false,
+          hoverAnimation: false,
+          yAxisIndex: useRightAxis ? 1 : 0,
+          data: chartData.actual,
+          lineStyle: {
+            width: 2.2,
+            color: definition.color,
+            opacity: 1,
+          },
+          areaStyle: {
+            color: withAlpha(definition.color, palette.areaAlpha),
+            opacity: 1,
+          },
+          itemStyle: {
+            color: definition.color,
+          },
+          emphasis: {
+            disabled: true,
+          },
         },
-        areaStyle: {
-          color: withAlpha(definition.color, palette.areaAlpha),
-          opacity: 1,
+        {
+          name: definition.shortLabel,
+          type: "line" as const,
+          showSymbol: false,
+          smooth: false,
+          connectNulls: false,
+          silent: true,
+          hoverAnimation: false,
+          yAxisIndex: useRightAxis ? 1 : 0,
+          data: chartData.gaps,
+          lineStyle: {
+            width: 1.6,
+            type: "dashed" as const,
+            color: definition.color,
+            opacity: 0.78,
+          },
+          itemStyle: {
+            color: definition.color,
+          },
+          tooltip: {
+            show: false,
+          },
+          emphasis: {
+            disabled: true,
+          },
+          z: 3,
         },
-        itemStyle: {
-          color: definition.color,
-        },
-        emphasis: {
-          disabled: true,
-        },
-      };
+      ];
     });
 
     return {
@@ -178,6 +225,7 @@ export function TimeSeriesChart({
       legend: {
         top: 8,
         type: "scroll",
+        data: sensors.map((sensor) => sensorByKey[sensor].shortLabel),
         selectedMode: true,
         textStyle: {
           color: palette.muted,
@@ -328,6 +376,7 @@ export function TimeSeriesChart({
   }, [
     axisDescription,
     effectiveShowDataZoom,
+    gapThresholdMs,
     limitSensors,
     limits,
     palette,
@@ -452,6 +501,12 @@ export function TimeSeriesChart({
         position: "relative",
       }}
     >
+      {hasDataGaps && resolvedTheme !== "print" ? (
+        <div className="chart-gap-note" role="note">
+          <span aria-hidden="true" />
+          เส้นประเชื่อมช่วงที่ไม่มีข้อมูลจริง
+        </div>
+      ) : null}
       <div className="time-series-chart" ref={chartRef} role="img" aria-label={title} />
 
       {overlayLines.length ? (
@@ -695,6 +750,74 @@ function withAlpha(hex: string, alpha: number): string {
   const b = parseInt(normalized.slice(4, 6), 16);
 
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function getGapThresholdMs(points: TimeSeriesPoint[]): number {
+  const timestamps = points
+    .map((point) => Date.parse(point.timestamp))
+    .filter(Number.isFinite)
+    .sort((left, right) => left - right);
+  const intervals = timestamps
+    .slice(1)
+    .map((timestamp, index) => timestamp - timestamps[index])
+    .filter((interval) => interval > 0 && interval <= 60 * 60 * 1000)
+    .sort((left, right) => left - right);
+
+  if (!intervals.length) return MIN_GAP_THRESHOLD_MS;
+
+  const middle = Math.floor(intervals.length / 2);
+  const median =
+    intervals.length % 2
+      ? intervals[middle]
+      : (intervals[middle - 1] + intervals[middle]) / 2;
+
+  return Math.min(
+    MAX_GAP_THRESHOLD_MS,
+    Math.max(MIN_GAP_THRESHOLD_MS, median * 3),
+  );
+}
+
+function buildSensorChartData(
+  points: TimeSeriesPoint[],
+  sensor: SensorKey,
+  gapThresholdMs: number,
+): SensorChartData {
+  const actual: SensorChartData["actual"] = [];
+  const gaps: SensorChartData["gaps"] = [];
+  let previous: { timestamp: number; value: number } | null = null;
+  let missingSincePrevious = false;
+
+  for (const point of points) {
+    const timestamp = Date.parse(point.timestamp);
+    const rawValue = point[sensor] as number | null | undefined;
+    const value = rawValue == null ? Number.NaN : Number(rawValue);
+
+    if (!Number.isFinite(timestamp) || !Number.isFinite(value)) {
+      if (Number.isFinite(timestamp)) actual.push([timestamp, null]);
+      missingSincePrevious = true;
+      continue;
+    }
+
+    const hasGap =
+      previous !== null &&
+      (missingSincePrevious || timestamp - previous.timestamp > gapThresholdMs);
+
+    if (hasGap && previous) {
+      const breakAt = previous.timestamp + (timestamp - previous.timestamp) / 2;
+      actual.push([breakAt, null]);
+      gaps.push(
+        [previous.timestamp, previous.value],
+        [timestamp, value],
+        [timestamp + 1, null],
+      );
+    }
+
+    actual.push([timestamp, value]);
+    previous = { timestamp, value };
+    missingSincePrevious = false;
+  }
+
+  return { actual, gaps };
 }
 
 function getAxisBounds(
