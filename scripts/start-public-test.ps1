@@ -6,8 +6,6 @@
 
 $ErrorActionPreference = 'Stop'
 
-# Public start must never commit or push automatically.
-$SkipGitPush = $true
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $runtimeDir = Join-Path $root '.runtime'
 $cloudflared = Join-Path $runtimeDir 'cloudflared.exe'
@@ -161,6 +159,65 @@ function Test-LocalHealth {
   }
 }
 
+function Publish-RuntimeConfig([string]$ExpectedApiBaseUrl) {
+  if ($SkipGitPush) {
+    Write-Host 'Skipping GitHub Pages runtime-config update.' -ForegroundColor DarkGray
+    return
+  }
+
+  $branch = (& git -C $root branch --show-current).Trim()
+  if ($LASTEXITCODE -ne 0 -or $branch -ne 'main') {
+    throw "Automatic runtime-config publishing requires the main branch (current: $branch)"
+  }
+
+  $stagedOtherFiles = @(
+    & git -C $root diff --cached --name-only |
+      Where-Object { $_ -and $_ -ne 'public/runtime-config.json' }
+  )
+  if ($stagedOtherFiles.Count -gt 0) {
+    throw 'Cannot publish runtime-config while unrelated files are staged. Commit or unstage them first.'
+  }
+
+  & git -C $root add -- 'public/runtime-config.json'
+  if ($LASTEXITCODE -ne 0) { throw 'Failed to stage public/runtime-config.json' }
+
+  & git -C $root diff --cached --quiet -- 'public/runtime-config.json'
+  if ($LASTEXITCODE -eq 1) {
+    Write-Host 'Publishing the new API URL to GitHub Pages...' -ForegroundColor Cyan
+    & git -C $root commit -m 'Update temporary API endpoint' -- 'public/runtime-config.json'
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to commit the new runtime-config' }
+    & git -C $root push origin main
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to push the new runtime-config to GitHub' }
+  } elseif ($LASTEXITCODE -ne 0) {
+    throw 'Failed to compare the runtime-config with Git'
+  } else {
+    Write-Host 'GitHub already has this API URL.' -ForegroundColor DarkGray
+  }
+
+  if ($SkipDeployWait) { return }
+
+  Write-Host 'Waiting for GitHub Pages to use the new API URL...' -ForegroundColor DarkGray
+  $deadline = (Get-Date).AddMinutes(3)
+  $deployed = $false
+  do {
+    try {
+      $cacheBust = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+      $publicConfig = Invoke-RestMethod -TimeoutSec 15 `
+        "https://0tyght.github.io/stcr/runtime-config.json?t=$cacheBust"
+      $deployed = $publicConfig.apiBaseUrl -eq $ExpectedApiBaseUrl
+    } catch {
+      $deployed = $false
+    }
+    if (-not $deployed) { Start-Sleep -Seconds 5 }
+  } while ((-not $deployed) -and (Get-Date) -lt $deadline)
+
+  if (-not $deployed) {
+    throw 'GitHub Pages did not publish the new API URL within 3 minutes'
+  }
+
+  Write-Host 'GitHub Pages is using the new API URL.' -ForegroundColor Green
+}
+
 trap {
   Write-Warning "Startup failed: $($_.Exception.Message)"
   Stop-StcrProcesses
@@ -301,6 +358,8 @@ $runtimeConfig = [ordered]@{
   $runtimeConfig + [Environment]::NewLine,
   (New-Object Text.UTF8Encoding($false))
 )
+
+Publish-RuntimeConfig "$url/stcr/api"
 
 Write-Host ''
 Write-Host 'STCR public test server is ready' -ForegroundColor Green

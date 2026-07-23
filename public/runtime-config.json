@@ -1,7 +1,7 @@
 {
     "dataSource":  "node-red",
-    "apiBaseUrl":  "https://theatre-late-instructor-habitat.trycloudflare.com/stcr/api",
+    "apiBaseUrl":  "https://detroit-valentine-wrapping-groove.trycloudflare.com/stcr/api",
     "pollIntervalMs":  1000,
     "requestTimeoutMs":  15000,
-    "updatedAt":  "2026-07-22T14:02:06.4083110Z"
+    "updatedAt":  "2026-07-23T02:25:14.6789208Z"
 }
