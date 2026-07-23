@@ -377,6 +377,12 @@ function downloadBlob(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function confirmDownload(filename: string, detail: string): boolean {
+  return window.confirm(
+    `ยืนยันการดาวน์โหลด?\n\n${detail}\nชื่อไฟล์: ${filename}\n\nกรุณาตรวจสอบเตา รอบ และข้อมูลในฟอร์มก่อนดาวน์โหลด`,
+  );
+}
+
 function createCsvBlob(points: TimeSeriesPoint[], sensors: SensorKey[]): Blob {
   const header = ["timestamp", ...sensors];
   const rows = points.map((point) => [
@@ -642,6 +648,8 @@ export function ReportPage() {
       const range = cycleRange ?? getCycleRange(oven, mode, safeCycle);
       const filename = createPdfFilename(company, safeCycle, range.start);
 
+      if (!confirmDownload(filename, `รายงาน PDF รอบ ${safeCycle}`)) return;
+
       const fileHandle = chooseLocation
         ? await requestSaveFile(filename, "PDF document", "application/pdf", ".pdf")
         : undefined;
@@ -693,6 +701,9 @@ export function ReportPage() {
     const high = Math.max(rangeFromCycle, rangeToCycle);
     const low = Math.min(rangeFromCycle, rangeToCycle);
     const filename = `${company.shortName}-รอบที่-${high}-ถึง-${low}.zip`;
+
+    if (!confirmDownload(filename, `รายงาน ZIP จำนวน ${cycles.length} รอบ`)) return;
+
     const fileHandle = await requestSaveFile(
       filename,
       "ZIP archive",
@@ -737,6 +748,9 @@ export function ReportPage() {
     if (!oven || selectedCycle == null || !points.length) return;
 
     const filename = `F-WS-05-${oven.name}-cycle-${selectedCycle}.csv`;
+
+    if (!confirmDownload(filename, `ข้อมูล CSV รอบ ${selectedCycle}`)) return;
+
     const fileHandle = await requestSaveFile(
       filename,
       "CSV document",

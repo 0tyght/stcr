@@ -255,6 +255,19 @@ const ovenAlarms = useMemo(
     setCurrentReportFrameSrc(reportUrl);
   }
 
+  function handleDownloadCsv() {
+    if (!oven) return;
+
+    const filename = `${oven.name}-cycle.csv`;
+    const confirmed = window.confirm(
+      `ยืนยันการดาวน์โหลด?\n\nข้อมูล CSV ของ ${oven.name}\nชื่อไฟล์: ${filename}`,
+    );
+
+    if (!confirmed) return;
+
+    downloadCsv(filename, points, allSensorKeys);
+  }
+
   const currentCycleLabel =
     effectiveMode === "realtime"
       ? `รอบปัจจุบัน ${oven.cycleCount}`
@@ -386,7 +399,7 @@ const ovenAlarms = useMemo(
             <button
               className="button"
               type="button"
-              onClick={() => downloadCsv(`${oven.name}-cycle.csv`, points, allSensorKeys)}
+              onClick={handleDownloadCsv}
             >
               <Download size={17} />
               ส่งออก CSV
