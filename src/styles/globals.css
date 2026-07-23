@@ -510,6 +510,20 @@ kbd {
   flex: 0 0 auto;
 }
 
+.topbar-manual-link {
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.topbar-manual-link:hover,
+.topbar-manual-link:focus-visible {
+  border-color: var(--line-strong);
+  background: #202733;
+  color: var(--ink-strong);
+  outline: none;
+}
+
 .page-actions,
 .download-row {
   display: flex;
@@ -568,6 +582,10 @@ kbd {
   .topbar-actions .toolbar-button:first-child {
     display: none;
   }
+
+  .topbar-actions .toolbar-button.topbar-manual-link {
+    display: inline-flex;
+  }
 }
 
 @media (max-width: 1160px) {
@@ -597,6 +615,15 @@ kbd {
   }
 
   .live-clock {
+    display: none;
+  }
+
+  .topbar-manual-link {
+    width: 32px;
+    padding: 0;
+  }
+
+  .topbar-manual-link-label {
     display: none;
   }
 }

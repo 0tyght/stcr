@@ -1,4 +1,4 @@
-import { Clock3, LogOut, Palette, Search, User } from "lucide-react";
+import { BookDown, Clock3, LogOut, Palette, Search, User } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -127,6 +127,23 @@ export function Topbar({ onLogout }: TopbarProps) {
       </div>
 
       <div className="topbar-actions">
+        <a
+          className="toolbar-button topbar-manual-link"
+          href={`${import.meta.env.BASE_URL}manual/STCR-User-Manual.pdf`}
+          download="STCR-User-Manual.pdf"
+          title="ดาวน์โหลดคู่มือการใช้งาน"
+          onClick={(event) => {
+            const confirmed = window.confirm(
+              "ยืนยันดาวน์โหลดคู่มือการใช้งาน STCR?\n\nชื่อไฟล์: STCR-User-Manual.pdf",
+            );
+
+            if (!confirmed) event.preventDefault();
+          }}
+        >
+          <BookDown size={15} />
+          <span className="topbar-manual-link-label">คู่มือ</span>
+        </a>
+
         <button
           type="button"
           className={`theme-switch is-${themeMode}`}
