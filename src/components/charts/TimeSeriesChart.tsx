@@ -165,10 +165,10 @@ export function TimeSeriesChart({
           yAxisIndex: useRightAxis ? 1 : 0,
           data: chartData.gaps,
           lineStyle: {
-            width: 1.6,
-            type: "dashed" as const,
+            width: 2.2,
+            type: "solid" as const,
             color: definition.color,
-            opacity: 0.78,
+            opacity: 1,
           },
           itemStyle: {
             color: definition.color,
@@ -504,7 +504,7 @@ export function TimeSeriesChart({
       {hasDataGaps && resolvedTheme !== "print" ? (
         <div className="chart-gap-note" role="note">
           <span aria-hidden="true" />
-          เส้นประเชื่อมช่วงที่ไม่มีข้อมูลจริง
+          ช่วงที่ไม่มีข้อมูลจริงจะแสดงเฉพาะเส้นเชื่อม
         </div>
       ) : null}
       <div className="time-series-chart" ref={chartRef} role="img" aria-label={title} />

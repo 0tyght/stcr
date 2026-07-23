@@ -1608,8 +1608,8 @@ select:focus {
 
 .chart-gap-note span {
   width: 28px;
-  border-top: 2px dashed currentColor;
-  opacity: 0.78;
+  border-top: 2px solid currentColor;
+  opacity: 1;
 }
 
 .time-series-chart {
