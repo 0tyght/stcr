@@ -36,9 +36,22 @@ export function SensorGauge({
   const readingAgeMs = Date.now() - Date.parse(updatedAt);
   const readingIsStale = !Number.isFinite(readingAgeMs) || readingAgeMs > 180_000;
 
-  const hasLimit = showLimit && !!limit;
+  const hasLimit = showLimit && !!limit && sensor !== "blowerTemp";
   const scale = getSensorScale(sensor);
   const ratio = clamp((value - scale.min) / Math.max(scale.max - scale.min, 1), 0, 1);
+
+  // หัวกลมของ stroke จะยื่นเลยปลาย path ครึ่งหนึ่งของความหนาเส้น
+  // จึงหดปลาย centerline กลับ เพื่อให้ขอบหัวกลมตรงกับค่าจริงบนสเกล
+  const progressCapRatio =
+    (INNER_STROKE_WIDTH / 2) / (Math.PI * INNER_RADIUS);
+  const progressArcEndRatio =
+    ratio > 0 ? Math.max(0, ratio - progressCapRatio) : 0;
+  const progressEndPoint = pointOnGauge(
+    INNER_RADIUS,
+    progressArcEndRatio,
+  );
+  const outerStartPoint = pointOnGauge(OUTER_RADIUS, 0);
+  const outerEndPoint = pointOnGauge(OUTER_RADIUS, 1);
 
   const tone = hasLimit ? getGaugeTone(value, limit.lower, limit.upper) : "normal";
   const progressColor = hasLimit ? getToneColor(tone) : definition.color;
@@ -132,12 +145,29 @@ export function SensorGauge({
                 fill="none"
                 stroke={segment.color}
                 strokeWidth={OUTER_STROKE_WIDTH}
-                strokeLinecap="round"
+                strokeLinecap={hasLimit ? "butt" : "round"}
                 opacity={0.96}
               />
             );
           })}
 
+
+          {hasLimit ? (
+            <>
+              <circle
+                cx={outerStartPoint.x}
+                cy={outerStartPoint.y}
+                r={OUTER_STROKE_WIDTH / 2}
+                fill={outerSegments[0]?.color}
+              />
+              <circle
+                cx={outerEndPoint.x}
+                cy={outerEndPoint.y}
+                r={OUTER_STROKE_WIDTH / 2}
+                fill={outerSegments[outerSegments.length - 1]?.color}
+              />
+            </>
+          ) : null}
           <path
             d={describeGaugeArc(INNER_RADIUS, 0, 1)}
             fill="none"
@@ -145,14 +175,27 @@ export function SensorGauge({
             strokeWidth={INNER_STROKE_WIDTH}
             strokeLinecap="round"
           />
-
-          <path
-            d={describeGaugeArc(INNER_RADIUS, 0, ratio)}
-            fill="none"
-            stroke={progressColor}
-            strokeWidth={INNER_STROKE_WIDTH}
-            strokeLinecap="round"
-          />
+          {ratio > 0 ? (
+            <>
+              <path
+                d={describeGaugeArc(
+                  INNER_RADIUS,
+                  0,
+                  progressArcEndRatio,
+                )}
+                fill="none"
+                stroke={progressColor}
+                strokeWidth={INNER_STROKE_WIDTH}
+                strokeLinecap="butt"
+              />
+              <circle
+                cx={progressEndPoint.x}
+                cy={progressEndPoint.y}
+                r={INNER_STROKE_WIDTH / 2}
+                fill={progressColor}
+              />
+            </>
+          ) : null}
 
           <text
             x={CENTER_X}
