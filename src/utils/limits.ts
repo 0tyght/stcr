@@ -6,12 +6,12 @@ export type ReadingState = "normal" | "warning" | "danger";
 export const temperatureLimitSensors: SensorKey[] = ["chamberTemp", "furnaceTemp"];
 
 export function usesTemperatureLimit(sensor: SensorKey): boolean {
-  return sensor === "chamberTemp" || sensor === "furnaceTemp" || sensor === "blowerTemp";
+  return sensor === "chamberTemp" || sensor === "furnaceTemp";
 }
 
 export function getLimitSourceSensor(sensor: SensorKey): SensorKey | null {
   if (sensor === "chamberTemp") return "chamberTemp";
-  if (sensor === "furnaceTemp" || sensor === "blowerTemp") return "furnaceTemp";
+  if (sensor === "furnaceTemp") return "furnaceTemp";
   return null;
 }
 

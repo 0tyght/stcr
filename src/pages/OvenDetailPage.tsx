@@ -484,7 +484,7 @@ const ovenAlarms = useMemo(
 
             <ChartPanel
               title="อุณหภูมิเตาเผาและ Blower"
-              description="เตาเผาและ Blower ใช้ Upper/Lower ชุดเดียวกัน"
+              description="เส้น Upper/Lower ใช้เฉพาะอุณหภูมิเตาเผา"
               points={points}
               sensors={heatSensors}
               limits={oven.limits}
@@ -493,7 +493,7 @@ const ovenAlarms = useMemo(
               leftAxisName="อุณหภูมิ °C"
               rightAxisName=""
               limitSensors={["furnaceTemp"]}
-              limitLabel="เตาเผา / Blower"
+              limitLabel="เตาเผา"
               timeRange={cycleRange ?? undefined}
             />
           </section>
@@ -746,7 +746,7 @@ function HistoricalChartSection({
 
         <ChartPanel
           title="อุณหภูมิเตาเผาและ Blower"
-          description="เตาเผาและ Blower ใช้ Upper/Lower ชุดเดียวกัน"
+          description="เส้น Upper/Lower ใช้เฉพาะอุณหภูมิเตาเผา"
           points={points}
           sensors={heatSensors}
           limits={limits}
@@ -755,7 +755,7 @@ function HistoricalChartSection({
           leftAxisName="อุณหภูมิ °C"
           rightAxisName=""
           limitSensors={["furnaceTemp"]}
-          limitLabel="เตาเผา / Blower"
+          limitLabel="เตาเผา"
         />
       </div>
     </section>
@@ -911,9 +911,12 @@ function ChartPanel({
   );
 }
 
-function getGaugeLimit(oven: Oven, sensor: SensorKey) {
-  if (sensor === "furnaceTemp" || sensor === "blowerTemp") {
-    return oven.limits.furnaceTemp;
+function getGaugeLimit(
+  oven: Oven,
+  sensor: SensorKey,
+) {
+  if (sensor === "blowerTemp" || sensor === "humidity") {
+    return undefined;
   }
 
   return oven.limits[sensor];

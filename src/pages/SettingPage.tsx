@@ -57,14 +57,7 @@ export function SettingPage() {
     event.preventDefault();
     if (!oven || !limits) return;
     setSaving(true);
-    await saveLimits(oven.id, {
-      ...limits,
-      blowerTemp: {
-        ...limits.blowerTemp,
-        lower: limits.furnaceTemp.lower,
-        upper: limits.furnaceTemp.upper,
-      },
-    });
+    await saveLimits(oven.id, limits);
     setSaving(false);
   }
 
@@ -185,7 +178,7 @@ export function SettingPage() {
             <div className="limit-form">
               {editableLimitSensors.map((sensor) => (
                 <div className="limit-row" key={sensor}>
-                  <strong>{sensor === "furnaceTemp" ? "อุณหภูมิเตาเผา / Blower" : sensorByKey[sensor].label}</strong>
+                  <strong>{sensorByKey[sensor].label}</strong>
                   <label className="field">
                     <span>Lower</span>
                     <input
