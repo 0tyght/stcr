@@ -1,7 +1,7 @@
 {
     "dataSource":  "node-red",
-    "apiBaseUrl":  "https://commission-violation-commitment-assets.trycloudflare.com/stcr/api",
+    "apiBaseUrl":  "https://baghdad-complete-while-dvd.trycloudflare.com/stcr/api",
     "pollIntervalMs":  1000,
     "requestTimeoutMs":  15000,
-    "updatedAt":  "2026-07-23T21:12:42.7665124Z"
+    "updatedAt":  "2026-07-23T21:27:40.3072704Z"
 }
