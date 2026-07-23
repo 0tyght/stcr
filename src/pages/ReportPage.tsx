@@ -2072,11 +2072,11 @@ function FwsSvgTemperatureGrid({
         <>
           <SvgText x={30} y={chartBottom + 17} size={8.2} weight={700} anchor="middle">ไม้ฟืน (ก.ก.)</SvgText>
           <SvgText x={30} y={chartBottom + 29} size={6.8} anchor="middle">Firewood</SvgText>
-          <SvgText x={30} y={firewoodRowBottom + 12} size={8.2} weight={700} anchor="middle">สภาพยาง</SvgText>
+          <SvgText x={30} y={firewoodRowBottom + 12} size={8.2} weight={700} anchor="middle">สภาพสุกของยาง</SvgText>
           <SvgText x={30} y={firewoodRowBottom + 22} size={6.8} anchor="middle">Smoked condition</SvgText>
         </>
       ) : (
-        <SvgText x={30} y={chartBottom + 15} size={10.5} weight={700} anchor="middle">สภาพยาง</SvgText>
+        <SvgText x={30} y={chartBottom + 15} size={10.5} weight={700} anchor="middle">สภาพสุกของยาง</SvgText>
       )}
 
       {Array.from({ length: template.dayCount }).map((_, dayIndex) => {
@@ -2579,7 +2579,7 @@ function GrSvgNotes({ y, form }: { y: number; form: ReportFormState }) {
       </g>
       <g transform="translate(0 -9)">
       <SvgText x={58} y={17} size={8.1} weight={700}>
-        * สภาพลูกยาง
+        * สภาพสุกของยาง
       </SvgText>
       <path
         d="M 135 8 L 143 18 M 143 8 L 135 18"
