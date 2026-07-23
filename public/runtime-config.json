@@ -1,7 +1,7 @@
 {
     "dataSource":  "node-red",
-    "apiBaseUrl":  "https://detroit-valentine-wrapping-groove.trycloudflare.com/stcr/api",
+    "apiBaseUrl":  "https://landscape-doors-sec-step.trycloudflare.com/stcr/api",
     "pollIntervalMs":  1000,
     "requestTimeoutMs":  15000,
-    "updatedAt":  "2026-07-23T02:25:14.6789208Z"
+    "updatedAt":  "2026-07-23T20:20:38.1150614Z"
 }
