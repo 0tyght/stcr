@@ -67,6 +67,10 @@ export function OvenDetailPage() {
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [calendarCursor, setCalendarCursor] = useState<Date>(() => new Date());
   const [points, setPoints] = useState<TimeSeriesPoint[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [lastHistorySuccessAt, setLastHistorySuccessAt] =
+    useState<string | null>(null);
   const [chartViewResetKey, setChartViewResetKey] = useState(0);
   const [currentReportFrameSrc, setCurrentReportFrameSrc] = useState<string | null>(null);
 
@@ -147,21 +151,41 @@ export function OvenDetailPage() {
     let cancelled = false;
 
     const loadHistory = async () => {
-      const nextPoints = await apiClient.getHistory({
-        ovenId: oven.id,
-        preset: "custom",
-        sensors: allSensorKeys,
-        startAt: historyStartAt,
-        endAt:
-          effectiveMode === "realtime"
-            ? new Date().toISOString()
-            : historyEndAt,
-        cycleNumber: historyCycleNumber,
-        includeIgnition: historyIncludeIgnition,
-      });
-
       if (!cancelled) {
-        setPoints(nextPoints);
+        setHistoryLoading(true);
+        setHistoryError(null);
+      }
+
+      try {
+        const nextPoints = await apiClient.getHistory({
+          ovenId: oven.id,
+          preset: "custom",
+          sensors: allSensorKeys,
+          startAt: historyStartAt,
+          endAt:
+            effectiveMode === "realtime"
+              ? new Date().toISOString()
+              : historyEndAt,
+          cycleNumber: historyCycleNumber,
+          includeIgnition: historyIncludeIgnition,
+        });
+
+        if (!cancelled) {
+          setPoints(nextPoints);
+          setLastHistorySuccessAt(new Date().toISOString());
+        }
+      } catch (nextError) {
+        if (!cancelled) {
+          setHistoryError(
+            nextError instanceof Error
+              ? nextError.message
+              : "โหลดข้อมูลกราฟไม่สำเร็จ",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setHistoryLoading(false);
+        }
       }
     };
 
@@ -331,7 +355,24 @@ const ovenAlarms = useMemo(
           </button>
         </div>
 
-        {effectiveMode === "realtime" ? (
+        {historyLoading || historyError ? (
+        <div
+          className={`history-load-state ${
+            historyError ? "is-error" : "is-loading"
+          }`}
+        >
+          {historyError
+            ? `โหลดข้อมูลกราฟไม่สำเร็จ: ${historyError}`
+            : "กำลังโหลดข้อมูลกราฟ..."}
+          {historyError && lastHistorySuccessAt
+            ? ` ข้อมูลที่แสดงสำเร็จล่าสุดเมื่อ ${formatDateTime(
+                lastHistorySuccessAt,
+              )}`
+            : ""}
+        </div>
+      ) : null}
+
+      {effectiveMode === "realtime" ? (
           <p className="mode-note">
             <CalendarClock size={16} />
             ปัจจุบัน คือกราฟรอบที่กำลังอบอยู่ ข้อมูลจะเติมเข้ากราฟตามรอบส่งจริง

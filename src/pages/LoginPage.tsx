@@ -44,8 +44,7 @@ export function LoginPage({
     document.documentElement.dataset.uiTheme = themeMode;
     localStorage.setItem(COMPANY_STORAGE_KEY, companyId);
     localStorage.setItem(THEME_STORAGE_KEY, themeMode);
-    localStorage.setItem(ACCOUNT_STORAGE_KEY, username);
-  }, [companyId, themeMode, username]);
+  }, [companyId, themeMode]);
 
   function selectCompany(nextCompanyId: CompanyId) {
     if (nextCompanyId === companyId) return;
@@ -59,13 +58,13 @@ export function LoginPage({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     localStorage.setItem(COMPANY_STORAGE_KEY, companyId);
-    localStorage.setItem(ACCOUNT_STORAGE_KEY, username);
     localStorage.setItem(THEME_STORAGE_KEY, themeMode);
 
     setLoginError("");
     setSubmitting(true);
     try {
-      await onLogin(username, password, companyId);
+      await onLogin(username.trim(), password, companyId);
+      localStorage.setItem(ACCOUNT_STORAGE_KEY, username.trim());
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : "เข้าสู่ระบบไม่สำเร็จ");
     } finally {

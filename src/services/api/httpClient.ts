@@ -44,10 +44,21 @@ async function request(path: string, options: RequestOptions = {}, query?: URLSe
         clearAuthSession();
         window.dispatchEvent(new Event("stcr-auth-expired"));
       }
-      throw new ApiError(`Node-RED ตอบกลับด้วยสถานะ ${response.status}`, {
-        status: response.status,
-        code: "HTTP_ERROR",
-      });
+
+      const payload = (await response
+        .clone()
+        .json()
+        .catch(() => null)) as
+        | { error?: string; code?: string }
+        | null;
+
+      throw new ApiError(
+        payload?.error || `Node-RED ตอบกลับด้วยสถานะ ${response.status}`,
+        {
+          status: response.status,
+          code: payload?.code || "HTTP_ERROR",
+        },
+      );
     }
 
     return response;

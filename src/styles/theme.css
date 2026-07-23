@@ -793,3 +793,542 @@
   border-color: color-mix(in srgb, var(--company-primary) 20%, var(--line));
   box-shadow: 0 3px 12px rgba(15, 23, 42, 0.07);
 }
+
+/* =========================================================
+   Layered dark company theme
+   Keeps the information density of the company theme while
+   using several dark surface levels instead of one flat black.
+   ========================================================= */
+
+:root[data-ui-theme="dark"] {
+  color-scheme: dark;
+  --dark-accent: var(--company-primary, var(--orange));
+  --dark-accent-strong: color-mix(in srgb, var(--dark-accent) 78%, #ffffff);
+  --dark-accent-soft: color-mix(in srgb, var(--dark-accent) 12%, transparent);
+  --dark-accent-faint: color-mix(in srgb, var(--dark-accent) 5%, transparent);
+  --dark-warm-accent: #f08a24;
+  --dark-on-primary: #ffffff;
+}
+
+:root[data-ui-theme="dark"][data-company="gr"] {
+  --dark-on-primary: #171a1f;
+}
+
+:root[data-ui-theme="dark"] body,
+:root[data-ui-theme="dark"] .app-shell,
+:root[data-ui-theme="dark"] .workspace {
+  background: var(--bg);
+}
+
+:root[data-ui-theme="dark"] .view-root {
+  background:
+    radial-gradient(
+      circle at 84% -8%,
+      color-mix(in srgb, var(--dark-accent) 8%, transparent),
+      transparent 28%
+    ),
+    linear-gradient(180deg, #0b1119 0, var(--bg) 210px);
+  color: var(--ink);
+}
+
+:root[data-ui-theme="dark"] .view-root:not(.page-dashboard) {
+  --page-accent: var(--dark-accent);
+  --page-accent-soft: color-mix(in srgb, var(--dark-accent) 9%, var(--surface));
+}
+
+/* Topbar */
+
+:root[data-ui-theme="dark"] .topbar {
+  border-bottom-color: color-mix(in srgb, var(--dark-accent) 14%, var(--line));
+  background: rgba(12, 18, 27, 0.94);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.025) inset,
+    0 8px 24px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(16px);
+}
+
+:root[data-ui-theme="dark"] .breadcrumbs,
+:root[data-ui-theme="dark"] .breadcrumb-item a,
+:root[data-ui-theme="dark"] .breadcrumb-item span,
+:root[data-ui-theme="dark"] .live-clock {
+  color: var(--muted);
+}
+
+:root[data-ui-theme="dark"] .breadcrumb-item strong {
+  color: var(--ink-strong);
+}
+
+:root[data-ui-theme="dark"] .global-search,
+:root[data-ui-theme="dark"] .toolbar-button,
+:root[data-ui-theme="dark"] .icon-button,
+:root[data-ui-theme="dark"] .user-chip,
+:root[data-ui-theme="dark"] kbd {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface-soft) 82%, #080c12);
+  color: var(--muted);
+}
+
+:root[data-ui-theme="dark"] .global-search:focus-within,
+:root[data-ui-theme="dark"] .toolbar-button:hover,
+:root[data-ui-theme="dark"] .icon-button:hover,
+:root[data-ui-theme="dark"] .user-chip:hover {
+  border-color: color-mix(in srgb, var(--dark-accent) 62%, var(--line));
+  background: color-mix(in srgb, var(--dark-accent) 10%, var(--surface-soft));
+  color: var(--ink-strong);
+}
+
+:root[data-ui-theme="dark"] .theme-switch {
+  border-color: color-mix(in srgb, var(--dark-accent) 54%, var(--line));
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--dark-accent) 16%, var(--surface-soft)),
+      var(--surface)
+    );
+  color: var(--ink-strong);
+}
+
+:root[data-ui-theme="dark"] .theme-switch-track {
+  background: color-mix(in srgb, var(--dark-accent) 34%, var(--surface-strong));
+}
+
+:root[data-ui-theme="dark"] .theme-switch-dot {
+  background: var(--dark-accent-strong);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.18);
+}
+
+/* Sidebar */
+
+:root[data-ui-theme="dark"] .sidebar {
+  border-right-color: color-mix(in srgb, var(--dark-accent) 10%, var(--line));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--dark-accent) 7%, #151c26) 0,
+      #101720 150px,
+      #0c121a 100%
+    );
+  box-shadow: 8px 0 28px rgba(0, 0, 0, 0.16);
+}
+
+:root[data-ui-theme="dark"] .brand-row {
+  border-bottom-color: color-mix(in srgb, var(--dark-accent) 18%, var(--line));
+  background:
+    linear-gradient(
+      110deg,
+      color-mix(in srgb, var(--dark-accent) 11%, var(--surface-soft)),
+      rgba(10, 15, 22, 0.58)
+    );
+}
+
+:root[data-ui-theme="dark"] .brand-mark-text {
+  color: var(--dark-accent);
+  text-shadow: 0 0 20px color-mix(in srgb, var(--dark-accent) 28%, transparent);
+}
+
+:root[data-ui-theme="dark"] .nav-item,
+:root[data-ui-theme="dark"] .oven-link {
+  color: #9aa6b7;
+}
+
+:root[data-ui-theme="dark"] .nav-item:hover,
+:root[data-ui-theme="dark"] .oven-link:hover {
+  background: color-mix(in srgb, var(--dark-accent) 8%, var(--surface-soft));
+  color: var(--ink-strong);
+}
+
+:root[data-ui-theme="dark"] .nav-item.active,
+:root[data-ui-theme="dark"] .oven-link.active {
+  border-left-color: var(--dark-accent);
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--dark-accent) 22%, var(--surface-soft)),
+      color-mix(in srgb, var(--dark-accent) 7%, transparent)
+    );
+  color: var(--dark-accent-strong);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--dark-accent) 13%, transparent);
+}
+
+/* Panels and visual hierarchy */
+
+:root[data-ui-theme="dark"] .panel,
+:root[data-ui-theme="dark"] .metric-card,
+:root[data-ui-theme="dark"] .summary-card,
+:root[data-ui-theme="dark"] .oven-card,
+:root[data-ui-theme="dark"] .time-block,
+:root[data-ui-theme="dark"] .mini-card,
+:root[data-ui-theme="dark"] .gauge-card,
+:root[data-ui-theme="dark"] .history-stat-card,
+:root[data-ui-theme="dark"] .status-banner,
+:root[data-ui-theme="dark"] .status-range-card,
+:root[data-ui-theme="dark"] .alarm-item,
+:root[data-ui-theme="dark"] .table-wrap,
+:root[data-ui-theme="dark"] .chart-panel,
+:root[data-ui-theme="dark"] .grafana-chart-panel,
+:root[data-ui-theme="dark"] .report-form-controls,
+:root[data-ui-theme="dark"] .report-preview-column,
+:root[data-ui-theme="dark"] .report-detail-card {
+  border-color: color-mix(in srgb, var(--dark-accent) 11%, var(--line));
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.018), transparent 48%),
+    var(--surface);
+  color: var(--ink);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.025) inset,
+    0 8px 22px rgba(0, 0, 0, 0.2);
+}
+
+:root[data-ui-theme="dark"] .summary-card:nth-child(4n + 1),
+:root[data-ui-theme="dark"] .metric-card:nth-child(4n + 1) {
+  background:
+    linear-gradient(145deg, var(--dark-accent-soft), transparent 58%),
+    var(--surface);
+}
+
+:root[data-ui-theme="dark"] .summary-card:nth-child(4n + 2),
+:root[data-ui-theme="dark"] .metric-card:nth-child(4n + 2) {
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--blue) 8%, transparent),
+      transparent 58%
+    ),
+    var(--surface);
+}
+
+:root[data-ui-theme="dark"] .summary-card:nth-child(4n + 3),
+:root[data-ui-theme="dark"] .metric-card:nth-child(4n + 3) {
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--dark-warm-accent) 7%, transparent),
+      transparent 58%
+    ),
+    var(--surface);
+}
+
+:root[data-ui-theme="dark"] .summary-card:nth-child(4n),
+:root[data-ui-theme="dark"] .metric-card:nth-child(4n) {
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--offline) 7%, transparent),
+      transparent 58%
+    ),
+    var(--surface);
+}
+
+:root[data-ui-theme="dark"] .panel-heading,
+:root[data-ui-theme="dark"] .report-preview-heading {
+  border-bottom-color: color-mix(in srgb, var(--dark-accent) 15%, var(--line));
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--dark-accent) 10%, var(--surface-soft)),
+      var(--surface) 72%
+    );
+}
+
+:root[data-ui-theme="dark"] .page-title h1,
+:root[data-ui-theme="dark"] .panel-heading h2,
+:root[data-ui-theme="dark"] .summary-card strong,
+:root[data-ui-theme="dark"] .mini-card strong,
+:root[data-ui-theme="dark"] .history-stat-card strong,
+:root[data-ui-theme="dark"] .status-banner strong,
+:root[data-ui-theme="dark"] .status-range-card strong {
+  color: var(--ink-strong);
+}
+
+:root[data-ui-theme="dark"] .title-rule,
+:root[data-ui-theme="dark"] .view-root:not(.page-dashboard) .panel-heading h2::before {
+  background: linear-gradient(180deg, var(--dark-accent), var(--dark-warm-accent));
+}
+
+:root[data-ui-theme="dark"] .summary-icon {
+  border: 1px solid color-mix(in srgb, var(--dark-accent) 16%, var(--line));
+  background: color-mix(in srgb, var(--dark-accent) 9%, var(--surface-soft));
+  color: var(--dark-accent-strong);
+}
+
+/* Toolbars, fields and actions */
+
+:root[data-ui-theme="dark"] .dashboard-toolbar,
+:root[data-ui-theme="dark"] .toolbar-grid,
+:root[data-ui-theme="dark"] .detail-control-bar,
+:root[data-ui-theme="dark"] .report-selection-toolbar,
+:root[data-ui-theme="dark"] .report-cycle-toolbar {
+  border-color: color-mix(in srgb, var(--dark-accent) 17%, var(--line));
+  background:
+    linear-gradient(
+      100deg,
+      color-mix(in srgb, var(--dark-accent) 7%, var(--surface-soft)),
+      var(--surface) 64%
+    );
+  box-shadow:
+    inset 3px 0 0 color-mix(in srgb, var(--dark-accent) 68%, transparent),
+    0 6px 18px rgba(0, 0, 0, 0.16);
+}
+
+:root[data-ui-theme="dark"] input,
+:root[data-ui-theme="dark"] select {
+  border-color: var(--line);
+  background: #0e151e;
+  color: var(--ink);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.32);
+}
+
+:root[data-ui-theme="dark"] input:hover,
+:root[data-ui-theme="dark"] select:hover {
+  border-color: var(--line-strong);
+}
+
+:root[data-ui-theme="dark"] input:focus,
+:root[data-ui-theme="dark"] select:focus {
+  border-color: var(--dark-accent);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--dark-accent) 14%, transparent),
+    inset 0 1px 2px rgba(0, 0, 0, 0.24);
+}
+
+:root[data-ui-theme="dark"] .segment,
+:root[data-ui-theme="dark"] .button,
+:root[data-ui-theme="dark"] .tab,
+:root[data-ui-theme="dark"] .check-pill,
+:root[data-ui-theme="dark"] .threshold-item,
+:root[data-ui-theme="dark"] .panel-mode-chip {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+
+:root[data-ui-theme="dark"] .segment:hover,
+:root[data-ui-theme="dark"] .button:hover,
+:root[data-ui-theme="dark"] .tab:hover,
+:root[data-ui-theme="dark"] .segment.is-active,
+:root[data-ui-theme="dark"] .tab.is-active {
+  border-color: color-mix(in srgb, var(--dark-accent) 62%, var(--line));
+  background: color-mix(in srgb, var(--dark-accent) 12%, var(--surface-soft));
+  color: var(--ink-strong);
+}
+
+:root[data-ui-theme="dark"] .tabs,
+:root[data-ui-theme="dark"] .segmented {
+  border-color: color-mix(in srgb, var(--dark-accent) 10%, var(--line));
+  background: #0b1119;
+}
+
+:root[data-ui-theme="dark"] .button-primary,
+:root[data-ui-theme="dark"] .oven-card-footer .button {
+  border-color: var(--dark-accent);
+  background:
+    linear-gradient(
+      135deg,
+      var(--dark-accent-strong),
+      color-mix(in srgb, var(--dark-accent) 78%, var(--dark-warm-accent))
+    );
+  color: var(--dark-on-primary);
+  box-shadow: 0 7px 18px color-mix(in srgb, var(--dark-accent) 16%, transparent);
+}
+
+:root[data-ui-theme="dark"] .button-primary:hover,
+:root[data-ui-theme="dark"] .oven-card-footer .button:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+:root[data-ui-theme="dark"] .button-dark {
+  border-color: #45566b;
+  background: linear-gradient(135deg, #344256, #293546);
+  color: #f7f9fc;
+}
+
+/* Cards, status and data surfaces */
+
+:root[data-ui-theme="dark"] .oven-card-header {
+  border-bottom-color: color-mix(in srgb, var(--dark-accent) 11%, var(--line));
+  background:
+    linear-gradient(
+      100deg,
+      color-mix(in srgb, var(--dark-accent) 7%, var(--surface-strong)),
+      var(--surface-soft)
+    );
+}
+
+:root[data-ui-theme="dark"] .oven-card.status-open {
+  border-color: color-mix(in srgb, var(--green) 48%, var(--line));
+}
+
+:root[data-ui-theme="dark"] .oven-card.status-open .oven-card-header {
+  border-bottom-color: var(--green);
+  background:
+    linear-gradient(100deg, var(--green-soft), var(--surface-soft) 62%);
+}
+
+:root[data-ui-theme="dark"] .oven-card.status-closed .oven-card-header {
+  border-bottom-color: #566375;
+  background: linear-gradient(100deg, #202936, var(--surface-soft));
+}
+
+:root[data-ui-theme="dark"] .oven-card.status-offline .oven-card-header {
+  border-bottom-color: #6d7786;
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      #1a222d,
+      #1a222d 8px,
+      #1d2733 8px,
+      #1d2733 16px
+    );
+}
+
+:root[data-ui-theme="dark"] .oven-state-note,
+:root[data-ui-theme="dark"] .audit-item,
+:root[data-ui-theme="dark"] .empty-state,
+:root[data-ui-theme="dark"] .loading-state {
+  border-color: var(--line);
+  background: var(--surface-soft);
+}
+
+:root[data-ui-theme="dark"] .time-series-chart,
+:root[data-ui-theme="dark"] .report-page-shell {
+  border-color: color-mix(in srgb, var(--dark-accent) 12%, var(--line));
+  background: #0d141d;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+:root[data-ui-theme="dark"] .table-wrap {
+  background: #101720;
+}
+
+:root[data-ui-theme="dark"] th {
+  border-bottom-color: color-mix(in srgb, var(--dark-accent) 16%, var(--line));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--dark-accent) 8%, var(--surface-strong)),
+      var(--surface-soft)
+    );
+  color: #bcc6d4;
+}
+
+:root[data-ui-theme="dark"] td {
+  color: var(--ink);
+}
+
+:root[data-ui-theme="dark"] tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.012);
+}
+
+:root[data-ui-theme="dark"] tbody tr:hover {
+  background: color-mix(in srgb, var(--dark-accent) 7%, var(--surface-soft));
+}
+
+/* Report UI stays dark around the white printable document. */
+
+:root[data-ui-theme="dark"] .report-form-controls {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--dark-accent) 8%, var(--surface-soft)),
+      var(--surface) 96px
+    );
+}
+
+:root[data-ui-theme="dark"] .report-preview-column {
+  background: #0e151e;
+}
+
+:root[data-ui-theme="dark"] .report-preview-heading {
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--dark-accent) 13%, var(--surface-strong)),
+      var(--surface) 72%
+    );
+}
+
+:root[data-ui-theme="dark"] .report-detail-card {
+  background: color-mix(in srgb, var(--dark-accent) 4%, var(--surface-soft));
+}
+
+/* Login uses the selected company accent without becoming a bright company page. */
+
+:root[data-ui-theme="dark"] .login-screen.login-modern {
+  background:
+    radial-gradient(
+      circle at 8% 8%,
+      color-mix(in srgb, var(--dark-accent) 18%, transparent),
+      transparent 30%
+    ),
+    radial-gradient(circle at 92% 90%, rgba(240, 138, 36, 0.11), transparent 28%),
+    linear-gradient(145deg, #070b11 0%, #101824 52%, #080d14 100%);
+}
+
+:root[data-ui-theme="dark"] .login-modern-shell {
+  border-color: color-mix(in srgb, var(--dark-accent) 15%, var(--line));
+  background: rgba(15, 22, 31, 0.96);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 38px 100px rgba(0, 0, 0, 0.48);
+}
+
+:root[data-ui-theme="dark"] .login-showcase {
+  background:
+    linear-gradient(165deg, rgba(255, 255, 255, 0.055), transparent 48%),
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--dark-accent) 8%, #242c37),
+      #303844 62%,
+      #171e28 100%
+    );
+}
+
+:root[data-ui-theme="dark"] .login-showcase::before {
+  border-color: color-mix(in srgb, var(--dark-accent) 14%, transparent);
+}
+
+:root[data-ui-theme="dark"] .login-showcase::after {
+  background: linear-gradient(90deg, var(--dark-accent) 0 58%, var(--dark-warm-accent) 58%);
+}
+
+:root[data-ui-theme="dark"] .login-panel.login-modern-panel {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.018), transparent 44%),
+    #101720;
+}
+
+:root[data-ui-theme="dark"] .login-active-brand {
+  border-color: color-mix(in srgb, var(--dark-accent) 28%, var(--line));
+  background: color-mix(in srgb, var(--dark-accent) 8%, var(--surface-soft));
+}
+
+:root[data-ui-theme="dark"] .company-choice {
+  border-color: var(--line);
+  background: #141d28;
+}
+
+:root[data-ui-theme="dark"] .company-choice:hover {
+  border-color: color-mix(in srgb, var(--dark-accent) 38%, var(--line-strong));
+  background: #182330;
+}
+
+:root[data-ui-theme="dark"] .company-choice.is-selected {
+  border-color: var(--dark-accent);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--dark-accent) 13%, var(--surface-soft)),
+      var(--surface)
+    );
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--dark-accent) 12%, transparent),
+    inset 3px 0 0 var(--dark-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-ui-theme="dark"] .button,
+  :root[data-ui-theme="dark"] .company-choice {
+    transition: none;
+  }
+}

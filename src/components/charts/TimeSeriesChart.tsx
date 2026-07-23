@@ -38,6 +38,16 @@ type SensorChartData = {
   gaps: Array<[number, number | null]>;
 };
 
+type ChartViewState = {
+  legendSelected: Record<string, boolean>;
+  dataZoom: Array<{
+    start?: number;
+    end?: number;
+    startValue?: number | string;
+    endValue?: number | string;
+  }>;
+};
+
 const GAP_THRESHOLD_MS = 30 * 60 * 1000;
 
 export function TimeSeriesChart({
@@ -72,6 +82,7 @@ export function TimeSeriesChart({
   const updateOverlayRef = useRef<() => void>(() => undefined);
 
   const appliedResetViewKeyRef = useRef(resetViewKey);
+  const viewStateRef = useRef<ChartViewState | null>(null);
   const [pageTheme, setPageTheme] = useState<"dark" | "company">(() => getCurrentPageTheme());
   const [overlayBox, setOverlayBox] = useState({ width: 0, height: 0 });
   const [overlayLines, setOverlayLines] = useState<OverlayLine[]>([]);
@@ -449,35 +460,42 @@ export function TimeSeriesChart({
   useEffect(() => {
     if (!chartRef.current) return;
 
-    instanceRef.current?.dispose();
-    instanceRef.current = init(chartRef.current);
+    if (instanceRef.current) {
+      viewStateRef.current = readChartViewState(instanceRef.current);
+      instanceRef.current.dispose();
+    }
+
+    const chart = init(chartRef.current);
+    instanceRef.current = chart;
 
     const handleChartStateChange = () => {
+      viewStateRef.current = readChartViewState(chart);
       window.requestAnimationFrame(() => {
         updateOverlayRef.current();
       });
     };
 
-    instanceRef.current.on("legendselectchanged", handleChartStateChange);
-    instanceRef.current.on("datazoom", handleChartStateChange);
-    instanceRef.current.on("finished", handleChartStateChange);
+    chart.on("legendselectchanged", handleChartStateChange);
+    chart.on("datazoom", handleChartStateChange);
+    chart.on("finished", handleChartStateChange);
 
     const resizeObserver = new ResizeObserver(() => {
-      instanceRef.current?.resize();
+      chart.resize();
       handleChartStateChange();
     });
-
     resizeObserver.observe(chartRef.current);
 
     return () => {
       resizeObserver.disconnect();
+      viewStateRef.current = readChartViewState(chart);
+      chart.off("legendselectchanged", handleChartStateChange);
+      chart.off("datazoom", handleChartStateChange);
+      chart.off("finished", handleChartStateChange);
+      chart.dispose();
 
-      instanceRef.current?.off("legendselectchanged", handleChartStateChange);
-      instanceRef.current?.off("datazoom", handleChartStateChange);
-      instanceRef.current?.off("finished", handleChartStateChange);
-
-      instanceRef.current?.dispose();
-      instanceRef.current = null;
+      if (instanceRef.current === chart) {
+        instanceRef.current = null;
+      }
     };
   }, [resolvedTheme]);
 
@@ -487,13 +505,17 @@ export function TimeSeriesChart({
 
     const shouldResetView =
       appliedResetViewKeyRef.current !== resetViewKey;
+    const savedView = shouldResetView ? null : viewStateRef.current;
 
-    // auto refresh ใช้ merge เพื่อรักษาปุ่มซ่อน/แสดงเส้นและช่วง dataZoom
-    // manual refresh เปลี่ยน resetViewKey จึงค่อย notMerge และรีเซ็ตมุมมอง
+    // auto refresh ใช้ merge และคืนมุมมองเดิม
+    // manual refresh เปลี่ยน resetViewKey จึงค่อยรีเซ็ต legend/dataZoom
     chart.setOption(option, shouldResetView);
 
     if (shouldResetView) {
       appliedResetViewKeyRef.current = resetViewKey;
+      viewStateRef.current = null;
+    } else if (savedView) {
+      restoreChartViewState(chart, savedView);
     }
 
     chart.resize();
@@ -610,6 +632,54 @@ function createOverlayLine(
     labelX,
     labelY,
   };
+}
+
+function readChartViewState(chart: ECharts): ChartViewState {
+  const option = chart.getOption() as {
+    legend?: Array<{
+      selected?: Record<string, boolean>;
+    }>;
+    dataZoom?: Array<{
+      start?: number;
+      end?: number;
+      startValue?: number | string;
+      endValue?: number | string;
+    }>;
+  };
+
+  return {
+    legendSelected: {
+      ...(option.legend?.[0]?.selected ?? {}),
+    },
+    dataZoom: (option.dataZoom ?? []).map((item) => ({
+      start: item.start,
+      end: item.end,
+      startValue: item.startValue,
+      endValue: item.endValue,
+    })),
+  };
+}
+
+function restoreChartViewState(
+  chart: ECharts,
+  state: ChartViewState,
+): void {
+  Object.entries(state.legendSelected).forEach(
+    ([name, selected]) => {
+      chart.dispatchAction({
+        type: selected ? "legendSelect" : "legendUnSelect",
+        name,
+      });
+    },
+  );
+
+  state.dataZoom.forEach((item, dataZoomIndex) => {
+    chart.dispatchAction({
+      type: "dataZoom",
+      dataZoomIndex,
+      ...item,
+    });
+  });
 }
 
 function getLegendSelectedMap(chart: ECharts): Record<string, boolean> {
@@ -811,9 +881,20 @@ function getAxisBounds(
   }
 
   const values = [
-    ...sensors.flatMap((sensor) => points.map((point) => point[sensor])),
-    ...limitSensors.flatMap((sensor) => [limits[sensor].lower, limits[sensor].upper]),
-  ];
+    ...sensors.flatMap((sensor) =>
+      points.map((point) => point[sensor]),
+    ),
+    ...limitSensors.flatMap((sensor) => [
+      limits[sensor].lower,
+      limits[sensor].upper,
+    ]),
+  ]
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
+
+  if (!values.length) {
+    return { min: 0, max: 100 };
+  }
 
   const minValue = Math.min(...values);
   const maxValue = Math.max(...values);
