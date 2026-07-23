@@ -255,9 +255,17 @@ SECTIONS = [
 
 
 def register_fonts():
-    pdfmetrics.registerFont(TTFont("Sarabun", str(FONT_DIR / "Sarabun-Regular.ttf")))
-    pdfmetrics.registerFont(TTFont("Sarabun-SemiBold", str(FONT_DIR / "Sarabun-SemiBold.ttf")))
-    pdfmetrics.registerFont(TTFont("Sarabun-Bold", str(FONT_DIR / "Sarabun-Bold.ttf")))
+    # HarfBuzz shaping keeps Thai tone marks and vowels attached to the correct
+    # consonants instead of allowing them to collide with adjacent glyphs.
+    pdfmetrics.registerFont(
+        TTFont("Sarabun", str(FONT_DIR / "Sarabun-Regular.ttf"), shapable=True)
+    )
+    pdfmetrics.registerFont(
+        TTFont("Sarabun-SemiBold", str(FONT_DIR / "Sarabun-SemiBold.ttf"), shapable=True)
+    )
+    pdfmetrics.registerFont(
+        TTFont("Sarabun-Bold", str(FONT_DIR / "Sarabun-Bold.ttf"), shapable=True)
+    )
 
 
 def annotate_screenshots():
@@ -288,8 +296,12 @@ def annotate_screenshots():
             )
             draw.text((1250, 12), "ผู้ใช้งาน", font=redact_font, fill=(90, 98, 110, 255))
 
-        for number, (x1, y1, x2, y2) in marks:
+        # Draw every guide rectangle first. Badges are drawn in a second pass so
+        # no later rectangle can cross over a badge that was already rendered.
+        for _, (x1, y1, x2, y2) in marks:
             draw.rounded_rectangle((x1, y1, x2, y2), radius=8, outline=red, width=5)
+
+        for number, (x1, y1, _, _) in marks:
             cx, cy, radius = max(22, x1 - 12), max(22, y1 - 12), 18
             draw.ellipse(
                 (cx - radius, cy - radius, cx + radius, cy + radius),
@@ -297,14 +309,12 @@ def annotate_screenshots():
                 outline=white,
                 width=3,
             )
-            label = str(number)
-            box = draw.textbbox((0, 0), label, font=badge_font)
-            width, height = box[2] - box[0], box[3] - box[1]
             draw.text(
-                (cx - width / 2, cy - height / 2 - 3),
-                label,
+                (cx, cy),
+                str(number),
                 font=badge_font,
                 fill=white,
+                anchor="mm",
             )
 
         image.convert("RGB").save(
@@ -546,13 +556,7 @@ def build_manual():
             "อธิบายทุกหน้าหลักด้วยภาพจากระบบจริง พร้อมกรอบสีแดงและหมายเลขอ้างอิง",
             style_map["body"],
         ),
-        Spacer(1, 8 * mm),
-        Paragraph(
-            "<b>วิธีอ่านคู่มือ</b><br/>หมายเลขในกรอบสีแดงบนภาพตรงกับหมายเลขคำอธิบายใต้ภาพ "
-            "ให้ทำตามลำดับเมื่อเป็นขั้นตอน และใช้เป็นจุดอ้างอิงเมื่อเป็นคำอธิบายหน้าจอ",
-            style_map["callout"],
-        ),
-        Spacer(1, 7 * mm),
+        Spacer(1, 10 * mm),
         Paragraph("<b>เนื้อหา</b>", style_map["h1"]),
         Paragraph(
             "1. เข้าสู่ระบบ<br/>2. Dashboard และเมนูหลัก<br/>"
@@ -564,8 +568,6 @@ def build_manual():
             style_map["toc"],
         ),
         Spacer(1, 10 * mm),
-        Paragraph("ฉบับสำหรับคอมพิวเตอร์และ iPad", style_map["center"]),
-        Paragraph("ปรับปรุงล่าสุด: 23 กรกฎาคม 2569", style_map["center"]),
         PageBreak(),
     ]
 

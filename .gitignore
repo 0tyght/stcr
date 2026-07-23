@@ -19,3 +19,6 @@ MQTT.txt
 .env.*
 !.env.example
 output/manual-assets/annotated/
+output/pdf/rendered/
+output/docx/rendered/
+scripts/__pycache__/
