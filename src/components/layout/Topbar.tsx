@@ -70,6 +70,8 @@ export function Topbar({ onLogout }: TopbarProps) {
   });
 
   const companyId = getStoredCompanyId();
+  const manualCompanyName = companyId === "ttn" ? "TTN" : "GR";
+  const manualFileName = `STCR-User-Manual-${manualCompanyName}.pdf`;
   const breadcrumbs = useMemo(() => buildBreadcrumbs(location.pathname), [location.pathname]);
 
   useEffect(() => {
@@ -129,13 +131,13 @@ export function Topbar({ onLogout }: TopbarProps) {
       <div className="topbar-actions">
         <a
           className="toolbar-button topbar-manual-link"
-          href={`${import.meta.env.BASE_URL}manual/STCR-User-Manual.pdf`}
-          download="STCR-User-Manual.pdf"
+        href={`${import.meta.env.BASE_URL}manual/${manualFileName}`}
+        download={manualFileName}
           title="ดาวน์โหลดคู่มือการใช้งาน"
           onClick={(event) => {
             const confirmed = window.confirm(
-              "ยืนยันดาวน์โหลดคู่มือการใช้งาน STCR?\n\nชื่อไฟล์: STCR-User-Manual.pdf",
-            );
+          `ยืนยันดาวน์โหลดคู่มือการใช้งาน STCR?\n\nโรงงาน: ${manualCompanyName}\nชื่อไฟล์: ${manualFileName}`,
+        );
 
             if (!confirmed) event.preventDefault();
           }}
