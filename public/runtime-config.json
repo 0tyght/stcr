@@ -1,7 +1,7 @@
 {
     "dataSource":  "node-red",
-    "apiBaseUrl":  "https://baghdad-complete-while-dvd.trycloudflare.com/stcr/api",
+    "apiBaseUrl":  "https://destinations-stats-alpine-bill.trycloudflare.com/stcr/api",
     "pollIntervalMs":  1000,
     "requestTimeoutMs":  15000,
-    "updatedAt":  "2026-07-23T21:27:40.3072704Z"
+    "updatedAt":  "2026-07-24T03:32:24.4944251Z"
 }
