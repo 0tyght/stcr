@@ -1,7 +1,7 @@
 {
     "dataSource":  "express",
-    "apiBaseUrl":  "https://exhibitions-divorce-alone-dept.trycloudflare.com/stcr/api",
+    "apiBaseUrl":  "https://lawrence-kyle-investors-home.trycloudflare.com/stcr/api",
     "pollIntervalMs":  1000,
     "requestTimeoutMs":  15000,
-    "updatedAt":  "2026-07-25T07:58:48.3921926Z"
+    "updatedAt":  "2026-07-25T08:09:22.5483266Z"
 }
