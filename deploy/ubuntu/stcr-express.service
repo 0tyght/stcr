@@ -2,26 +2,46 @@
 Description=STCR Express API and MQTT service
 After=network-online.target mariadb.service
 Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
 User=stcr
 Group=stcr
 WorkingDirectory=/opt/stcr
+Environment=NODE_ENV=production
 EnvironmentFile=/etc/stcr/stcr.env
+ExecStartPre=/usr/bin/node /opt/stcr/backend/scripts/preflight.mjs
 ExecStart=/usr/bin/node /opt/stcr/backend/src/server.mjs
 Restart=on-failure
 RestartSec=5
+TimeoutStartSec=60
 TimeoutStopSec=30
+KillSignal=SIGTERM
+KillMode=mixed
+UMask=0027
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=stcr-express
+LimitNOFILE=65536
 NoNewPrivileges=true
 PrivateTmp=true
+PrivateDevices=true
 ProtectSystem=strict
 ProtectHome=true
+ProtectClock=true
+ProtectHostname=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
+ProtectKernelLogs=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictRealtime=true
 LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
 ReadWritePaths=/opt/stcr/output
 
 [Install]

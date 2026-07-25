@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation } from "react-router";
 
 import { runtimeConfig } from "../config/runtime";
 import { apiClient } from "../services/apiClient";

@@ -1,5 +1,5 @@
 import { CalendarDays, Clock3, Droplets, Flame, Gauge, Thermometer, Wind } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { StatusBadge } from "../../components/ui/StatusBadge";
 import type { Oven } from "../../types";
 import { formatDate, formatNumber, formatSensorValue, formatTime } from "../../utils/format";

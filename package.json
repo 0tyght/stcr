@@ -21,14 +21,17 @@
     "dev:api": "node --watch backend/src/server.mjs",
     "start": "node backend/src/server.mjs",
     "backend:verify": "node backend/scripts/verify-migration.mjs",
-    "backend:check": "node --check backend/src/server.mjs && node --check backend/src/http/app.mjs && node --check backend/src/http/api-runtime.mjs && node --check backend/src/runtime/function-runner.mjs && node --check backend/src/mqtt/mqtt-service.mjs && node backend/scripts/verify-migration.mjs && node backend/scripts/self-test.mjs",
+    "backend:check": "node --check backend/src/server.mjs && node --check backend/src/http/app.mjs && node --check backend/src/http/security.mjs && node --check backend/src/runtime/readiness.mjs && node --check backend/src/runtime/function-runner.mjs && node --check backend/src/mqtt/mqtt-service.mjs && node backend/scripts/verify-migration.mjs && node backend/scripts/self-test.mjs && node backend/scripts/security-test.mjs",
     "backend:preflight": "node backend/scripts/preflight.mjs",
     "user:create": "node backend/tools/create-user.mjs",
     "api-key:create": "node backend/tools/create-api-key.mjs",
-    "password:hash": "node backend/tools/hash-password.mjs"
+    "password:hash": "node backend/tools/hash-password.mjs",
+    "backend:security-test": "node backend/scripts/security-test.mjs",
+    "backend:smoke": "node backend/scripts/production-smoke.mjs",
+    "audit:production": "npm audit --omit=dev --audit-level=high",
+    "production:check": "npm run backend:check && npm run backend:preflight && npm run build && npm run backend:smoke && npm run audit:production"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^5.0.4",
     "echarts": "^6.0.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
@@ -38,14 +41,23 @@
     "mysql2": "^3.23.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "react-router-dom": "^7.9.4",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "react-router": "8.3.0"
   },
   "devDependencies": {
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "typescript": "^5.9.3",
     "vite": "^7.1.10",
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "@vitejs/plugin-react": "^5.0.4"
+  },
+  "overrides": {
+    "dompurify": "^3.4.5",
+    "@babel/plugin-transform-modules-systemjs": "^7.29.4"
+  },
+  "allowScripts": {
+    "core-js@3.49.0": true,
+    "esbuild@0.28.1": true
   }
 }

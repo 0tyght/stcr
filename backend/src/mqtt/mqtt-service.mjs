@@ -3,7 +3,10 @@ import { resolve } from "node:path";
 import mqtt from "mqtt";
 
 import { envBoolean, envNumber } from "../config/env.mjs";
-import { createLegacyFunctionRunner, createSerialExecutor } from "../runtime/function-runner.mjs";
+import {
+  createBoundedSerialExecutor,
+  createLegacyFunctionRunner,
+} from "../runtime/function-runner.mjs";
 import {
   globalStore,
   mqttAdapterContextStore,
@@ -19,28 +22,51 @@ const writerPath = resolve(
   "backend/src/legacy-functions/factory-mqtt-db-writer.js",
 );
 
+function deploymentMode() {
+  return String(process.env.STCR_DEPLOYMENT_MODE || "development").trim().toLowerCase();
+}
+
+function validateRoute(topic, route) {
+  if (!route || typeof route !== "object" || Array.isArray(route)) {
+    throw new Error(`MQTT route for ${topic} must be an object`);
+  }
+  const companyId = String(route.companyId || "").trim().toLowerCase();
+  const messageType = String(route.messageType || "").trim().toLowerCase();
+  if (!companyId) throw new Error(`MQTT route for ${topic} is missing companyId`);
+  if (!new Set(["status", "sensor"]).has(messageType)) {
+    throw new Error(`MQTT route for ${topic} has invalid messageType`);
+  }
+  if (deploymentMode() === "production" && /[+#]/.test(topic)) {
+    throw new Error(`Wildcard MQTT topic is not allowed in production: ${topic}`);
+  }
+  return { companyId, messageType };
+}
+
 function parseTopicRoutes() {
   const configured = String(process.env.STCR_FACTORY_MQTT_TOPIC_ROUTES_JSON || "").trim();
+  let parsed;
   if (configured) {
-    const parsed = JSON.parse(configured);
+    parsed = JSON.parse(configured);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       throw new Error("STCR_FACTORY_MQTT_TOPIC_ROUTES_JSON must be an object");
     }
-    return parsed;
+  } else {
+    const companyId = String(process.env.STCR_FACTORY_MQTT_COMPANY_ID || "ttn")
+      .trim()
+      .toLowerCase();
+    const topics = String(process.env.STCR_FACTORY_MQTT_TOPICS || "test,sensor")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    parsed = Object.fromEntries(topics.map((topic) => [topic, {
+      companyId,
+      messageType: topic === "test" ? "status" : "sensor",
+    }]));
   }
 
-  const companyId = String(process.env.STCR_FACTORY_MQTT_COMPANY_ID || "ttn")
-    .trim()
-    .toLowerCase();
-  const topics = String(process.env.STCR_FACTORY_MQTT_TOPICS || "test,sensor")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  return Object.fromEntries(topics.map((topic) => [topic, {
-    companyId,
-    messageType: topic === "test" ? "status" : "sensor",
-  }]));
+  return Object.fromEntries(
+    Object.entries(parsed).map(([topic, route]) => [topic, validateRoute(topic, route)]),
+  );
 }
 
 function setMqttHealth(patch) {
@@ -51,6 +77,11 @@ function setMqttHealth(patch) {
     topics: patch.topics || current.topics || {},
     runtime: "express",
   });
+}
+
+function incrementHealthCounter(name) {
+  const health = globalStore.get("stcrMqttHealth") || { topics: {} };
+  setMqttHealth({ [name]: Number(health[name] || 0) + 1 });
 }
 
 function inspectPayload(topic, payload, route) {
@@ -84,7 +115,7 @@ function inspectPayload(topic, payload, route) {
       }
     }
   } catch {
-    // Adapter performs the final validation and rejection.
+    // The adapter performs final schema validation and rejection.
   }
 
   const totalMessages = Number(health.totalMessages || 0) + 1;
@@ -134,7 +165,9 @@ export async function startMqttService() {
     globalStore,
     contextStore: mqttWriterContextStore,
   });
-  const runSerial = createSerialExecutor();
+  const runSerial = createBoundedSerialExecutor(
+    envNumber("STCR_FACTORY_MQTT_MAX_PENDING_MESSAGES", 1000, 10, 100000),
+  );
 
   async function processMessage(message) {
     const adapted = await adapter(message);
@@ -143,13 +176,18 @@ export async function startMqttService() {
     }
   }
 
+  const qos = envNumber("STCR_FACTORY_MQTT_QOS", 1, 0, 2);
   const client = mqtt.connect(brokerUrl, {
     clientId: String(process.env.STCR_FACTORY_MQTT_CLIENT_ID || `stcr-express-${process.pid}`),
     username: process.env.STCR_FACTORY_MQTT_USERNAME || undefined,
     password: process.env.STCR_FACTORY_MQTT_PASSWORD || undefined,
     clean: true,
-    reconnectPeriod: 5000,
-    connectTimeout: 10000,
+    protocolVersion: 4,
+    keepalive: envNumber("STCR_FACTORY_MQTT_KEEPALIVE_SECONDS", 30, 5, 300),
+    reconnectPeriod: envNumber("STCR_FACTORY_MQTT_RECONNECT_MS", 5000, 1000, 60000),
+    connectTimeout: envNumber("STCR_FACTORY_MQTT_CONNECT_TIMEOUT_MS", 10000, 1000, 60000),
+    resubscribe: true,
+    queueQoSZero: false,
     rejectUnauthorized: envBoolean("STCR_FACTORY_MQTT_TLS_REJECT_UNAUTHORIZED", true),
   });
 
@@ -161,7 +199,7 @@ export async function startMqttService() {
   });
 
   client.on("connect", () => {
-    client.subscribe(topics, { qos: 1 }, (error, grants) => {
+    client.subscribe(topics, { qos }, (error, grants) => {
       if (error) {
         setMqttHealth({ connected: false, lastErrorAt: new Date().toISOString() });
         console.error("[express-mqtt] Subscribe failed", error);
@@ -176,10 +214,39 @@ export async function startMqttService() {
     });
   });
 
+  const maxPayloadBytes = envNumber(
+    "STCR_FACTORY_MQTT_MAX_PAYLOAD_BYTES",
+    8192,
+    256,
+    1048576,
+  );
+  const allowRetainedSensor = envBoolean("STCR_FACTORY_MQTT_ALLOW_RETAINED_SENSOR", false);
+  const logEvery = envNumber(
+    "STCR_FACTORY_MQTT_LOG_EVERY_MESSAGES",
+    deploymentMode() === "production" ? 1000 : 100,
+    1,
+    1000000,
+  );
+
   client.on("message", (topic, payload, packet) => {
     const route = routes[topic];
+    if (!route) {
+      incrementHealthCounter("rejectedUnknownTopic");
+      return;
+    }
+    if (payload.length > maxPayloadBytes) {
+      incrementHealthCounter("rejectedOversize");
+      console.warn(`[express-mqtt] Rejected oversized payload on ${topic}: ${payload.length} bytes`);
+      return;
+    }
+    if (packet.retain && route.messageType === "sensor" && !allowRetainedSensor) {
+      incrementHealthCounter("rejectedRetainedSensor");
+      console.warn(`[express-mqtt] Rejected retained sensor payload on ${topic}`);
+      return;
+    }
+
     const { receivedAt, totalMessages } = inspectPayload(topic, payload, route);
-    if (totalMessages === 1 || totalMessages % 100 === 0) {
+    if (totalMessages === 1 || totalMessages % logEvery === 0) {
       console.log(`[express-mqtt] Received ${totalMessages} messages; latest topic=${topic}`);
     }
 
@@ -194,6 +261,11 @@ export async function startMqttService() {
         route,
       },
     })).catch((error) => {
+      if (error?.code === "SERIAL_QUEUE_FULL") {
+        incrementHealthCounter("rejectedQueueFull");
+        console.error("[express-mqtt] Processing queue is full; message rejected");
+        return;
+      }
       setMqttHealth({ lastErrorAt: new Date().toISOString() });
       console.error("[express-mqtt] Message processing failed", error);
     });
@@ -227,6 +299,10 @@ export async function startMqttService() {
       _minuteFlushTick: true,
       factoryMqtt: { receivedAt },
     })).catch((error) => {
+      if (error?.code === "SERIAL_QUEUE_FULL") {
+        incrementHealthCounter("rejectedFlushQueueFull");
+        return;
+      }
       console.error("[express-mqtt] Minute flush failed", error);
     });
   }, flushIntervalMs);

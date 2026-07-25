@@ -56,3 +56,25 @@ export function createSerialExecutor() {
     return result;
   };
 }
+
+export function createBoundedSerialExecutor(maxPending = 1000) {
+  let tail = Promise.resolve();
+  let pending = 0;
+
+  return function executeBoundedSerial(task) {
+    if (pending >= maxPending) {
+      const error = new Error(`Serial queue is full (${maxPending})`);
+      error.code = "SERIAL_QUEUE_FULL";
+      return Promise.reject(error);
+    }
+
+    pending += 1;
+    const result = tail.then(task, task);
+    tail = result
+      .catch(() => undefined)
+      .finally(() => {
+        pending -= 1;
+      });
+    return result;
+  };
+}

@@ -22,3 +22,10 @@ output/manual-assets/annotated/
 output/pdf/rendered/
 output/docx/rendered/
 scripts/__pycache__/
+# STCR runtime files
+.env
+.env.*
+!.env.example
+*.log
+output/*.tmp
+output/*.pid

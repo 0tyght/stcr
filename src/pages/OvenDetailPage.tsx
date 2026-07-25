@@ -14,7 +14,7 @@ import {
   Thermometer,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router";
 
 import { useAppData } from "../app/providers";
 import { ThresholdLegend } from "../components/charts/ThresholdLegend";

@@ -39,7 +39,7 @@ export default defineConfig({
       output: {
         manualChunks: {
           echarts: ["echarts"],
-          vendor: ["react", "react-dom", "react-router-dom", "lucide-react"],
+          vendor: ["react", "react-dom", "react-router", "lucide-react"],
         },
       },
     },

@@ -1,6 +1,6 @@
 import { BookDown, Clock3, LogOut, Palette, Search, User } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router";
 import {
   applyCompanyTheme,
 } from "../../config/companies";

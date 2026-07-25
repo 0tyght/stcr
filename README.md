@@ -46,3 +46,12 @@ npm run dev
 ```
 
 ดูรายละเอียดที่ [docs/express-migration.md](docs/express-migration.md)
+## Production Check
+
+ก่อน Deploy ให้เปิด MariaDB และรัน:
+
+```bash
+npm run production:check
+```
+
+Production ใช้ API แบบ Same Origin ที่ `/stcr/api`, มี `/healthz` สำหรับ Liveness และ `/readyz` สำหรับตรวจฐานข้อมูล/MQTT ดูขั้นตอนที่ [docs/production-deployment.md](docs/production-deployment.md).

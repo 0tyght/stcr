@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import { HashRouter, Navigate, Route, Routes } from "react-router";
 import { AppLayout } from "../components/layout/AppLayout";
 import { LoadingState } from "../components/ui/LoadingState";
 import { LoginPage } from "../pages/LoginPage";

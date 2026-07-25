@@ -6,6 +6,8 @@ const root = process.cwd();
 const required = [
   "backend/src/server.mjs",
   "backend/src/http/app.mjs",
+  "backend/src/http/security.mjs",
+  "backend/src/runtime/readiness.mjs",
   "backend/src/mqtt/mqtt-service.mjs",
   "backend/src/legacy-functions/api-router.js",
   "backend/src/legacy-functions/factory-mqtt-adapter.js",
@@ -14,6 +16,7 @@ const required = [
   "backend/tools/create-api-key.mjs",
   "src/services/api/expressApi.ts",
   "deploy/ubuntu/stcr-express.service",
+  ".github/workflows/production-check.yml",
 ];
 for (const relative of required) await access(resolve(root, relative));
 
@@ -22,8 +25,6 @@ const forbidden = [
   "src/services/api/nodeRedApi.ts",
   "deploy/ubuntu/node-red-stcr.service",
   "deploy/ubuntu/node-red-stcr-override.conf",
-  "docs/node-red-api.md",
-  "docs/node-red-iot-workflow.md",
 ];
 for (const relative of forbidden) {
   if (existsSync(resolve(root, relative))) {
@@ -36,17 +37,17 @@ if (!packageJson.dependencies?.express) throw new Error("express dependency is m
 if (packageJson.scripts?.start !== "node backend/src/server.mjs") {
   throw new Error("npm start does not point to Express");
 }
-if (Object.keys(packageJson.scripts || {}).some((name) => name.startsWith("node-red:"))) {
-  throw new Error("Node-RED npm scripts still exist");
+if (!packageJson.scripts?.["backend:security-test"] || !packageJson.scripts?.["backend:smoke"]) {
+  throw new Error("Production verification scripts are missing");
 }
 
 const vite = await readFile(resolve(root, "vite.config.ts"), "utf8");
 if (!vite.includes("127.0.0.1:3001") || vite.includes("127.0.0.1:1880")) {
   throw new Error("Vite proxy is not fully migrated to port 3001");
 }
-const runtime = await readFile(resolve(root, "src/config/runtime.ts"), "utf8");
-if (!runtime.includes("127.0.0.1:3001/stcr/api")) {
-  throw new Error("Frontend default API URL is not Express");
+const runtimeConfig = JSON.parse(await readFile(resolve(root, "public/runtime-config.json"), "utf8"));
+if (runtimeConfig.apiBaseUrl !== "/stcr/api" || runtimeConfig.dataSource !== "express") {
+  throw new Error("Production runtime config must use the same-origin Express API");
 }
 
-console.log("Express migration structure verification passed");
+console.log("Express production structure verification passed");
