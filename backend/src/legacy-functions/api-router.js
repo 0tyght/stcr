@@ -220,7 +220,7 @@ function authenticate() {
 }
 
 async function authenticateFromDb(token) {
-  // fallback: ดึง session จาก DB (กรณี Node-RED restart แล้ว cache หาย)
+  // fallback: ดึง session จาก DB (กรณี Express restart แล้ว cache หาย)
   if (!/^[a-f0-9]{64}$/i.test(token)) return null;
   try {
     const pool = getDatabasePool();
@@ -286,7 +286,7 @@ async function deleteSession(token) {
   } catch { /* ไม่หยุดถ้า DB error */ }
 }
 
-// cleanup DB sessions เก่า (รันครั้งแรกที่ Node-RED เริ่ม)
+// cleanup DB sessions เก่า (รันครั้งแรกที่ Express เริ่ม)
 getDatabasePool().execute(`DELETE FROM sessions WHERE expires_at <= UTC_TIMESTAMP(3)`)
   .catch((err) => node.warn(`Session cleanup failed: ${err.message}`));
 
@@ -1930,7 +1930,7 @@ if (method === "POST" && path === "/stcr/api/ovens") {
   );
   state.ovens.push(oven);
   state.history[oven.id] = [];
-  await addAudit(state, session, "เพิ่มเตาใหม่", oven.name, "เพิ่มเตาผ่าน Node-RED API");
+  await addAudit(state, session, "เพิ่มเตาใหม่", oven.name, "เพิ่มเตาผ่าน Express API");
   persistState();
   return jsonResponse(oven, 201);
 }
@@ -2154,7 +2154,7 @@ if (method === "PUT" && limitsMatch) {
     ],
   );
   state.ovens[index] = { ...state.ovens[index], limits: normalizedLimits };
-  await addAudit(state, session, "เปลี่ยนค่า Limit", state.ovens[index].name, "บันทึก Upper/Lower ผ่าน Node-RED API");
+  await addAudit(state, session, "เปลี่ยนค่า Limit", state.ovens[index].name, "บันทึก Upper/Lower ผ่าน Express API");
   persistState();
   return jsonResponse(state.ovens[index]);
 }
@@ -2181,7 +2181,7 @@ if (ovenMatch) {
       [name, zone, line, companyId, ovenId],
     );
     state.ovens[index] = { ...state.ovens[index], name, zone, line };
-    await addAudit(state, session, "แก้ไขข้อมูลเตา", name, "แก้ชื่อ โซน หรือไลน์ผ่าน Node-RED API");
+    await addAudit(state, session, "แก้ไขข้อมูลเตา", name, "แก้ชื่อ โซน หรือไลน์ผ่าน Express API");
     persistState();
     return jsonResponse(state.ovens[index]);
   }

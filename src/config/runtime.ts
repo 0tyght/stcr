@@ -7,7 +7,7 @@ function readPositiveInteger(value: string | undefined, fallback: number): numbe
 }
 
 function normalizeBaseUrl(value: string | undefined): string {
-  return (value?.trim() || "http://127.0.0.1:1880/stcr/api").replace(/\/+$/, "");
+  return (value?.trim() || "http://127.0.0.1:3001/stcr/api").replace(/\/+$/, "");
 }
 
 export type RuntimeConfig = {

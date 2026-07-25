@@ -4,155 +4,106 @@
   [switch]$Background
 )
 
-$ErrorActionPreference = 'Stop'
-
-$root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$runtimeDir = Join-Path $root '.runtime'
-$cloudflared = Join-Path $runtimeDir 'cloudflared.exe'
-$runtimeConfigPath = Join-Path $root 'public\runtime-config.json'
-$nodeRedSettings = Join-Path $root 'node-red\settings.production.cjs'
-$nodeRedUserDir = Join-Path $env:USERPROFILE '.node-red'
-$mysqlAdmin = 'C:\xampp\mysql\bin\mysqladmin.exe'
-$mysqlStart = 'C:\xampp\mysql_start.bat'
+$ErrorActionPreference = "Stop"
+$root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$runtimeDir = Join-Path $root ".runtime"
+$runtimeConfigPath = Join-Path $root "public\runtime-config.json"
+$statePath = Join-Path $runtimeDir "express-public-services.json"
+$cloudflared = Join-Path $runtimeDir "cloudflared.exe"
+$mysqlAdmin = "C:\xampp\mysql\bin\mysqladmin.exe"
+$mysqlStart = "C:\xampp\mysql_start.bat"
 $mysqlStartedByScript = $false
+$apiProcess = $null
 $tunnelProcess = $null
-$nodeRedProcess = $null
-
 New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
 
 function Test-Port([int]$Port) {
   return [bool](Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
 }
 
-function Wait-Port([int]$Port, [int]$Seconds) {
+function Wait-Until([scriptblock]$Condition, [int]$Seconds) {
   $deadline = (Get-Date).AddSeconds($Seconds)
-  while ((-not (Test-Port $Port)) -and (Get-Date) -lt $deadline) {
+  do {
+    if (& $Condition) { return $true }
     Start-Sleep -Milliseconds 500
+  } while ((Get-Date) -lt $deadline)
+  return $false
+}
+
+function Get-StcrProcess([string]$Pattern) {
+  return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+    $_.Name -eq "node.exe" -and $_.CommandLine -like $Pattern
+  })
+}
+
+function Stop-StcrRuntime {
+  Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+    ($_.Name -eq "cloudflared.exe" -and $_.CommandLine -like "*127.0.0.1:3001*") -or
+    ($_.Name -eq "node.exe" -and $_.CommandLine -like "*backend*src*server.mjs*")
+  } | ForEach-Object {
+    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
   }
-  return Test-Port $Port
-}
-
-function Get-StcrProcesses([string]$Name, [string]$CommandPattern) {
-  return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -eq $Name -and $_.CommandLine -like $CommandPattern })
-}
-
-function Stop-StcrProcesses {
-  Get-StcrProcesses 'cloudflared.exe' '*127.0.0.1:1880*' |
-    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-  Get-StcrProcesses 'node.exe' '*node-red*settings.production.cjs*' |
-    ForEach-Object { Stop-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }
 }
 
 function Import-RequiredEnvironment {
   $defaults = [ordered]@{
-    STCR_DB_HOST = '127.0.0.1'
-    STCR_DB_PORT = '3306'
-    STCR_DB_USER = 'stcr_app'
-    STCR_DB_NAME = 'stcr'
-    STCR_ALLOWED_ORIGINS = 'https://0tyght.github.io,http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:4173,http://localhost:4173'
-    STCR_SESSION_TTL_MINUTES = '480'
-    STCR_TRUST_PROXY = 'true'
-    STCR_DEPLOYMENT_MODE = 'test'
-    STCR_FACTORY_MQTT_ENABLED = 'true'
-    STCR_FACTORY_MQTT_TOPICS = 'test,sensor'
-    STCR_FACTORY_MQTT_COMPANY_ID = 'ttn'
-    STCR_FACTORY_MQTT_CLIENT_ID = 'stcr-multi-company-server'
-    STCR_FACTORY_MQTT_OVEN_MAP_JSON = '{"1":"oven-1","2":"oven-2","3":"oven-3","4":"oven-4","5":"oven-5","6":"oven-6","7":"oven-7","8":"oven-8","9":"oven-9"}'
+    STCR_API_HOST = "127.0.0.1"
+    STCR_API_PORT = "3001"
+    STCR_SERVE_FRONTEND = "false"
+    STCR_DB_HOST = "127.0.0.1"
+    STCR_DB_PORT = "3306"
+    STCR_DB_USER = "stcr_app"
+    STCR_DB_NAME = "stcr"
+    STCR_ALLOWED_ORIGINS = "https://0tyght.github.io,http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:4173,http://localhost:4173"
+    STCR_SESSION_TTL_MINUTES = "480"
+    STCR_TRUST_PROXY = "true"
+    STCR_DEPLOYMENT_MODE = "test"
+    STCR_FACTORY_MQTT_ENABLED = "true"
+    STCR_FACTORY_MQTT_TOPICS = "test,sensor"
+    STCR_FACTORY_MQTT_COMPANY_ID = "ttn"
+    STCR_FACTORY_MQTT_CLIENT_ID = "stcr-multi-company-express"
+    STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES = "420"
+    STCR_FACTORY_MQTT_TLS_REJECT_UNAUTHORIZED = "false"
+    STCR_FACTORY_MQTT_STORE_RAW_MESSAGES = "false"
+    STCR_OFFLINE_THRESHOLD_SECONDS = "180"
+    STCR_HTTP_INGEST_ENABLED = "false"
     STCR_FACTORY_MQTT_TOPIC_ROUTES_JSON = '{"test":{"companyId":"ttn","messageType":"status"},"sensor":{"companyId":"ttn","messageType":"sensor"},"status_gr":{"companyId":"gr","messageType":"status"},"sensor_gr":{"companyId":"gr","messageType":"sensor"}}'
     STCR_FACTORY_MQTT_OVEN_MAPS_JSON = '{"ttn":{"1":"oven-1","2":"oven-2","3":"oven-3","4":"oven-4","5":"oven-5","6":"oven-6","7":"oven-7","8":"oven-8","9":"oven-9"},"gr":{"11":"oven-11","12":"oven-12","13":"oven-13","14":"oven-14","15":"oven-15","16":"oven-16","17":"oven-17","18":"oven-18","19":"oven-19","20":"oven-20","21":"oven-21","22":"oven-22","23":"oven-23","24":"oven-24","25":"oven-25","26":"oven-26"}}'
-    # The factory currently sends Bangkok wall-clock time with a trailing Z.
-    # Remove this correction after the publisher sends a real UTC/offset timestamp.
-    STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES = '420'
-    STCR_FACTORY_MQTT_TLS_REJECT_UNAUTHORIZED = 'false'
-    STCR_FACTORY_MQTT_STORE_RAW_MESSAGES = 'false'
-    STCR_OFFLINE_THRESHOLD_SECONDS = '180'
-    STCR_HTTP_INGEST_ENABLED = 'false'
   }
 
-  $forceTestDefaults = @(
-    'STCR_TRUST_PROXY',
-    'STCR_DEPLOYMENT_MODE',
-    'STCR_HTTP_INGEST_ENABLED',
-    'STCR_FACTORY_MQTT_CLIENT_ID',
-    'STCR_FACTORY_MQTT_TOPIC_ROUTES_JSON',
-    'STCR_FACTORY_MQTT_OVEN_MAPS_JSON'
-  )
-
   foreach ($key in $defaults.Keys) {
-    $value = if ($forceTestDefaults -contains $key) {
-      [string]$defaults[$key]
-    } else {
-      [Environment]::GetEnvironmentVariable($key, 'User')
-    }
-
-    if ([string]::IsNullOrWhiteSpace($value)) {
-      $value = [string]$defaults[$key]
-    }
-
+    $value = [Environment]::GetEnvironmentVariable($key, "User")
+    if ([string]::IsNullOrWhiteSpace($value)) { $value = [string]$defaults[$key] }
     Set-Item -Path "Env:$key" -Value $value
   }
 
   $required = @(
-    'STCR_DB_PASSWORD',
-    'STCR_NODE_RED_CREDENTIAL_SECRET',
-    'STCR_API_KEY_PEPPER',
-    'STCR_FACTORY_MQTT_URL',
-    'STCR_FACTORY_MQTT_USERNAME',
-    'STCR_FACTORY_MQTT_PASSWORD'
+    "STCR_DB_PASSWORD",
+    "STCR_API_KEY_PEPPER",
+    "STCR_FACTORY_MQTT_URL",
+    "STCR_FACTORY_MQTT_USERNAME",
+    "STCR_FACTORY_MQTT_PASSWORD"
   )
-
   $missing = @()
-
   foreach ($key in $required) {
-    $value = [Environment]::GetEnvironmentVariable(
-      $key,
-      'User'
-    )
-
+    $value = [Environment]::GetEnvironmentVariable($key, "User")
     if ([string]::IsNullOrWhiteSpace($value)) {
       $missing += $key
-      continue
-    }
-
-    Set-Item -Path "Env:$key" -Value $value
-  }
-
-  $optional = @(
-    'STCR_TTN_INGEST_API_KEY'
-  )
-
-  foreach ($key in $optional) {
-    $value = [Environment]::GetEnvironmentVariable(
-      $key,
-      'User'
-    )
-
-    if (-not [string]::IsNullOrWhiteSpace($value)) {
+    } else {
       Set-Item -Path "Env:$key" -Value $value
     }
   }
-
   if ($missing.Count -gt 0) {
-    throw (
-      'Missing Windows User environment variables: ' +
-      ($missing -join ', ') +
-      '. Run scripts\setup-dev-env.ps1 before public:start.'
-    )
+    throw "Missing Windows User environment variables: $($missing -join ', ')"
   }
-
   if ($env:STCR_API_KEY_PEPPER.Length -lt 32) {
-    throw 'STCR_API_KEY_PEPPER must contain at least 32 characters'
-  }
-
-  if ($env:STCR_NODE_RED_CREDENTIAL_SECRET.Length -lt 32) {
-    throw 'STCR_NODE_RED_CREDENTIAL_SECRET must contain at least 32 characters'
+    throw "STCR_API_KEY_PEPPER must contain at least 32 characters"
   }
 }
 
 function Test-LocalHealth {
   try {
-    $health = Invoke-RestMethod -TimeoutSec 5 'http://127.0.0.1:1880/stcr/api/health'
+    $health = Invoke-RestMethod -TimeoutSec 5 "http://127.0.0.1:3001/stcr/api/health"
     return [bool]$health.ok
   } catch {
     return $false
@@ -161,197 +112,161 @@ function Test-LocalHealth {
 
 function Publish-RuntimeConfig([string]$ExpectedApiBaseUrl) {
   if ($SkipGitPush) {
-    Write-Host 'Skipping GitHub Pages runtime-config update.' -ForegroundColor DarkGray
+    Write-Host "ข้ามการอัปเดต runtime-config บน GitHub" -ForegroundColor DarkGray
     return
   }
 
   $branch = (& git -C $root branch --show-current).Trim()
-  if ($LASTEXITCODE -ne 0 -or $branch -ne 'main') {
-    throw "Automatic runtime-config publishing requires the main branch (current: $branch)"
+  if ($LASTEXITCODE -ne 0 -or $branch -ne "main") {
+    throw "การเผยแพร่ runtime-config อัตโนมัติต้องอยู่บน main (ปัจจุบัน: $branch)"
   }
 
-  $stagedOtherFiles = @(
-    & git -C $root diff --cached --name-only |
-      Where-Object { $_ -and $_ -ne 'public/runtime-config.json' }
-  )
-  if ($stagedOtherFiles.Count -gt 0) {
-    throw 'Cannot publish runtime-config while unrelated files are staged. Commit or unstage them first.'
+  $otherStaged = @(& git -C $root diff --cached --name-only | Where-Object {
+    $_ -and $_ -ne "public/runtime-config.json"
+  })
+  if ($otherStaged.Count -gt 0) {
+    throw "มีไฟล์อื่นถูก Stage อยู่ กรุณา Commit หรือ Unstage ก่อน"
   }
 
-  & git -C $root add -- 'public/runtime-config.json'
-  if ($LASTEXITCODE -ne 0) { throw 'Failed to stage public/runtime-config.json' }
-
-  & git -C $root diff --cached --quiet -- 'public/runtime-config.json'
+  & git -C $root add -- "public/runtime-config.json"
+  if ($LASTEXITCODE -ne 0) { throw "Stage runtime-config ไม่สำเร็จ" }
+  & git -C $root diff --cached --quiet -- "public/runtime-config.json"
   if ($LASTEXITCODE -eq 1) {
-    Write-Host 'Publishing the new API URL to GitHub Pages...' -ForegroundColor Cyan
-    & git -C $root commit -m 'Update temporary API endpoint' -- 'public/runtime-config.json'
-    if ($LASTEXITCODE -ne 0) { throw 'Failed to commit the new runtime-config' }
+    & git -C $root commit -m "อัปเดตปลายทาง Express ชั่วคราว" -- "public/runtime-config.json"
+    if ($LASTEXITCODE -ne 0) { throw "Commit runtime-config ไม่สำเร็จ" }
     & git -C $root push origin main
-    if ($LASTEXITCODE -ne 0) { throw 'Failed to push the new runtime-config to GitHub' }
+    if ($LASTEXITCODE -ne 0) { throw "Push runtime-config ไม่สำเร็จ" }
   } elseif ($LASTEXITCODE -ne 0) {
-    throw 'Failed to compare the runtime-config with Git'
-  } else {
-    Write-Host 'GitHub already has this API URL.' -ForegroundColor DarkGray
+    throw "ตรวจ runtime-config ไม่สำเร็จ"
   }
 
   if ($SkipDeployWait) { return }
-
-  Write-Host 'Waiting for GitHub Pages to use the new API URL...' -ForegroundColor DarkGray
+  Write-Host "กำลังรอ GitHub Pages เผยแพร่ URL ใหม่..." -ForegroundColor DarkGray
   $deadline = (Get-Date).AddMinutes(3)
-  $deployed = $false
   do {
     try {
       $cacheBust = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-      $publicConfig = Invoke-RestMethod -TimeoutSec 15 `
-        "https://0tyght.github.io/stcr/runtime-config.json?t=$cacheBust"
-      $deployed = $publicConfig.apiBaseUrl -eq $ExpectedApiBaseUrl
-    } catch {
-      $deployed = $false
-    }
-    if (-not $deployed) { Start-Sleep -Seconds 5 }
-  } while ((-not $deployed) -and (Get-Date) -lt $deadline)
-
-  if (-not $deployed) {
-    throw 'GitHub Pages did not publish the new API URL within 3 minutes'
-  }
-
-  Write-Host 'GitHub Pages is using the new API URL.' -ForegroundColor Green
+      $publicConfig = Invoke-RestMethod -TimeoutSec 15 "https://0tyght.github.io/stcr/runtime-config.json?t=$cacheBust"
+      if ($publicConfig.apiBaseUrl -eq $ExpectedApiBaseUrl) {
+        Write-Host "GitHub Pages ใช้ Express URL ใหม่แล้ว" -ForegroundColor Green
+        return
+      }
+    } catch {}
+    Start-Sleep -Seconds 5
+  } while ((Get-Date) -lt $deadline)
+  throw "GitHub Pages ยังไม่เผยแพร่ URL ใหม่ภายใน 3 นาที"
 }
 
 trap {
   Write-Warning "Startup failed: $($_.Exception.Message)"
-  Stop-StcrProcesses
-  if ($mysqlStartedByScript -and (Test-Port 3306)) {
+  Stop-StcrRuntime
+  if ($mysqlStartedByScript -and (Test-Port 3306) -and (Test-Path $mysqlAdmin)) {
     & $mysqlAdmin -u root shutdown | Out-Null
   }
   exit 1
 }
 
-if (-not (Test-Path $nodeRedSettings)) { throw "Node-RED settings not found: $nodeRedSettings" }
-if (-not (Test-Path $mysqlStart)) { throw "XAMPP MySQL starter not found: $mysqlStart" }
-if (-not (Test-Path $mysqlAdmin)) { throw "mysqladmin.exe not found: $mysqlAdmin" }
+Set-Location $root
+if (-not (Test-Path $mysqlStart)) { throw "ไม่พบ XAMPP MySQL starter: $mysqlStart" }
+if (-not (Test-Path $mysqlAdmin)) { throw "ไม่พบ mysqladmin.exe: $mysqlAdmin" }
 
-Write-Host 'Starting STCR public test server...' -ForegroundColor Cyan
-
+Write-Host "กำลังเปิด STCR Express public test..." -ForegroundColor Cyan
 if (-not (Test-Port 3306)) {
-  Write-Host 'Starting MariaDB...' -ForegroundColor DarkGray
   Start-Process -FilePath $mysqlStart -WindowStyle Hidden | Out-Null
-  if (-not (Wait-Port 3306 30)) { throw 'MariaDB failed to start on port 3306' }
+  if (-not (Wait-Until { Test-Port 3306 } 30)) { throw "MariaDB เปิดไม่สำเร็จ" }
   $mysqlStartedByScript = $true
 }
 
 Import-RequiredEnvironment
 
-$backupScript = Join-Path $PSScriptRoot 'backup-database.ps1'
-$backupDir = Join-Path $root 'backups'
-$latestBackup = Get-ChildItem $backupDir -Filter 'stcr-*.sql' -ErrorAction SilentlyContinue |
-  Sort-Object LastWriteTime -Descending |
-  Select-Object -First 1
-if (-not $latestBackup -or $latestBackup.LastWriteTime.Date -lt (Get-Date).Date) {
-  Write-Host 'Creating the daily database backup...' -ForegroundColor DarkGray
-  & $backupScript
+$backupScript = Join-Path $PSScriptRoot "backup-database.ps1"
+if (Test-Path $backupScript) {
+  $backupDir = Join-Path $root "backups"
+  $latest = Get-ChildItem $backupDir -Filter "stcr-*.sql" -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+  if (-not $latest -or $latest.LastWriteTime.Date -lt (Get-Date).Date) {
+    & $backupScript
+    if ($LASTEXITCODE -ne 0) { throw "สำรองฐานข้อมูลไม่สำเร็จ" }
+  }
 }
 
-$existingNodeRed = Get-StcrProcesses 'node.exe' '*node-red*settings.production.cjs*'
-if ($existingNodeRed.Count -gt 0 -and (Test-LocalHealth)) {
-  $nodeRedProcess = Get-Process -Id $existingNodeRed[0].ProcessId
-  Write-Host 'Node-RED is already online.' -ForegroundColor DarkGray
+$existingApi = Get-StcrProcess "*backend*src*server.mjs*"
+if ($existingApi.Count -gt 0 -and (Test-LocalHealth)) {
+  $apiProcess = Get-Process -Id $existingApi[0].ProcessId
+  Write-Host "Express API เปิดอยู่แล้ว" -ForegroundColor DarkGray
 } else {
-  if (Test-Port 1880) {
-    throw 'Port 1880 is already used by another process. Stop it before running this command.'
-  }
-
-  Write-Host 'Starting Node-RED API...' -ForegroundColor DarkGray
-  $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-  $nodeOut = Join-Path $runtimeDir "node-red-$stamp.out.log"
-  $nodeErr = Join-Path $runtimeDir "node-red-$stamp.err.log"
-  $nodeRedCommand = Join-Path $env:APPDATA 'npm\node-red.cmd'
-  $nodeRedProcess = Start-Process -FilePath $nodeRedCommand `
-    -ArgumentList @('--settings', $nodeRedSettings, '--userDir', $nodeRedUserDir) `
-    -WorkingDirectory $root -RedirectStandardOutput $nodeOut -RedirectStandardError $nodeErr `
+  if (Test-Port 3001) { throw "Port 3001 ถูกใช้งานโดย Process อื่น" }
+  $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  $apiOut = Join-Path $runtimeDir "express-$stamp.out.log"
+  $apiErr = Join-Path $runtimeDir "express-$stamp.err.log"
+  $node = (Get-Command node.exe -ErrorAction Stop).Source
+  $apiProcess = Start-Process -FilePath $node `
+    -ArgumentList @("backend/src/server.mjs") `
+    -WorkingDirectory $root `
+    -RedirectStandardOutput $apiOut `
+    -RedirectStandardError $apiErr `
     -WindowStyle Hidden -PassThru
 
-  $deadline = (Get-Date).AddSeconds(40)
-  while ((-not (Test-LocalHealth)) -and (Get-Date) -lt $deadline -and (-not $nodeRedProcess.HasExited)) {
-    Start-Sleep -Milliseconds 500
-  }
-  if (-not (Test-LocalHealth)) {
-    Get-Content $nodeOut,$nodeErr -Tail 50 -ErrorAction SilentlyContinue
-    throw 'Node-RED API failed to start'
+  $ready = Wait-Until { Test-LocalHealth } 45
+  if (-not $ready) {
+    Get-Content $apiOut,$apiErr -Tail 80 -ErrorAction SilentlyContinue
+    throw "Express API เปิดไม่สำเร็จ"
   }
 }
 
 if (-not (Test-Path $cloudflared)) {
-  Write-Host 'Downloading cloudflared from the official Cloudflare release...' -ForegroundColor DarkGray
+  Write-Host "กำลังดาวน์โหลด cloudflared..." -ForegroundColor DarkGray
   Invoke-WebRequest -UseBasicParsing -TimeoutSec 180 `
-    'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe' `
+    "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" `
     -OutFile $cloudflared
 }
 
-Get-StcrProcesses 'cloudflared.exe' '*127.0.0.1:1880*' |
-  ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+  $_.Name -eq "cloudflared.exe" -and $_.CommandLine -like "*127.0.0.1:3001*"
+} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 
 $url = $null
-$latestTunnelLog = $null
 for ($attempt = 1; $attempt -le 4 -and -not $url; $attempt++) {
-  $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+  $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
   $tunnelOut = Join-Path $runtimeDir "tunnel-$stamp-attempt$attempt.out.log"
   $tunnelErr = Join-Path $runtimeDir "tunnel-$stamp-attempt$attempt.err.log"
-  $latestTunnelLog = $tunnelErr
-  Write-Host "Starting Cloudflare Quick Tunnel (attempt $attempt/4)..." -ForegroundColor Cyan
-
   $tunnelProcess = Start-Process -FilePath $cloudflared `
-    -ArgumentList @('tunnel', '--url', 'http://127.0.0.1:1880', '--no-autoupdate') `
-    -WorkingDirectory $root -RedirectStandardOutput $tunnelOut -RedirectStandardError $tunnelErr `
+    -ArgumentList @("tunnel", "--url", "http://127.0.0.1:3001", "--no-autoupdate") `
+    -WorkingDirectory $root `
+    -RedirectStandardOutput $tunnelOut `
+    -RedirectStandardError $tunnelErr `
     -WindowStyle Hidden -PassThru
 
-  $deadline = (Get-Date).AddSeconds(50)
-  while (-not $url -and (Get-Date) -lt $deadline -and (-not $tunnelProcess.HasExited)) {
+  $deadline = (Get-Date).AddSeconds(55)
+  do {
     Start-Sleep -Seconds 1
-    $logText = ((Get-Content $tunnelOut,$tunnelErr -ErrorAction SilentlyContinue) -join "`n")
-    $match = [regex]::Match($logText, 'https://[a-z0-9-]+\.trycloudflare\.com')
+    $text = ((Get-Content $tunnelOut,$tunnelErr -ErrorAction SilentlyContinue) -join "`n")
+    $match = [regex]::Match($text, "https://[a-z0-9-]+\.trycloudflare\.com")
     if ($match.Success) { $url = $match.Value }
-  }
+  } while (-not $url -and (Get-Date) -lt $deadline -and -not $tunnelProcess.HasExited)
 
-  if ($url) {
-    $tunnelHost = ([Uri]$url).Host
-    $healthDeadline = (Get-Date).AddSeconds(60)
-    $healthy = $false
-    do {
-      try {
-        $tunnelIp = Resolve-DnsName $tunnelHost -Server '1.1.1.1' -DnsOnly -Type A -ErrorAction Stop |
-          Where-Object { $_.IPAddress } | Select-Object -ExpandProperty IPAddress -First 1
-        if (-not $tunnelIp) { throw 'Cloudflare DNS is not ready' }
-        $healthJson = & curl.exe --silent --show-error --fail --max-time 15 `
-          --resolve "${tunnelHost}:443:$tunnelIp" "$url/stcr/api/health" 2>&1
-        if ($LASTEXITCODE -ne 0) { throw ($healthJson -join ' ') }
-        $healthy = [bool](($healthJson -join "`n") | ConvertFrom-Json).ok
-      } catch {
-        Start-Sleep -Seconds 3
-      }
-    } while ((-not $healthy) -and (Get-Date) -lt $healthDeadline -and (-not $tunnelProcess.HasExited))
-
-    if (-not $healthy) { $url = $null }
-  }
-
-  if (-not $url) {
-    if ($tunnelProcess -and (-not $tunnelProcess.HasExited)) {
-      Stop-Process -Id $tunnelProcess.Id -Force -ErrorAction SilentlyContinue
-    }
-    if ($attempt -lt 4) { Start-Sleep -Seconds (5 * $attempt) }
+  if (-not $url -and -not $tunnelProcess.HasExited) {
+    Stop-Process -Id $tunnelProcess.Id -Force -ErrorAction SilentlyContinue
   }
 }
+if (-not $url) { throw "Cloudflare Quick Tunnel เปิดไม่สำเร็จ" }
 
-if (-not $url) {
-  throw "Cloudflare Quick Tunnel failed. Latest log: $latestTunnelLog"
-}
+$remoteReady = Wait-Until {
+  try {
+    $remoteHealth = Invoke-RestMethod -TimeoutSec 15 "$url/stcr/api/health"
+    return [bool]$remoteHealth.ok
+  } catch {
+    return $false
+  }
+} 60
+if (-not $remoteReady) { throw "Cloudflare Tunnel เปิดแล้วแต่เรียก Express API ไม่สำเร็จ" }
 
 $runtimeConfig = [ordered]@{
-  dataSource = 'node-red'
+  dataSource = "express"
   apiBaseUrl = "$url/stcr/api"
   pollIntervalMs = 1000
   requestTimeoutMs = 15000
-  updatedAt = (Get-Date).ToUniversalTime().ToString('o')
+  updatedAt = (Get-Date).ToUniversalTime().ToString("o")
 } | ConvertTo-Json
 [IO.File]::WriteAllText(
   $runtimeConfigPath,
@@ -361,46 +276,49 @@ $runtimeConfig = [ordered]@{
 
 Publish-RuntimeConfig "$url/stcr/api"
 
-Write-Host ''
-Write-Host 'STCR public test server is ready' -ForegroundColor Green
-Write-Host 'Web: https://0tyght.github.io/stcr/'
+@{
+  apiPid = $apiProcess.Id
+  tunnelPid = $tunnelProcess.Id
+  mysqlStartedByScript = $mysqlStartedByScript
+  apiUrl = "$url/stcr/api"
+  startedAt = (Get-Date).ToString("o")
+} | ConvertTo-Json | Set-Content -Encoding UTF8 $statePath
+
+Write-Host ""
+Write-Host "STCR Express public test พร้อมใช้งาน" -ForegroundColor Green
+Write-Host "Web: https://0tyght.github.io/stcr/"
 Write-Host "API: $url/stcr/api"
-Write-Host 'Accounts: gr_dev_admin / ttn_dev_admin (use the existing test passwords)'
 
 if ($Background) {
-  Write-Host 'Mode: background. Run npm run public:stop to stop all STCR services.' -ForegroundColor DarkGray
+  Write-Host "ทำงานเบื้องหลัง ใช้ npm run public:stop เพื่อปิด" -ForegroundColor DarkGray
   return
 }
 
-Write-Host ''
-Write-Host 'Server monitor is running. Press Q to stop Tunnel, Node-RED and MySQL.' -ForegroundColor Cyan
+Write-Host "กด Q เพื่อปิด Express, Tunnel และ MySQL ที่สคริปต์เปิด" -ForegroundColor Cyan
 try {
   while ($true) {
-    $dbState = if (Test-Port 3306) { 'ONLINE' } else { 'OFFLINE' }
-    $apiState = if (Test-LocalHealth) { 'ONLINE' } else { 'OFFLINE' }
-    $tunnelState = if ($tunnelProcess -and (-not $tunnelProcess.HasExited)) { 'ONLINE' } else { 'OFFLINE' }
-    Write-Host ("[{0}] DB: {1} | Node-RED: {2} | Tunnel: {3}" -f (Get-Date -Format 'HH:mm:ss'), $dbState, $apiState, $tunnelState)
-
+    Write-Host ("[{0}] DB: {1} | Express: {2} | Tunnel: {3}" -f `
+      (Get-Date -Format "HH:mm:ss"), `
+      $(if (Test-Port 3306) { "ONLINE" } else { "OFFLINE" }), `
+      $(if (Test-LocalHealth) { "ONLINE" } else { "OFFLINE" }), `
+      $(if ($tunnelProcess -and -not $tunnelProcess.HasExited) { "ONLINE" } else { "OFFLINE" }))
     for ($step = 0; $step -lt 10; $step++) {
       try {
         if ([Console]::KeyAvailable -and [Console]::ReadKey($true).Key -eq [ConsoleKey]::Q) {
-          throw [System.OperationCanceledException]::new('Stop requested')
+          throw [System.OperationCanceledException]::new("Stop requested")
         }
-      } catch [System.OperationCanceledException] {
-        throw
-      } catch {
-        # Ctrl+C remains available in terminals that do not expose KeyAvailable.
-      }
+      } catch [System.OperationCanceledException] { throw }
+      catch {}
       Start-Sleep -Milliseconds 500
     }
   }
 } catch [System.OperationCanceledException] {
-  Write-Host 'Stop requested.' -ForegroundColor Yellow
+  Write-Host "กำลังปิดระบบ..." -ForegroundColor Yellow
 } finally {
-  Write-Host 'Stopping STCR public test server...' -ForegroundColor Yellow
-  Stop-StcrProcesses
+  Stop-StcrRuntime
   if ($mysqlStartedByScript -and (Test-Port 3306)) {
     & $mysqlAdmin -u root shutdown | Out-Null
   }
-  Write-Host 'STCR services are stopped.' -ForegroundColor Green
+  Remove-Item $statePath -Force -ErrorAction SilentlyContinue
+  Write-Host "ปิด STCR Express public test แล้ว" -ForegroundColor Green
 }

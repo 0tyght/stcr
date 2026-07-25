@@ -59,7 +59,7 @@ export const companies = {
     shortName: "GR",
     accounts: [{ id: "gr_dev_admin", label: "gr_dev_admin" }],
     data: {
-      sourceId: "gr-node-red",
+      sourceId: "gr-express",
       apiBaseUrl: import.meta.env.VITE_GR_API_BASE_URL?.trim(),
     },
     brand: {
@@ -106,7 +106,7 @@ export const companies = {
     shortName: "TTN",
     accounts: [{ id: "ttn_dev_admin", label: "ttn_dev_admin" }],
     data: {
-      sourceId: "ttn-node-red",
+      sourceId: "ttn-express",
       apiBaseUrl: import.meta.env.VITE_TTN_API_BASE_URL?.trim(),
     },
     brand: {

@@ -1,15 +1,15 @@
 [Unit]
-Description=STCR Node-RED API and factory telemetry service
+Description=STCR Express API and MQTT service
 After=network-online.target mariadb.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=node-red
-Group=node-red
+User=stcr
+Group=stcr
 WorkingDirectory=/opt/stcr
 EnvironmentFile=/etc/stcr/stcr.env
-ExecStart=/usr/bin/node-red --userDir /var/lib/node-red --settings /opt/stcr/node-red/settings.production.cjs
+ExecStart=/usr/bin/node /opt/stcr/backend/src/server.mjs
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30
@@ -22,7 +22,7 @@ ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
-ReadWritePaths=/var/lib/node-red
+ReadWritePaths=/opt/stcr/output
 
 [Install]
 WantedBy=multi-user.target

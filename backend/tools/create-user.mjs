@@ -5,7 +5,7 @@ const allowedCompanies = new Set(["gr", "ttn"]);
 const allowedRoles = new Set(["admin", "operator", "viewer"]);
 
 if (!allowedCompanies.has(companyId) || !/^[a-zA-Z0-9_.-]{3,80}$/.test(username || "")) {
-  console.error("Usage: node node-red/create-user.mjs <gr|ttn> <username> [admin|operator|viewer] [display name]");
+  console.error("Usage: node backend/tools/create-user.mjs <gr|ttn> <username> [admin|operator|viewer] [display name]");
   process.exit(1);
 }
 if (!allowedRoles.has(role)) {

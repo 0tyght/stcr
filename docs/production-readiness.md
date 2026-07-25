@@ -8,11 +8,11 @@ Decision: **NO-GO for factory production**
 1. Confirm why TTN still publishes only ovens 1-6 although TTN has ovens 1-9. GR now publishes ovens 11-26 through `status_gr` and `sensor_gr`; some GR sensor messages contain empty `oventemp`/`blower` values and must be confirmed with the publisher.
 2. Enable MQTT TLS on port 8883, rotate the credential that was shared in plaintext, and re-test certificate validation.
 3. Keep HTTP ingestion disabled while MQTT writes directly to MySQL. If HTTP ingestion is enabled later, generate separate GR and TTN keys and run cross-tenant rejection tests first.
-4. Create the least-privilege production MySQL account and verify its grants. Never run Node-RED as MySQL root.
+4. Create the least-privilege production MySQL account and verify its grants. Never run Express as MySQL root.
 5. Establish retention jobs for raw MQTT, telemetry and audit data.
 6. Finish alarm creation/resolution and offline-sensor monitoring from real telemetry, then test restart recovery from MySQL.
 7. Copy backups to encrypted off-host storage and perform a documented restore drill with measured recovery time.
-8. Add monitoring for DB connectivity, last telemetry age per oven, ingestion failures, disk usage, backup age and Node-RED process health.
+8. Add monitoring for DB connectivity, last telemetry age per oven, ingestion failures, disk usage, backup age and Express process health.
 9. Run end-to-end acceptance for both companies: login/roles, tenant isolation, 6-day realtime graph, historical cycle, PDF/CSV, settings and loss-of-signal behavior.
 10. Obtain authorized SSH key access and validate the systemd, nginx, firewall, MariaDB and backup configuration on the actual Ubuntu host.
 
@@ -26,7 +26,7 @@ Decision: **NO-GO for factory production**
 - Added database-backed runtime startup and removed runtime test-data generators.
 - Persisted oven settings and alarm acknowledgement changes to MySQL.
 - Made production history and CSV fail visibly when MySQL is unavailable.
-- Added Ubuntu Node-RED, nginx, local backup service and daily timer templates.
+- Added Ubuntu Express, nginx, local backup service and daily timer templates.
 - Confirmed anonymous MQTT access is rejected; confirmed port 1883 is reachable and TLS port 8883 is not.
 - Production dependency audit reports zero known vulnerabilities.
 
@@ -47,9 +47,9 @@ Decision: **NO-GO for factory production**
 - Passwords use Argon2id hashes; ingestion keys use HMAC-SHA-256 hashes with an external pepper.
 - API requests validate company and oven ownership and reject sequence replay/invalid physical ranges.
 - Telemetry persistence uses transactions and unique constraints.
-- The frontend and Node-RED Flow contain no runtime test-data generator or fallback data source.
+- The frontend and Express backend contain no runtime test-data generator or fallback data source.
 - Production environment preflight rejects placeholders, weak/missing secrets and temporary tunnel URLs.
-- TypeScript build, Node-RED contract validation and production dependency audit run in CI.
+- TypeScript build, Express runtime verification and production dependency audit run in CI.
 - Desktop and iPad smoke tests passed at 1440x900 and 1024x768 without horizontal page overflow using the same-origin development proxy.
 
 ## Release gate

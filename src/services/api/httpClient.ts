@@ -53,7 +53,7 @@ async function request(path: string, options: RequestOptions = {}, query?: URLSe
         | null;
 
       throw new ApiError(
-        payload?.error || `Node-RED ตอบกลับด้วยสถานะ ${response.status}`,
+        payload?.error || `Express ตอบกลับด้วยสถานะ ${response.status}`,
         {
           status: response.status,
           code: payload?.code || "HTTP_ERROR",
@@ -65,12 +65,12 @@ async function request(path: string, options: RequestOptions = {}, query?: URLSe
   } catch (error) {
     if (error instanceof ApiError) throw error;
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new ApiError("หมดเวลารอการตอบกลับจาก Node-RED", {
+      throw new ApiError("หมดเวลารอการตอบกลับจาก Express", {
         code: "REQUEST_TIMEOUT",
         cause: error,
       });
     }
-    throw new ApiError("เชื่อมต่อ Node-RED ไม่สำเร็จ", {
+    throw new ApiError("เชื่อมต่อ Express ไม่สำเร็จ", {
       code: "NETWORK_ERROR",
       cause: error,
     });
@@ -88,7 +88,7 @@ export async function requestJson<T>(
   try {
     return (await response.json()) as T;
   } catch (error) {
-    throw new ApiError("Node-RED ส่ง JSON ไม่ถูกต้อง", {
+    throw new ApiError("Express ส่ง JSON ไม่ถูกต้อง", {
       code: "INVALID_JSON",
       cause: error,
     });

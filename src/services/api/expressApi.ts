@@ -63,7 +63,7 @@ function alarmQueryParams(
   });
 }
 
-export const nodeRedApi: AppApi = {
+export const expressApi: AppApi = {
   getOvens: () => requestArray<Oven>("/ovens"),
   getRealtimeOvens: () => requestArray<Oven>("/ovens"),
   getOven: (ovenId) =>
