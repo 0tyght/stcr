@@ -48,6 +48,7 @@ mysqldump \
   --defaults-extra-file="$client_config" \
   --single-transaction \
   --quick \
+  --no-tablespaces \
   --routines \
   --triggers \
   --events \

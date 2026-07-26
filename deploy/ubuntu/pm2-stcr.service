@@ -1,0 +1,23 @@
+[Unit]
+Description=STCR PM2 process manager
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=forking
+User=stcr
+Group=stcr
+Environment=PM2_HOME=/home/stcr/.pm2
+Environment=PATH=/opt/stcr-node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PIDFile=/home/stcr/.pm2/pm2.pid
+Restart=on-failure
+RestartSec=5
+ExecStart=/usr/bin/pm2 resurrect
+ExecReload=/usr/bin/pm2 reload all
+ExecStop=/usr/bin/pm2 kill
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

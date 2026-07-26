@@ -1,6 +1,6 @@
 [Unit]
 Description=Back up the STCR MariaDB database
-After=mariadb.service
+After=mysql.service mariadb.service
 
 [Service]
 Type=oneshot
