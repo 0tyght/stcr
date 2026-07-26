@@ -252,6 +252,7 @@ async function createSession(user, ttlMinutes) {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAtMs = Date.now() + ttlMinutes * 60 * 1000;
   const expiresAt = new Date(expiresAtMs).toISOString();
+  const expiresAtSql = expiresAt.slice(0, 23).replace("T", " ");
   const session = {
     userId: user.id,
     username: user.username,
@@ -267,7 +268,7 @@ async function createSession(user, ttlMinutes) {
     `INSERT INTO sessions (token, user_id, company_id, username, roles, expires_at)
      VALUES (?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE expires_at=VALUES(expires_at)`,
-    [token, user.id, user.companyId, user.username, JSON.stringify(user.roles), expiresAt],
+    [token, user.id, user.companyId, user.username, JSON.stringify(user.roles), expiresAtSql],
   );
   const sessions = cleanupSessions();
   sessions[token] = session;
