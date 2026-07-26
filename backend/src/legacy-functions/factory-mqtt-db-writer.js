@@ -322,7 +322,7 @@ async function saveRawMessage(executor, value, receivedAtDate, detail, force = f
       Number(value.qos || 0),
       Boolean(value.retained),
       Boolean(value.duplicateDelivery),
-      value.sourceTimestamp,
+      validDate(value.sourceTimestamp, receivedAtDate),
       JSON.stringify(value.source),
       makeMessageHash(value),
       value.normalizationStatus || (value.type === "pending" ? "pending" : "normalized"),

@@ -1088,7 +1088,7 @@ async function persistFactoryMqttRaw(envelope) {
     [
       envelope.companyId, envelope.ovenId, envelope.ovenNumber, envelope.cycleNumber,
       envelope.topic, envelope.qos, envelope.retained, envelope.duplicateDelivery,
-      envelope.sourceTimestamp, envelope.payloadJson, messageHash,
+      new Date(envelope.sourceTimestamp), envelope.payloadJson, messageHash,
       envelope.normalizationStatus, envelope.normalizationDetail,
     ],
   );
@@ -1150,7 +1150,7 @@ async function persistHttpTelemetryBatch(batch, apiKeyRecord) {
           `stcr/${batch.companyId}/${batch.ovenId}/telemetry/${reading.sensorKey}`,
           batch.deviceId, reading.sensorId, reading.sensorKey, reading.sequence,
           reading.rawValue, reading.unit, reading.quality, JSON.stringify(reading.qualityReasons),
-          reading.sourceTimestamp, reading.sourceTimestamp, receivedAt,
+          new Date(reading.sourceTimestamp), new Date(reading.sourceTimestamp), receivedAt,
         ],
       );
     }
