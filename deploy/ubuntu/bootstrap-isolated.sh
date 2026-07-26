@@ -197,7 +197,7 @@ set -a
 # shellcheck disable=SC1091
 source /etc/stcr/migration.env
 set +a
-export PATH=/opt/stcr-node/bin:/usr/bin:/bin
+export PATH=/opt/stcr-node/bin:/usr/sbin:/usr/bin:/sbin:/bin
 if [[ "$(mysql --protocol=socket -N stcr -e \
   "SELECT COUNT(*) FROM schema_migrations")" = "0" ]]; then
   /opt/stcr-node/bin/npm --prefix "$release_directory" run db:migrate -- --baseline
