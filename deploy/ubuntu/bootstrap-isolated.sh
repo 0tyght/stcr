@@ -63,6 +63,7 @@ if [[ ! -x "/opt/$node_directory/bin/node" ]]; then
   )
   tar -xJf "$temporary_directory/$node_archive" -C /opt
 fi
+chown -R root:root "/opt/$node_directory"
 ln -sfn "/opt/$node_directory" /opt/stcr-node
 /opt/stcr-node/bin/node --version
 
@@ -73,7 +74,7 @@ if [[ ! -d "$release_directory/.git" ]]; then
 fi
 runuser -u stcr -- git -C "$release_directory" fetch --prune origin main
 runuser -u stcr -- git -C "$release_directory" checkout --detach "$STCR_RELEASE_SHA"
-test "$(git -C "$release_directory" rev-parse HEAD)" = "$STCR_RELEASE_SHA"
+test "$(runuser -u stcr -- git -C "$release_directory" rev-parse HEAD)" = "$STCR_RELEASE_SHA"
 ln -sfn "$release_directory" /opt/stcr/current
 
 runuser -u stcr -- env \
