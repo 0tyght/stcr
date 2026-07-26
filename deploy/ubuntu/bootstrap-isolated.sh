@@ -204,6 +204,9 @@ if [[ "$(mysql --protocol=socket -N stcr -e \
 else
   /opt/stcr-node/bin/npm --prefix "$release_directory" run db:migrate
 fi
+unset STCR_DB_HOST STCR_DB_PORT STCR_DB_NAME STCR_DB_USER STCR_DB_PASSWORD
+unset STCR_DB_MIGRATION_USER STCR_DB_MIGRATION_PASSWORD
+unset STCR_FACTORY_MQTT_USERNAME STCR_FACTORY_MQTT_PASSWORD
 
 install -o root -g root -m 0755 \
   "$release_directory/deploy/ubuntu/backup-stcr.sh" /usr/local/sbin/backup-stcr
@@ -243,6 +246,11 @@ runuser -u stcr -- env \
   HOME=/home/stcr \
   PM2_HOME=/home/stcr/.pm2 \
   PATH=/opt/stcr-node/bin:/usr/bin:/bin \
+  /usr/bin/pm2 kill || true
+runuser -u stcr -- env \
+  HOME=/home/stcr \
+  PM2_HOME=/home/stcr/.pm2 \
+  PATH=/opt/stcr-node/bin:/usr/bin:/bin \
   /usr/bin/pm2 start "$release_directory/deploy/ubuntu/ecosystem.config.cjs" \
     --only stcr-api --update-env
 runuser -u stcr -- env \
@@ -257,8 +265,21 @@ systemctl start stcr-backup.timer
 
 rm -f "$BOOTSTRAP_ENV"
 
-curl -fsS http://127.0.0.1:3001/readyz
-curl -fsS http://127.0.0.1:8300/readyz
-curl -fsS http://127.0.0.1:8300/runtime-config.json
+wait_for_http() {
+  local url="$1"
+  local attempt
+  for attempt in {1..30}; do
+    if curl -fsS "$url"; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "Timed out waiting for $url" >&2
+  return 1
+}
+
+wait_for_http http://127.0.0.1:3001/readyz
+wait_for_http http://127.0.0.1:8300/readyz
+wait_for_http http://127.0.0.1:8300/runtime-config.json
 echo
 echo "STCR isolated deployment completed at $STCR_RELEASE_SHA"
