@@ -236,6 +236,9 @@ EOF
 systemctl reload nginx
 systemctl daemon-reload
 
+# PM2 starts a detached daemon. Use a directory the isolated service user can
+# traverse instead of inheriting the deploy user's private home directory.
+cd /home/stcr
 runuser -u stcr -- env \
   HOME=/home/stcr \
   PM2_HOME=/home/stcr/.pm2 \
