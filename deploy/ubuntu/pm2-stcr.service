@@ -4,12 +4,12 @@ After=network-online.target mysql.service
 Wants=network-online.target
 
 [Service]
-Type=forking
+Type=oneshot
+RemainAfterExit=yes
 User=stcr
 Group=stcr
 Environment=PM2_HOME=/home/stcr/.pm2
 Environment=PATH=/opt/stcr-node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-PIDFile=/home/stcr/.pm2/pm2.pid
 Restart=on-failure
 RestartSec=5
 ExecStart=/usr/bin/pm2 resurrect
