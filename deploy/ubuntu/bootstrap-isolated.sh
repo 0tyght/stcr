@@ -232,7 +232,7 @@ cat > /etc/logrotate.d/stcr <<'EOF'
 }
 EOF
 
-nginx -t
+/usr/sbin/nginx -t
 systemctl reload nginx
 systemctl daemon-reload
 
