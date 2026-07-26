@@ -2,14 +2,37 @@
 -- Existing duplicate tables are preserved as detached legacy archives so a
 -- separate migration team can map or remove them without changing runtime data.
 
-ALTER TABLE sensor_minute_aggregates
-  ADD COLUMN IF NOT EXISTS source_kind
-    ENUM('mqtt', 'http', 'import', 'manual')
-    NOT NULL DEFAULT 'mqtt'
-    AFTER quality,
-  ADD COLUMN IF NOT EXISTS source_ref
-    VARCHAR(160) NULL
-    AFTER source_kind;
+SET @has_source_kind = (
+  SELECT COUNT(*)
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'sensor_minute_aggregates'
+    AND column_name = 'source_kind'
+);
+SET @sql = IF(
+  @has_source_kind = 0,
+  'ALTER TABLE sensor_minute_aggregates ADD COLUMN source_kind ENUM(''mqtt'', ''http'', ''import'', ''manual'') NOT NULL DEFAULT ''mqtt'' AFTER quality',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @has_source_ref = (
+  SELECT COUNT(*)
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'sensor_minute_aggregates'
+    AND column_name = 'source_ref'
+);
+SET @sql = IF(
+  @has_source_ref = 0,
+  'ALTER TABLE sensor_minute_aggregates ADD COLUMN source_ref VARCHAR(160) NULL AFTER source_kind',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 SET @has_source_index = (
   SELECT COUNT(*)
