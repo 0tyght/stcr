@@ -15,6 +15,8 @@ const required = [
   "backend/tools/create-user.mjs",
   "backend/tools/create-api-key.mjs",
   "src/services/api/expressApi.ts",
+  "deploy/ubuntu/ecosystem.config.cjs",
+  "deploy/ubuntu/nginx-stcr-local.conf",
   "deploy/ubuntu/stcr-express.service",
   ".github/workflows/production-check.yml",
 ];
@@ -48,6 +50,28 @@ if (!vite.includes("127.0.0.1:3001") || vite.includes("127.0.0.1:1880")) {
 const runtimeConfig = JSON.parse(await readFile(resolve(root, "public/runtime-config.json"), "utf8"));
 if (runtimeConfig.apiBaseUrl !== "/stcr/api" || runtimeConfig.dataSource !== "express") {
   throw new Error("Production runtime config must use the same-origin Express API");
+}
+
+const schema = await readFile(resolve(root, "database/schema.sql"), "utf8");
+if (
+  schema.includes("CREATE TABLE IF NOT EXISTS sensor_readings") ||
+  schema.includes("CREATE TABLE IF NOT EXISTS telemetry_events")
+) {
+  throw new Error("Fresh schema still creates duplicate sensor-history tables");
+}
+if (!schema.includes("CREATE TABLE IF NOT EXISTS sensor_minute_aggregates")) {
+  throw new Error("Canonical minute-history table is missing");
+}
+
+const mqttWriter = await readFile(
+  resolve(root, "backend/src/legacy-functions/factory-mqtt-db-writer.js"),
+  "utf8",
+);
+if (
+  mqttWriter.includes("INSERT INTO sensor_readings") ||
+  mqttWriter.includes("UPDATE sensor_readings")
+) {
+  throw new Error("MQTT runtime still writes duplicate sensor history");
 }
 
 console.log("Express production structure verification passed");

@@ -559,23 +559,6 @@ async function resolveCycleLifecycle(
       reportMinuteAt,
     ],
   );
-  await connection.execute(
-    `UPDATE sensor_readings
-     SET cycle_id = ?,
-         cycle_phase = 'recording',
-         included_in_report = TRUE
-     WHERE company_id = ?
-       AND oven_id = ?
-       AND recorded_at >= ?
-       AND (cycle_id IS NULL OR cycle_id = ?)`,
-    [
-      cycle.id,
-      bucket.companyId,
-      bucket.ovenId,
-      reportMinuteAt,
-      cycle.id,
-    ],
-  );
 
   return cycle;
 }
@@ -767,59 +750,6 @@ async function persistMinuteBucket(bucket) {
         lastReceivedAt,
       ],
     );
-
-    // Keep the existing history API compatible: one average point per minute.
-    // The three core values are required by the current sensor_readings schema.
-    if (
-      chamber.count > 0 &&
-      humidity.count > 0 &&
-      furnace.count > 0
-    ) {
-      await connection.execute(
-        `INSERT INTO sensor_readings (
-           company_id,
-           oven_id,
-           cycle_id,
-           recorded_at,
-           chamber_temp,
-           humidity,
-           furnace_temp,
-           blower_temp,
-           cycle_phase,
-           included_in_report,
-           quality,
-           source_timestamp,
-           received_at
-         )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-           cycle_id = VALUES(cycle_id),
-           chamber_temp = VALUES(chamber_temp),
-           humidity = VALUES(humidity),
-           furnace_temp = VALUES(furnace_temp),
-           blower_temp = VALUES(blower_temp),
-           cycle_phase = VALUES(cycle_phase),
-           included_in_report = VALUES(included_in_report),
-           quality = VALUES(quality),
-           source_timestamp = VALUES(source_timestamp),
-           received_at = VALUES(received_at)`,
-        [
-          bucket.companyId,
-          bucket.ovenId,
-          cycle?.id || null,
-          minuteAt,
-          chamber.avg,
-          humidity.avg,
-          furnace.avg,
-          blower.avg,
-          cyclePhase,
-          includedInReport,
-          bucket.quality || "good",
-          lastSourceAt,
-          lastReceivedAt,
-        ],
-      );
-    }
 
     await connection.commit();
     syncCycleMemory(bucket, cycle);

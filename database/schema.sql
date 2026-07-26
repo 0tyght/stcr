@@ -129,53 +129,6 @@ CREATE TABLE IF NOT EXISTS oven_cycles (
   CONSTRAINT fk_cycles_oven FOREIGN KEY (company_id, oven_id) REFERENCES ovens(company_id, id)
 ) ENGINE=InnoDB;
 
-CREATE TABLE IF NOT EXISTS sensor_readings (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  company_id VARCHAR(32) NOT NULL,
-  oven_id VARCHAR(64) NOT NULL,
-  cycle_id BIGINT UNSIGNED NULL,
-  recorded_at DATETIME(3) NOT NULL,
-  chamber_temp DECIMAL(8,2) NOT NULL,
-  humidity DECIMAL(8,2) NOT NULL,
-  furnace_temp DECIMAL(8,2) NOT NULL,
-  blower_temp DECIMAL(8,2) NULL,
-  cycle_phase ENUM('ignition', 'recording', 'cooldown', 'idle') NOT NULL,
-  included_in_report BOOLEAN NOT NULL DEFAULT FALSE,
-  quality ENUM('good', 'suspect', 'missing', 'manual') NOT NULL DEFAULT 'good',
-  source_timestamp DATETIME(3) NULL,
-  received_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  PRIMARY KEY (id),
-  UNIQUE KEY uq_readings_source_point (company_id, oven_id, recorded_at),
-  KEY ix_readings_report (company_id, oven_id, cycle_id, included_in_report, recorded_at),
-  KEY ix_readings_received (received_at),
-  CONSTRAINT fk_readings_oven FOREIGN KEY (company_id, oven_id) REFERENCES ovens(company_id, id),
-  CONSTRAINT fk_readings_cycle FOREIGN KEY (cycle_id) REFERENCES oven_cycles(id)
-) ENGINE=InnoDB;
-
-CREATE TABLE IF NOT EXISTS telemetry_events (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  company_id VARCHAR(32) NOT NULL,
-  oven_id VARCHAR(64) NOT NULL,
-  batch_id VARCHAR(96) NOT NULL,
-  topic VARCHAR(255) NOT NULL,
-  device_id VARCHAR(128) NOT NULL,
-  sensor_id VARCHAR(160) NOT NULL,
-  sensor_key VARCHAR(40) NOT NULL,
-  sequence_number BIGINT UNSIGNED NOT NULL,
-  numeric_value DECIMAL(12,3) NOT NULL,
-  unit_symbol VARCHAR(16) NOT NULL,
-  quality ENUM('good', 'suspect', 'missing', 'manual') NOT NULL,
-  quality_reasons JSON NULL,
-  source_timestamp DATETIME(3) NOT NULL,
-  gateway_timestamp DATETIME(3) NOT NULL,
-  received_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-  PRIMARY KEY (id),
-  UNIQUE KEY uq_telemetry_sensor_sequence (company_id, sensor_id, sequence_number),
-  KEY ix_telemetry_batch (batch_id),
-  KEY ix_telemetry_oven_time (company_id, oven_id, source_timestamp),
-  CONSTRAINT fk_telemetry_oven FOREIGN KEY (company_id, oven_id) REFERENCES ovens(company_id, id)
-) ENGINE=InnoDB;
-
 CREATE TABLE IF NOT EXISTS factory_mqtt_messages (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   company_id VARCHAR(32) NOT NULL,
@@ -196,6 +149,7 @@ CREATE TABLE IF NOT EXISTS factory_mqtt_messages (
   UNIQUE KEY uq_factory_mqtt_message_hash (message_hash),
   KEY ix_factory_mqtt_company_oven_time (company_id, oven_id, source_timestamp),
   KEY ix_factory_mqtt_topic_time (topic, source_timestamp),
+  KEY ix_factory_mqtt_retention (normalization_status, received_at),
   CONSTRAINT fk_factory_mqtt_company FOREIGN KEY (company_id) REFERENCES companies(id),
   CONSTRAINT fk_factory_mqtt_oven FOREIGN KEY (company_id, oven_id) REFERENCES ovens(company_id, id)
 ) ENGINE=InnoDB;
@@ -374,6 +328,8 @@ CREATE TABLE IF NOT EXISTS sensor_minute_aggregates (
   cycle_phase ENUM('ignition', 'recording', 'cooldown', 'idle') NOT NULL,
   included_in_report BOOLEAN NOT NULL DEFAULT FALSE,
   quality ENUM('good', 'suspect', 'missing', 'manual') NOT NULL DEFAULT 'good',
+  source_kind ENUM('mqtt', 'http', 'import', 'manual') NOT NULL DEFAULT 'mqtt',
+  source_ref VARCHAR(160) NULL,
   first_source_at DATETIME(3) NOT NULL,
   last_source_at DATETIME(3) NOT NULL,
   first_received_at DATETIME(3) NOT NULL,
@@ -384,6 +340,7 @@ CREATE TABLE IF NOT EXISTS sensor_minute_aggregates (
   PRIMARY KEY (company_id, oven_id, minute_at),
   KEY ix_minute_aggregate_cycle (company_id, oven_id, cycle_id, minute_at),
   KEY ix_minute_aggregate_received (last_received_at),
+  KEY ix_minute_aggregate_source (source_kind, source_ref),
   CONSTRAINT fk_minute_aggregate_oven
     FOREIGN KEY (company_id, oven_id)
     REFERENCES ovens(company_id, id),

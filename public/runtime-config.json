@@ -1,7 +1,7 @@
 {
     "dataSource":  "express",
-    "apiBaseUrl":  "https://insulation-methodology-attending-brave.trycloudflare.com/stcr/api",
+    "apiBaseUrl":  "/stcr/api",
     "pollIntervalMs":  1000,
     "requestTimeoutMs":  15000,
-    "updatedAt":  "2026-07-26T10:18:54.1221471Z"
+    "updatedAt":  null
 }

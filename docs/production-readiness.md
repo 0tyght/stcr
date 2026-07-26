@@ -7,9 +7,9 @@ Decision: **NO-GO for factory production**
 
 1. Confirm why TTN still publishes only ovens 1-6 although TTN has ovens 1-9. GR now publishes ovens 11-26 through `status_gr` and `sensor_gr`; some GR sensor messages contain empty `oventemp`/`blower` values and must be confirmed with the publisher.
 2. Enable MQTT TLS on port 8883, rotate the credential that was shared in plaintext, and re-test certificate validation.
-3. Keep HTTP ingestion disabled while MQTT writes directly to MySQL. If HTTP ingestion is enabled later, generate separate GR and TTN keys and run cross-tenant rejection tests first.
+3. Keep the unused HTTP ingestion route disabled. The production source is direct MQTT ingestion through Express.
 4. Create the least-privilege production MySQL account and verify its grants. Never run Express as MySQL root.
-5. Establish retention jobs for raw MQTT, telemetry and audit data.
+5. Establish retention jobs for MQTT diagnostics and audit data.
 6. Finish alarm creation/resolution and offline-sensor monitoring from real telemetry, then test restart recovery from MySQL.
 7. Copy backups to encrypted off-host storage and perform a documented restore drill with measured recovery time.
 8. Add monitoring for DB connectivity, last telemetry age per oven, ingestion failures, disk usage, backup age and Express process health.
@@ -28,7 +28,7 @@ Decision: **NO-GO for factory production**
 - Made production history and CSV fail visibly when MySQL is unavailable.
 - Added Ubuntu Express, nginx, local backup service and daily timer templates.
 - Confirmed anonymous MQTT access is rejected; confirmed port 1883 is reachable and TLS port 8883 is not.
-- Production dependency audit reports zero known vulnerabilities.
+- Added production dependency auditing to the release checks.
 
 ## Completed on 2026-07-22
 
@@ -41,12 +41,13 @@ Decision: **NO-GO for factory production**
 - Added exact topic routing for TTN `test`/`sensor` and GR `status_gr`/`sensor_gr` over one broker connection.
 - Added per-topic MQTT health counters without exposing raw payloads or credentials.
 - Disabled unused HTTP ingestion routes when direct MQTT mode is active, reduced session-validation database traffic, and paused frontend polling in hidden tabs.
+- Consolidated sensor history into `sensor_minute_aggregates`; duplicate sensor and telemetry tables are detached as `legacy_*` archives for a separate mapping task.
 
 ## Guardrails already present
 
 - Passwords use Argon2id hashes; ingestion keys use HMAC-SHA-256 hashes with an external pepper.
 - API requests validate company and oven ownership and reject sequence replay/invalid physical ranges.
-- Telemetry persistence uses transactions and unique constraints.
+- Minute aggregation uses transactions and a unique company/oven/minute key.
 - The frontend and Express backend contain no runtime test-data generator or fallback data source.
 - Production environment preflight rejects placeholders, weak/missing secrets and temporary tunnel URLs.
 - TypeScript build, Express runtime verification and production dependency audit run in CI.
@@ -59,11 +60,10 @@ Run these from the exact release commit and final environment:
 ```bash
 npm ci
 npm audit --omit=dev --audit-level=high
-npm run typecheck
-npm run node-red:build
-npm run node-red:validate
-npm run build
+npm run backend:check
 npm run production:preflight
+npm run build
+npm run backend:smoke
 ```
 
 Deployment is approved only when all commands pass, all blocking items are closed, a backup restore has been demonstrated, and the factory acceptance test is signed off.

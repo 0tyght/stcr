@@ -831,16 +831,6 @@ async function readOvenDeleteCheck(
       sql: "SELECT COUNT(*) AS count FROM sensor_minute_aggregates WHERE company_id = ? AND oven_id = ?",
     },
     {
-      key: "sensorReadings",
-      label: "ข้อมูลเซนเซอร์",
-      sql: "SELECT COUNT(*) AS count FROM sensor_readings WHERE company_id = ? AND oven_id = ?",
-    },
-    {
-      key: "telemetry",
-      label: "ข้อมูล Telemetry",
-      sql: "SELECT COUNT(*) AS count FROM telemetry_events WHERE company_id = ? AND oven_id = ?",
-    },
-    {
       key: "mqttMessages",
       label: "ข้อความ MQTT",
       sql: "SELECT COUNT(*) AS count FROM factory_mqtt_messages WHERE company_id = ? AND oven_id = ?",

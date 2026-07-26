@@ -4,10 +4,7 @@
 
 START TRANSACTION;
 
-DELETE FROM telemetry_events
-WHERE company_id = 'ttn';
-
-DELETE FROM sensor_readings
+DELETE FROM sensor_minute_aggregates
 WHERE company_id = 'ttn';
 
 DELETE FROM factory_mqtt_messages

@@ -7,14 +7,23 @@ import mysql from "mysql2/promise";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const migrationsDir = join(root, "database", "migrations");
 const baselineOnly = process.argv.includes("--baseline");
+const baselineThrough = "011_add_schema_migration_tracking.sql";
 const password = String(process.env.STCR_DB_PASSWORD || "");
 if (!password) throw new Error("STCR_DB_PASSWORD is required");
+const migrationUser =
+  process.env.STCR_DB_MIGRATION_USER || process.env.STCR_DB_USER || "stcr_app";
+const allowEmptyMigrationPassword = process.argv.includes(
+  "--allow-empty-migration-password",
+);
+const migrationPassword = allowEmptyMigrationPassword
+  ? ""
+  : String(process.env.STCR_DB_MIGRATION_PASSWORD || password);
 
 const connection = await mysql.createConnection({
   host: process.env.STCR_DB_HOST || "127.0.0.1",
   port: Number(process.env.STCR_DB_PORT || 3306),
-  user: process.env.STCR_DB_MIGRATION_USER || process.env.STCR_DB_USER || "stcr_app",
-  password: process.env.STCR_DB_MIGRATION_PASSWORD || password,
+  user: migrationUser,
+  password: migrationPassword,
   database: process.env.STCR_DB_NAME || "stcr",
   timezone: "Z",
   multipleStatements: true,
@@ -45,12 +54,13 @@ try {
       continue;
     }
 
-    if (!baselineOnly) await connection.query(sql);
+    const shouldBaseline = baselineOnly && name <= baselineThrough;
+    if (!shouldBaseline) await connection.query(sql);
     await connection.execute(
       "INSERT INTO schema_migrations (migration_name, checksum_sha256, applied_at) VALUES (?, ?, UTC_TIMESTAMP(3))",
       [name, checksum],
     );
-    console.log(`${baselineOnly ? "Baselined" : "Applied"}: ${name}`);
+    console.log(`${shouldBaseline ? "Baselined" : "Applied"}: ${name}`);
   }
 } finally {
   await connection.end();
