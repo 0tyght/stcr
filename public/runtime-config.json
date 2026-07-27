@@ -1,7 +1,7 @@
 {
     "dataSource":  "express",
     "apiBaseUrl":  "/stcr/api",
-    "pollIntervalMs":  1000,
+    "pollIntervalMs":  5000,
     "requestTimeoutMs":  15000,
     "updatedAt":  null
 }

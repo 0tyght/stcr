@@ -14,10 +14,10 @@ const allowedOrigin = requestOrigin && allowedOrigins.includes(requestOrigin) ? 
 const sensorKeys = ["chamberTemp", "humidity", "furnaceTemp", "blowerTemp"];
 const maxBodyBytes = 32 * 1024;
 const maxHistoryRangeMs = 14 * 24 * 60 * 60 * 1000;
-const configuredOfflineSeconds = Number(env.get("STCR_OFFLINE_THRESHOLD_SECONDS") || 180);
+const configuredOfflineSeconds = Number(env.get("STCR_OFFLINE_THRESHOLD_SECONDS") || 300);
 const offlineThresholdMs = Number.isFinite(configuredOfflineSeconds) && configuredOfflineSeconds >= 30
   ? configuredOfflineSeconds * 1000
-  : 180 * 1000;
+  : 300 * 1000;
 const sessionAccountRecheckMs = 60 * 1000;
 const httpIngestEnabled =
   String(env.get("STCR_HTTP_INGEST_ENABLED") || "false").toLowerCase() === "true";

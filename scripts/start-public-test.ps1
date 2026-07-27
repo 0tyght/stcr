@@ -65,7 +65,7 @@ function Import-RequiredEnvironment {
     STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES = "420"
     STCR_FACTORY_MQTT_TLS_REJECT_UNAUTHORIZED = "false"
     STCR_FACTORY_MQTT_STORE_RAW_MESSAGES = "false"
-    STCR_OFFLINE_THRESHOLD_SECONDS = "180"
+    STCR_OFFLINE_THRESHOLD_SECONDS = "300"
     STCR_HTTP_INGEST_ENABLED = "false"
     STCR_FACTORY_MQTT_TOPIC_ROUTES_JSON = '{"test":{"companyId":"ttn","messageType":"status"},"sensor":{"companyId":"ttn","messageType":"sensor"},"status_gr":{"companyId":"gr","messageType":"status"},"sensor_gr":{"companyId":"gr","messageType":"sensor"}}'
     STCR_FACTORY_MQTT_OVEN_MAPS_JSON = '{"ttn":{"1":"oven-1","2":"oven-2","3":"oven-3","4":"oven-4","5":"oven-5","6":"oven-6","7":"oven-7","8":"oven-8","9":"oven-9"},"gr":{"11":"oven-11","12":"oven-12","13":"oven-13","14":"oven-14","15":"oven-15","16":"oven-16","17":"oven-17","18":"oven-18","19":"oven-19","20":"oven-20","21":"oven-21","22":"oven-22","23":"oven-23","24":"oven-24","25":"oven-25","26":"oven-26"}}'
@@ -264,7 +264,7 @@ if (-not $remoteReady) { throw "Cloudflare Tunnel เปิดแล้วแต
 $runtimeConfig = [ordered]@{
   dataSource = "express"
   apiBaseUrl = "$url/stcr/api"
-  pollIntervalMs = 1000
+  pollIntervalMs = 5000
   requestTimeoutMs = 15000
   updatedAt = (Get-Date).ToUniversalTime().ToString("o")
 } | ConvertTo-Json
