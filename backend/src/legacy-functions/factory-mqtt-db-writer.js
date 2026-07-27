@@ -162,9 +162,15 @@ function addToMinuteBucket(value, receivedAtDate) {
   if (!(value.readings || []).length) return;
 
   const sourceDate = validDate(value.sourceTimestamp, receivedAtDate);
-  // Use server receive time for minute buckets so a stale device clock
-  // cannot force one database write per incoming message.
-  const minuteAt = minuteStart(receivedAtDate);
+  const fromDurableFactoryQueue = Boolean(
+    String(value.source?._stcr_message_id || "").trim(),
+  );
+  // Live legacy messages use receive time to protect against a bad PLC clock.
+  // Durable factory messages have already been timestamped and ordered locally,
+  // so replay them into their original measurement minute.
+  const minuteAt = minuteStart(
+    fromDurableFactoryQueue ? sourceDate : receivedAtDate,
+  );
   const key = bucketKey(value, minuteAt);
   const buckets = global.get(BUCKETS_KEY) || {};
   const bucket = buckets[key] || {
