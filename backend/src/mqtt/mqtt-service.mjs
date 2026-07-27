@@ -173,7 +173,9 @@ export async function startMqttService() {
     const adapted = await adapter(message);
     if (adapted?._mqttEnvelope || adapted?._minuteFlushTick) {
       await writer(adapted);
+      return true;
     }
+    return false;
   }
 
   const qos = envNumber("STCR_FACTORY_MQTT_QOS", 1, 0, 2);
@@ -221,6 +223,11 @@ export async function startMqttService() {
     1048576,
   );
   const allowRetainedSensor = envBoolean("STCR_FACTORY_MQTT_ALLOW_RETAINED_SENSOR", false);
+  const ackTopicPrefix = String(
+    process.env.STCR_FACTORY_MQTT_ACK_TOPIC_PREFIX || "stcr/ack",
+  )
+    .trim()
+    .replace(/\/+$/, "");
   const logEvery = envNumber(
     "STCR_FACTORY_MQTT_LOG_EVERY_MESSAGES",
     deploymentMode() === "production" ? 1000 : 100,
@@ -250,6 +257,17 @@ export async function startMqttService() {
       console.log(`[express-mqtt] Received ${totalMessages} messages; latest topic=${topic}`);
     }
 
+    let localMessageId = "";
+    try {
+      const parsed = JSON.parse(payload.toString("utf8"));
+      const candidate = String(parsed?._stcr_message_id || "").trim();
+      if (/^[A-Za-z0-9._:-]{16,160}$/.test(candidate)) {
+        localMessageId = candidate;
+      }
+    } catch {
+      // The adapter below performs the authoritative JSON validation.
+    }
+
     void runSerial(() => processMessage({
       topic,
       payload: payload.toString("utf8"),
@@ -260,7 +278,26 @@ export async function startMqttService() {
         receivedAt,
         route,
       },
-    })).catch((error) => {
+    })).then((persisted) => {
+      if (!persisted || !localMessageId || !ackTopicPrefix || !client.connected) return;
+      const ackTopic = `${ackTopicPrefix}/${route.companyId}`;
+      client.publish(
+        ackTopic,
+        JSON.stringify({
+          messageId: localMessageId,
+          sourceTopic: topic,
+          companyId: route.companyId,
+          storedAt: new Date().toISOString(),
+        }),
+        { qos: 1, retain: false },
+        (error) => {
+          if (error) {
+            incrementHealthCounter("ackPublishFailed");
+            console.error(`[express-mqtt] ACK publish failed for ${localMessageId}`, error);
+          }
+        },
+      );
+    }).catch((error) => {
       if (error?.code === "SERIAL_QUEUE_FULL") {
         incrementHealthCounter("rejectedQueueFull");
         console.error("[express-mqtt] Processing queue is full; message rejected");

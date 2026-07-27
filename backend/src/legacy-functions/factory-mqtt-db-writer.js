@@ -847,8 +847,10 @@ if (ignoredReason) {
     await flushCompletedBuckets(referenceDate);
   } catch (error) {
     node.warn(`MQTT diagnostic write failed: ${error.message}`);
+    throw error;
   }
-  return null;
+  msg._mqttPersisted = true;
+  return msg;
 }
 
 updateRealtimeMemory(envelope, referenceDate);
@@ -857,14 +859,28 @@ try {
   if (envelope.type === "test") {
     await persistStatus(envelope, referenceDate);
     await flushCompletedBuckets(referenceDate);
-    return null;
+    msg._mqttPersisted = true;
+    return msg;
   }
 
   if (envelope.type === "sensor" || envelope.type === "pending") {
     addToMinuteBucket(envelope, referenceDate);
     await persistHeartbeat(envelope, referenceDate);
 
-    if ((envelope.invalidSensors || []).length) {
+    const fromDurableFactoryQueue = Boolean(
+      String(envelope.source?._stcr_message_id || "").trim(),
+    );
+    if (fromDurableFactoryQueue) {
+      await saveRawMessage(
+        getPool(),
+        envelope,
+        referenceDate,
+        envelope.type === "pending"
+          ? `local-buffer; missing: ${(envelope.missingSensors || []).join(", ")}`
+          : "local-buffer-ingested",
+        true,
+      );
+    } else if ((envelope.invalidSensors || []).length) {
       await saveRawMessage(
         getPool(),
         { ...envelope, normalizationStatus: "rejected" },
@@ -882,10 +898,11 @@ try {
     }
 
     await flushCompletedBuckets(referenceDate);
-    return null;
+    msg._mqttPersisted = true;
+    return msg;
   }
 
-  node.warn(`Unknown MQTT envelope type: ${String(envelope.type)}`);
+  throw new Error(`Unknown MQTT envelope type: ${String(envelope.type)}`);
 } catch (error) {
   node.warn(`MQTT processing failed: ${error.message}`);
   node.status({
@@ -893,6 +910,7 @@ try {
     shape: "ring",
     text: `DB error oven ${envelope.ovenNumber}`,
   });
+  throw error;
 }
 
 return null;
