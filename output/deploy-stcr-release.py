@@ -6,6 +6,12 @@ import sys
 import paramiko
 
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+
 def read_connection_notes(path: pathlib.Path) -> tuple[str, str, str]:
     text = path.read_text(encoding="utf-8")
     host = re.search(r"host\s*:\s*([0-9.]+)", text, re.IGNORECASE)
@@ -68,7 +74,6 @@ def main() -> None:
         run(
             client,
             "hostname; whoami; readlink -f /opt/stcr/current; "
-            "git -C /opt/stcr/current rev-parse HEAD; "
             "curl -fsS http://127.0.0.1:3001/readyz",
         )
 
