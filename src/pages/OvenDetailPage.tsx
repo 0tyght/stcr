@@ -14,7 +14,7 @@ import {
   Thermometer,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { Link, Navigate, useParams } from "react-router";
+import { Link, Navigate, useNavigate, useParams } from "react-router";
 
 import { useAppData } from "../app/providers";
 import { ThresholdLegend } from "../components/charts/ThresholdLegend";
@@ -56,6 +56,7 @@ const realtimeGaugeOrder: SensorKey[] = [
 ];
 
 export function OvenDetailPage() {
+  const navigate = useNavigate();
   const { ovenId = "" } = useParams();
   const { ovens, alarms, loading, refresh, refreshing } = useAppData();
 
@@ -73,7 +74,6 @@ export function OvenDetailPage() {
   const [lastHistorySuccessAt, setLastHistorySuccessAt] =
     useState<string | null>(null);
   const [chartViewResetKey, setChartViewResetKey] = useState(0);
-  const [currentReportFrameSrc, setCurrentReportFrameSrc] = useState<string | null>(null);
 
   const realtimeAvailable = oven ? canUseRealtime(oven.status) : false;
 
@@ -311,13 +311,14 @@ const ovenAlarms = useMemo(
   function handleDownloadCurrentReport() {
     if (!oven || !oven.reportStartedAt) return;
 
-    const reportUrl = createReportFrameUrl({
+    const params = new URLSearchParams({
       ovenId: oven.id,
       mode: "current",
-      cycle: oven.cycleCount,
+      cycle: String(oven.cycleCount),
+      auto: "pdf",
     });
 
-    setCurrentReportFrameSrc(reportUrl);
+    navigate(`/reports?${params.toString()}`);
   }
 
   function handleDownloadCsv() {
@@ -642,23 +643,6 @@ const ovenAlarms = useMemo(
         )}
       </section>
 
-      {currentReportFrameSrc ? (
-        <iframe
-          key={currentReportFrameSrc}
-          title="ดาวน์โหลดรายงานปัจจุบัน"
-          src={currentReportFrameSrc}
-          style={{
-            position: "fixed",
-            width: 1,
-            height: 1,
-            right: 0,
-            bottom: 0,
-            opacity: 0,
-            pointerEvents: "none",
-            border: 0,
-          }}
-        />
-      ) : null}
     </>
   );
 }
@@ -1147,26 +1131,6 @@ function formatShortThaiDateTime(value: Date): string {
     minute: "2-digit",
     timeZone: "Asia/Bangkok",
   }).format(value);
-}
-
-function createReportFrameUrl({
-  ovenId,
-  mode,
-  cycle,
-}: {
-  ovenId: string;
-  mode: "current" | "history";
-  cycle: number;
-}): string {
-  const params = new URLSearchParams({
-    ovenId,
-    mode,
-    cycle: String(cycle),
-    auto: "pdf",
-    t: String(Date.now()),
-  });
-
-  return `${window.location.origin}${window.location.pathname}#/reports?${params.toString()}`;
 }
 
 const styles = {
