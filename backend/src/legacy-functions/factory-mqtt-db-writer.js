@@ -103,9 +103,11 @@ function updateRealtimeMemory(value, receivedAtDate) {
         updatedAt: timestamp,
       };
     }
-  }
 
-  oven.lastUpdatedAt = timestamp;
+    if ((value.readings || []).length) {
+      oven.lastUpdatedAt = timestamp;
+    }
+  }
   global.set("stcrState", rootState);
 }
 
@@ -540,6 +542,12 @@ async function resolveCycleLifecycle(
     eventAt: firstSourceAt,
     readyTemperature: Number(ovenRow.chamberLower),
   });
+
+  // Values received while the oven is closed remain useful for diagnostics,
+  // but must not stay linked to the last completed production cycle.
+  if (bucket.startOven !== 1) {
+    return null;
+  }
 
   const [cycleRows] = await connection.execute(
     `SELECT id, state, fired_at AS firedAt,

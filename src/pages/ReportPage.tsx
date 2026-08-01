@@ -426,6 +426,7 @@ export function ReportPage() {
   const [downloadMessage, setDownloadMessage] = useState("");
   const [autoDownloaded, setAutoDownloaded] = useState(false);
   const [previewExpanded, setPreviewExpanded] = useState(true);
+  const [reportRefreshKey, setReportRefreshKey] = useState(0);
   const [cycleMeta, setCycleMeta] = useState<ReportCycleMeta | null>(null);
   const [reportForm, setReportForm] = useState<ReportFormState>(() => ({
     ...getReportFormDefaults(company),
@@ -482,18 +483,21 @@ export function ReportPage() {
     };
   }, [oven?.id]);
 
+  const activeCycle = useMemo(
+    () => availableCycles.find((cycle) => cycle.state === "ignition" || cycle.state === "recording") ?? null,
+    [availableCycles],
+  );
+
   const historicalCycles = useMemo(
-    () => availableCycles.filter(
-      (cycle) => !(oven?.status === "open" && cycle.cycleNumber === oven.cycleCount),
-    ),
-    [availableCycles, oven?.cycleCount, oven?.status],
+    () => availableCycles.filter((cycle) => cycle.state === "completed"),
+    [availableCycles],
   );
 
   const cycleOptions = useMemo(() => {
     if (!oven) return [];
-    if (mode === "current") return oven.cycleCount > 0 ? [oven.cycleCount] : [];
+    if (mode === "current") return activeCycle ? [activeCycle.cycleNumber] : [];
     return historicalCycles.map((cycle) => cycle.cycleNumber);
-  }, [historicalCycles, mode, oven]);
+  }, [activeCycle, historicalCycles, mode, oven]);
 
   const updateReportLocation = useCallback(
     ({ nextOvenId, nextMode }: { nextOvenId?: string; nextMode?: ReportMode }) => {
@@ -609,7 +613,7 @@ export function ReportPage() {
       ? getDatabaseCycleRange(databaseCycle)
       : getCycleRange(oven, mode, selectedCycle);
     return resolveReportCycleRange(fallback, cycleMeta, mode);
-  }, [availableCycles, cycleMeta, mode, oven, selectedCycle]);
+  }, [availableCycles, cycleMeta, mode, oven, reportRefreshKey, selectedCycle]);
 
   const loadReport = useCallback(async () => {
     if (!oven || !cycleRange || selectedCycle == null) return;
@@ -650,7 +654,7 @@ export function ReportPage() {
 
   const autoLoadKey =
     oven && cycleRange && selectedCycle != null
-      ? `${oven.id}|${mode}|${selectedCycle}|${cycleRange.start.toISOString()}|${cycleRange.end.toISOString()}`
+      ? `${oven.id}|${mode}|${selectedCycle}|${cycleRange.start.toISOString()}|${cycleRange.end.toISOString()}|${reportRefreshKey}`
       : "";
 
   useEffect(() => {
@@ -658,6 +662,10 @@ export function ReportPage() {
     lastAutoLoadKeyRef.current = autoLoadKey;
     void loadReport();
   }, [autoLoadKey, loadReport]);
+
+  const refreshReport = useCallback(() => {
+    setReportRefreshKey((current) => current + 1);
+  }, []);
 
   const reportSlots = useMemo(() => {
     if (!oven || !cycleRange) return [];
@@ -703,6 +711,10 @@ export function ReportPage() {
         cycleNumber: safeCycle,
         sensors: allSensorKeys,
       });
+
+      if (!nextPoints.length) {
+        throw new Error("ไม่พบข้อมูลสำหรับรอบที่เลือก");
+      }
 
       setPoints(nextPoints);
 
@@ -760,6 +772,12 @@ export function ReportPage() {
           cycleNumber: safeCycle,
           sensors: allSensorKeys,
         });
+
+        if (!nextPoints.length) {
+          setPoints([]);
+          setReportError("ไม่พบข้อมูลสำหรับรอบที่เลือก จึงยังสร้าง PDF ไม่ได้");
+          return;
+        }
 
         setPoints(nextPoints);
         await waitForRender(300);
@@ -862,11 +880,11 @@ export function ReportPage() {
     return <EmptyState title="ยังไม่มีข้อมูลเตา" description="ยังไม่มีข้อมูลเตาสำหรับสร้างรายงาน" />;
   }
 
-  if (mode === "history" && cyclesLoading) {
+  if (cyclesLoading) {
     return <LoadingState />;
   }
 
-  if (mode === "history" && cyclesError) {
+  if (cyclesError) {
     return <EmptyState title="โหลดรายการรอบไม่สำเร็จ" description={cyclesError} />;
   }
 
@@ -881,7 +899,7 @@ export function ReportPage() {
 
   if (mode === "current" && !oven.reportStartedAt) {
     return (
-      <main className={`report-page report-page--${company.id}`}>
+      <div className={`report-page report-page--${company.id}`}>
         <style>{reportPageStyles}</style>
         <PageHeader
           title="รายงานรอบปัจจุบัน"
@@ -907,7 +925,7 @@ export function ReportPage() {
           title="ยังไม่พบรอบที่กำลังบันทึก"
           description="ระบบจะเริ่มบันทึกรายงานทันทีเมื่อได้รับสถานะเปิดเตาจาก MQTT"
         />
-      </main>
+      </div>
     );
   }
 
@@ -917,7 +935,7 @@ export function ReportPage() {
       : [];
 
   return (
-    <main className={`report-page report-page--${company.id}`}>
+    <div className={`report-page report-page--${company.id}`}>
       <style>{reportPageStyles}</style>
 
       <PageHeader
@@ -960,7 +978,7 @@ export function ReportPage() {
               className="button button-primary"
               type="button"
               onClick={() => void downloadSelectedPdf()}
-              disabled={downloadingPdf || loadingReport}
+              disabled={downloadingPdf || loadingReport || !points.length}
             >
               <FileDown size={17} />
               {downloadingPdf ? "กำลังโหลด..." : "ดาวน์โหลด PDF"}
@@ -977,7 +995,7 @@ export function ReportPage() {
             <button
               className="button button-dark"
               type="button"
-              onClick={() => void loadReport()}
+              onClick={refreshReport}
               disabled={loadingReport || downloadingPdf}
             >
               <RefreshCw size={17} />
@@ -1060,7 +1078,7 @@ export function ReportPage() {
                   className="button button-primary"
                   type="button"
                   onClick={() => void downloadSelectedPdf()}
-                  disabled={downloadingPdf || loadingReport}
+                  disabled={downloadingPdf || loadingReport || !points.length}
                 >
                   <FileDown size={17} />
                   {downloadingPdf ? "กำลังโหลด..." : `ดาวน์โหลด PDF รอบ ${selectedCycle}`}
@@ -1090,7 +1108,7 @@ export function ReportPage() {
               <button
                 className="button button-dark report-preview-refresh"
                 type="button"
-                onClick={() => void loadReport()}
+                onClick={refreshReport}
                 disabled={loadingReport || downloadingPdf}
               >
                 <RefreshCw size={17} />
@@ -1170,7 +1188,7 @@ export function ReportPage() {
           </section>
         </div>
       </section>
-    </main>
+    </div>
   );
 }
 
@@ -2711,10 +2729,6 @@ function GrSvgNotes({ y, form }: { y: number; form: ReportFormState }) {
       <SvgText x={58} y={42} size={8.1} weight={700}>
         ** อุณหภูมิเตา ตั้งแต่วันที่ 3 จนถึงวันที่ยางสุก ห้ามใส่อุณหภูมิต่ำกว่า 40 องศา และห้ามเกิน 55 องศา
       </SvgText>
-      <SvgText x={58} y={52} size={6.8}>
-        After the 3rd day of smoking, control the temperature between 40 - 55°C.
-      </SvgText>
-
       <SvgText x={58} y={70} size={8.2} weight={700}>ประเมินวันรมควัน</SvgText>
       <SvgText x={58} y={79} size={6.8}>Smoking period</SvgText>
       <FwsCheckbox x={166} y={60} size={10} checked={form.smokingPeriodStatus === "under"} />

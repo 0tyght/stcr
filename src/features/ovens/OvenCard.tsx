@@ -7,7 +7,10 @@ import { getReadingState } from "../../utils/limits";
 
 export function OvenCard({ oven }: { oven: Oven }) {
   const isLive = oven.status === "open";
-  const chamberState = getReadingState(oven.readings.chamberTemp.value, "chamberTemp", oven.limits);
+  const chamberFresh = readingIsFresh(oven.readings.chamberTemp.updatedAt);
+  const chamberState = chamberFresh
+    ? getReadingState(oven.readings.chamberTemp.value, "chamberTemp", oven.limits)
+    : "offline";
 
   return (
     <article className={`oven-card status-${oven.status}`}>
@@ -27,7 +30,7 @@ export function OvenCard({ oven }: { oven: Oven }) {
             {formatTime(oven.lastUpdatedAt)}
           </strong>
           <span>{isLive ? "Realtime ในห้องอบ" : "ค่าล่าสุดก่อนหยุด"}</span>
-          {isLive ? (
+          {isLive && chamberFresh ? (
             <strong className={`reading-inline tone-${chamberState}`}>
               <Thermometer size={15} />
               {formatSensorValue("chamberTemp", oven.readings.chamberTemp.value)}
@@ -46,15 +49,15 @@ export function OvenCard({ oven }: { oven: Oven }) {
         <div className="oven-mini-strip" aria-label="ค่า realtime แบบย่อ">
           <span>
             <Droplets size={13} />
-            {formatNumber(oven.readings.humidity.value, 1)}%
+            {formatMiniReading(oven.readings.humidity.value, oven.readings.humidity.updatedAt, 1, "%")}
           </span>
           <span>
             <Flame size={13} />
-            {formatNumber(oven.readings.furnaceTemp.value, 0)}°C
+            {formatMiniReading(oven.readings.furnaceTemp.value, oven.readings.furnaceTemp.updatedAt, 0, "°C")}
           </span>
           <span>
             <Wind size={13} />
-            {formatNumber(oven.readings.blowerTemp.value, 1)}°C
+            {formatMiniReading(oven.readings.blowerTemp.value, oven.readings.blowerTemp.updatedAt, 1, "°C")}
           </span>
         </div>
       ) : (
@@ -67,4 +70,18 @@ export function OvenCard({ oven }: { oven: Oven }) {
       </footer>
     </article>
   );
+}
+
+function readingIsFresh(updatedAt: string): boolean {
+  const ageMs = Date.now() - Date.parse(updatedAt);
+  return Number.isFinite(ageMs) && ageMs <= 5 * 60 * 1000;
+}
+
+function formatMiniReading(
+  value: number,
+  updatedAt: string,
+  precision: number,
+  unit: string,
+): string {
+  return readingIsFresh(updatedAt) ? `${formatNumber(value, precision)}${unit}` : "—";
 }

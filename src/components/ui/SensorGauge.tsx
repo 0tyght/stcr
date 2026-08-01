@@ -34,7 +34,7 @@ export function SensorGauge({
   const precision = sensor === "chamberTemp" || sensor === "humidity" ? 2 : 0;
   const formattedValue = formatNumber(value, precision);
   const readingAgeMs = Date.now() - Date.parse(updatedAt);
-  const readingIsStale = !Number.isFinite(readingAgeMs) || readingAgeMs > 180_000;
+  const readingIsStale = !Number.isFinite(readingAgeMs) || readingAgeMs > 5 * 60_000;
 
   const hasLimit = showLimit && !!limit && sensor !== "blowerTemp";
   const scale = getSensorScale(sensor);
@@ -232,7 +232,7 @@ export function SensorGauge({
             : "ไม่มี Upper/Lower สำหรับค่านี้"}
         </span>
         <small className={readingIsStale ? "is-stale" : ""}>
-          {readingIsStale ? "ข้อมูลล่าสุด " : "อัปเดต "}
+          {readingIsStale ? "ขาดข้อมูล · ล่าสุด " : "อัปเดต "}
           {formatTime(updatedAt)}
         </small>
       </div>

@@ -208,6 +208,10 @@ function cleanupSessions() {
   return sessions;
 }
 
+function sessionTokenHash(token) {
+  return crypto.createHash("sha256").update(String(token)).digest("hex");
+}
+
 function authenticate() {
   const authorization = String(requestHeaders.authorization || "");
   if (!authorization.startsWith("Bearer ")) return null;
@@ -230,7 +234,7 @@ async function authenticateFromDb(token) {
        FROM sessions
        WHERE token=? AND expires_at > UTC_TIMESTAMP(3)
        LIMIT 1`,
-      [token],
+      [sessionTokenHash(token)],
     );
     const row = rows[0];
     if (!row) return null;
@@ -268,7 +272,7 @@ async function createSession(user, ttlMinutes) {
     `INSERT INTO sessions (token, user_id, company_id, username, roles, expires_at)
      VALUES (?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE expires_at=VALUES(expires_at)`,
-    [token, user.id, user.companyId, user.username, JSON.stringify(user.roles), expiresAtSql],
+    [sessionTokenHash(token), user.id, user.companyId, user.username, JSON.stringify(user.roles), expiresAtSql],
   );
   const sessions = cleanupSessions();
   sessions[token] = session;
@@ -283,7 +287,7 @@ async function deleteSession(token) {
   global.set("stcrAuthSessions", sessions);
   try {
     const pool = getDatabasePool();
-    await pool.execute(`DELETE FROM sessions WHERE token=?`, [token]);
+    await pool.execute(`DELETE FROM sessions WHERE token=?`, [sessionTokenHash(token)]);
   } catch { /* ไม่หยุดถ้า DB error */ }
 }
 
@@ -439,7 +443,9 @@ async function loadRuntimeStateFromDatabase() {
      LEFT JOIN oven_cycles c ON c.id=(
        SELECT c2.id FROM oven_cycles c2
        WHERE c2.company_id=o.company_id AND c2.oven_id=o.id
-       ORDER BY c2.cycle_number DESC, c2.id DESC LIMIT 1
+       ORDER BY (c2.state IN ('ignition','recording')) DESC,
+                COALESCE(c2.report_started_at,c2.fired_at,c2.created_at) DESC,
+                c2.id DESC LIMIT 1
      )
      LEFT JOIN sensor_minute_aggregates r
        ON r.company_id=o.company_id AND r.oven_id=o.id AND r.minute_at=(
@@ -570,7 +576,6 @@ async function applyOfflineThreshold(rootState, referenceDate = new Date()) {
         changed.push({
           companyId,
           ovenId: oven.id,
-          lastUpdatedMs: Number.isFinite(lastUpdatedMs) ? lastUpdatedMs : 0,
         });
       } else if (
         !stale &&
@@ -590,7 +595,7 @@ async function applyOfflineThreshold(rootState, referenceDate = new Date()) {
     const pool = getDatabasePool();
 
     await Promise.all([
-      ...changed.map(async ({ companyId, ovenId, lastUpdatedMs }) => {
+      ...changed.map(async ({ companyId, ovenId }) => {
         await pool.execute(
           `UPDATE ovens
            SET status='offline'
@@ -599,12 +604,7 @@ async function applyOfflineThreshold(rootState, referenceDate = new Date()) {
              AND status<>'offline'`,
           [companyId, ovenId],
         );
-        const alarmKey = crypto
-          .createHash("sha256")
-          .update(`${companyId}|${ovenId}|${lastUpdatedMs}`)
-          .digest("hex")
-          .slice(0, 32);
-        const alarmId = `offline-${companyId}-${alarmKey}`;
+        const alarmId = `offline-${companyId}-${ovenId}`;
         await pool.execute(
           `INSERT INTO alarms (
              id, company_id, oven_id, cycle_id, sensor_key, severity, status,
@@ -621,6 +621,13 @@ async function applyOfflineThreshold(rootState, referenceDate = new Date()) {
             `ไม่ได้รับข้อมูลจากเตานานเกิน ${Math.round(offlineThresholdMs / 1000)} วินาที`,
             referenceDate,
           ],
+        );
+        await pool.execute(
+          `UPDATE alarms
+           SET status='resolved', resolved_at=COALESCE(resolved_at, ?)
+           WHERE company_id=? AND oven_id=? AND severity='offline'
+             AND status IN ('active','acknowledged') AND id<>?`,
+          [referenceDate, companyId, ovenId, alarmId],
         );
         const company = rootState.companies[companyId];
         company.alarms = company.alarms.filter((alarm) => alarm.id !== alarmId);
@@ -1959,32 +1966,35 @@ if (method === "GET" && cyclesMatch) {
 
   const pool = getDatabasePool();
   const [rows] = await pool.execute(
-    `SELECT a.cycle_number AS cycleNumber,
-            COALESCE(c.state, 'completed') AS state,
+    `SELECT c.cycle_number AS cycleNumber,
+            c.state,
             CASE WHEN c.fired_at IS NULL THEN NULL
                  ELSE DATE_FORMAT(c.fired_at, '%Y-%m-%dT%H:%i:%s.%fZ') END AS firedAt,
             DATE_FORMAT(
-              COALESCE(c.report_started_at, MIN(a.minute_at)),
+              COALESCE(c.report_started_at, MIN(a.minute_at), c.fired_at),
               '%Y-%m-%dT%H:%i:%s.%fZ'
             ) AS reportStartedAt,
             CASE WHEN c.stopped_at IS NULL THEN NULL
                  ELSE DATE_FORMAT(c.stopped_at, '%Y-%m-%dT%H:%i:%s.%fZ') END AS stoppedAt,
-            DATE_FORMAT(MIN(a.minute_at), '%Y-%m-%dT%H:%i:%s.%fZ') AS firstPointAt,
-            DATE_FORMAT(MAX(a.minute_at), '%Y-%m-%dT%H:%i:%s.%fZ') AS lastPointAt,
-            COUNT(*) AS pointCount
-     FROM sensor_minute_aggregates a
-     LEFT JOIN oven_cycles c
-       ON c.company_id=a.company_id
-      AND c.oven_id=a.oven_id
-      AND c.cycle_number=a.cycle_number
-     WHERE a.company_id=?
-       AND a.oven_id=?
-       AND a.cycle_number>0
-       AND a.included_in_report=TRUE
-     GROUP BY a.cycle_number, c.id, c.state, c.fired_at,
+            DATE_FORMAT(COALESCE(MIN(a.minute_at), c.report_started_at, c.fired_at), '%Y-%m-%dT%H:%i:%s.%fZ') AS firstPointAt,
+            DATE_FORMAT(COALESCE(MAX(a.minute_at), c.report_started_at, c.fired_at), '%Y-%m-%dT%H:%i:%s.%fZ') AS lastPointAt,
+            COUNT(a.minute_at) AS pointCount
+     FROM oven_cycles c
+     LEFT JOIN sensor_minute_aggregates a
+       ON a.company_id=c.company_id
+      AND a.oven_id=c.oven_id
+      AND a.cycle_number=c.cycle_number
+      AND a.included_in_report=TRUE
+     WHERE c.company_id=?
+       AND c.oven_id=?
+       AND c.cycle_number>0
+       AND c.state<>'cancelled'
+     GROUP BY c.cycle_number, c.id, c.state, c.fired_at,
               c.report_started_at, c.stopped_at
-     HAVING COUNT(*) >= 2
-     ORDER BY a.cycle_number DESC
+     HAVING c.state IN ('ignition','recording') OR COUNT(a.minute_at) >= 2
+     ORDER BY (c.state IN ('ignition','recording')) DESC,
+              COALESCE(c.report_started_at,c.fired_at) DESC,
+              c.id DESC
      LIMIT 1000`,
     [companyId, ovenId],
   );
