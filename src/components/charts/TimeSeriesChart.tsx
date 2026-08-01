@@ -84,6 +84,10 @@ export function TimeSeriesChart({
   const updateOverlayRef = useRef<() => void>(() => undefined);
 
   const appliedResetViewKeyRef = useRef(resetViewKey);
+  const timeRangeKey = timeRange
+    ? `${timeRange.start.getTime()}:${timeRange.end.getTime()}`
+    : "";
+  const appliedTimeRangeKeyRef = useRef(timeRangeKey);
   const viewStateRef = useRef<ChartViewState | null>(null);
   const [pageTheme, setPageTheme] = useState<"dark" | "company">(() => getCurrentPageTheme());
   const [overlayBox, setOverlayBox] = useState({ width: 0, height: 0 });
@@ -521,7 +525,8 @@ export function TimeSeriesChart({
     if (!chart) return;
 
     const shouldResetView =
-      appliedResetViewKeyRef.current !== resetViewKey;
+      appliedResetViewKeyRef.current !== resetViewKey ||
+      appliedTimeRangeKeyRef.current !== timeRangeKey;
     const savedView = shouldResetView ? null : viewStateRef.current;
 
     // auto refresh ใช้ merge และคืนมุมมองเดิม
@@ -530,6 +535,7 @@ export function TimeSeriesChart({
 
     if (shouldResetView) {
       appliedResetViewKeyRef.current = resetViewKey;
+      appliedTimeRangeKeyRef.current = timeRangeKey;
       viewStateRef.current = null;
     } else if (savedView) {
       restoreChartViewState(chart, savedView);
@@ -539,7 +545,7 @@ export function TimeSeriesChart({
     window.requestAnimationFrame(() => {
       updateOverlayRef.current();
     });
-  }, [option, resetViewKey]);
+  }, [option, resetViewKey, timeRangeKey]);
 
   return (
     <div
