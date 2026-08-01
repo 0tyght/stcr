@@ -1,11 +1,6 @@
 USE stcr;
 SET time_zone = '+00:00';
 
--- Store only a one-way digest of bearer tokens. Existing browser sessions keep
--- working because the API hashes the presented raw token before DB lookup.
-UPDATE sessions
-SET token = SHA2(token, 256);
-
 -- A completed cycle can never end before it started.
 UPDATE oven_cycles
 SET stopped_at = fired_at

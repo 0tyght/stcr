@@ -208,10 +208,6 @@ function cleanupSessions() {
   return sessions;
 }
 
-function sessionTokenHash(token) {
-  return crypto.createHash("sha256").update(String(token)).digest("hex");
-}
-
 function authenticate() {
   const authorization = String(requestHeaders.authorization || "");
   if (!authorization.startsWith("Bearer ")) return null;
@@ -234,7 +230,7 @@ async function authenticateFromDb(token) {
        FROM sessions
        WHERE token=? AND expires_at > UTC_TIMESTAMP(3)
        LIMIT 1`,
-      [sessionTokenHash(token)],
+      [token],
     );
     const row = rows[0];
     if (!row) return null;
@@ -272,7 +268,7 @@ async function createSession(user, ttlMinutes) {
     `INSERT INTO sessions (token, user_id, company_id, username, roles, expires_at)
      VALUES (?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE expires_at=VALUES(expires_at)`,
-    [sessionTokenHash(token), user.id, user.companyId, user.username, JSON.stringify(user.roles), expiresAtSql],
+    [token, user.id, user.companyId, user.username, JSON.stringify(user.roles), expiresAtSql],
   );
   const sessions = cleanupSessions();
   sessions[token] = session;
@@ -287,7 +283,7 @@ async function deleteSession(token) {
   global.set("stcrAuthSessions", sessions);
   try {
     const pool = getDatabasePool();
-    await pool.execute(`DELETE FROM sessions WHERE token=?`, [sessionTokenHash(token)]);
+    await pool.execute(`DELETE FROM sessions WHERE token=?`, [token]);
   } catch { /* ไม่หยุดถ้า DB error */ }
 }
 
