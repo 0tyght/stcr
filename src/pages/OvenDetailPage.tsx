@@ -618,6 +618,7 @@ const ovenAlarms = useMemo(
           calendarCells={calendarCells}
           points={points}
           limits={oven.limits}
+          timeRange={cycleRange ?? undefined}
           onChangePickMode={setHistoryPickMode}
           onSelectCycle={handleSelectCycle}
           onSelectDate={handleSelectDate}
@@ -681,6 +682,7 @@ function HistoricalChartSection({
   calendarCells,
   points,
   limits,
+  timeRange,
   onChangePickMode,
   onSelectCycle,
   onSelectDate,
@@ -699,6 +701,7 @@ function HistoricalChartSection({
   calendarCells: Date[];
   points: TimeSeriesPoint[];
   limits: LimitMap;
+  timeRange?: { start: Date; end: Date };
   onChangePickMode: (mode: HistoryPickMode) => void;
   onSelectCycle: (cycle: number) => void;
   onSelectDate: (dateKey: string) => void;
@@ -836,8 +839,9 @@ function HistoricalChartSection({
           leftAxisName="อุณหภูมิ °C"
           rightAxisName="ความชื้น %"
           limitSensors={["chamberTemp"]}
-                resetViewKey={resetViewKey}
-      />
+          timeRange={timeRange}
+          resetViewKey={resetViewKey}
+        />
 
         <ChartPanel
           title="อุณหภูมิเตาเผาและ Blower"
@@ -851,8 +855,9 @@ function HistoricalChartSection({
           rightAxisName=""
           limitSensors={["furnaceTemp"]}
           limitLabel="เตาเผา"
-                resetViewKey={resetViewKey}
-      />
+          timeRange={timeRange}
+          resetViewKey={resetViewKey}
+        />
       </div>
     </section>
   );
