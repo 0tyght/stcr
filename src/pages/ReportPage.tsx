@@ -1181,6 +1181,7 @@ export function ReportPage() {
               cycle={selectedCycle}
               cycleRange={cycleRange}
               cycleMeta={cycleMeta}
+              points={points}
               slots={reportSlots}
               company={company}
               form={reportForm}
@@ -1568,6 +1569,7 @@ function FwsSvgReport({
   cycle,
   cycleRange,
   cycleMeta,
+  points,
   slots,
   company,
   form,
@@ -1577,6 +1579,7 @@ function FwsSvgReport({
   cycle: number;
   cycleRange: { start: Date; end: Date };
   cycleMeta: ReportCycleMeta | null;
+  points: TimeSeriesPoint[];
   slots: ReportSlot[];
   company: CompanyConfig;
   form: ReportFormState;
@@ -1641,6 +1644,7 @@ function FwsSvgReport({
           y={graphY}
           width={mainW}
           height={graphH}
+          points={points}
           slots={slots}
           upper={upper}
           lower={lower}
@@ -2016,6 +2020,7 @@ function FwsSvgTemperatureGrid({
   y,
   width,
   height,
+  points,
   slots,
   upper,
   lower,
@@ -2025,6 +2030,7 @@ function FwsSvgTemperatureGrid({
   y: number;
   width: number;
   height: number;
+  points: TimeSeriesPoint[];
   slots: ReportSlot[];
   upper: number;
   lower: number;
@@ -2056,7 +2062,7 @@ function FwsSvgTemperatureGrid({
   const cellW = chartW / reportSlotCount;
 
   const graphMin = template.graphMin;
-  const showHumidity = !showFirewoodRow && form.showHumidityLine;
+  const showHumidity = form.showHumidityLine;
   const graphMax = showHumidity ? humidityGraphMax : template.graphMax;
 
   const valueToY = (value: number) => {
@@ -2069,7 +2075,7 @@ function FwsSvgTemperatureGrid({
 
   const slotToX = (index: number) => left + (index + 0.5) * cellW;
 
-  const temperaturePath = buildLinePath(
+  const sampledTemperaturePath = buildLinePath(
     slots
       .filter((slot) => slot.temperature !== null)
       .map((slot) => ({
@@ -2078,15 +2084,60 @@ function FwsSvgTemperatureGrid({
       })),
   );
 
-  const humidityPath = showHumidity
+  const gridStartTime = slots[0]?.date.getTime() ?? 0;
+  const gridDurationMs = reportSlotCount * template.intervalHours * 60 * 60 * 1000;
+  const gridEndTime = gridStartTime + gridDurationMs;
+  const timeToX = (time: number) => left + ((time - gridStartTime) / gridDurationMs) * chartW;
+
+  const rawTemperaturePath = showFirewoodRow
     ? buildLinePath(
-        slots
-          .filter((slot) => slot.humidity !== null)
-          .map((slot) => ({
-            x: slotToX(slot.index),
-            y: humidityToY(slot.humidity ?? graphMin),
-          })),
+        downsampleReportPath(
+          points
+            .map((point) => ({
+              time: new Date(point.timestamp).getTime(),
+              value: point.chamberTemp,
+            }))
+            .filter((point) =>
+              Number.isFinite(point.time) &&
+              Number.isFinite(point.value) &&
+              point.time >= gridStartTime &&
+              point.time <= gridEndTime,
+            )
+            .map((point) => ({ x: timeToX(point.time), y: tempToY(point.value) }))
+            .sort((a, b) => a.x - b.x),
+        ),
       )
+    : "";
+
+  const temperaturePath = showFirewoodRow ? rawTemperaturePath : sampledTemperaturePath;
+
+  const humidityPath = showHumidity
+    ? showFirewoodRow
+      ? buildLinePath(
+          downsampleReportPath(
+            points
+              .map((point) => ({
+                time: new Date(point.timestamp).getTime(),
+                value: point.humidity,
+              }))
+              .filter((point) =>
+                Number.isFinite(point.time) &&
+                Number.isFinite(point.value) &&
+                point.time >= gridStartTime &&
+                point.time <= gridEndTime,
+              )
+              .map((point) => ({ x: timeToX(point.time), y: humidityToY(point.value) }))
+              .sort((a, b) => a.x - b.x),
+          ),
+        )
+      : buildLinePath(
+          slots
+            .filter((slot) => slot.humidity !== null)
+            .map((slot) => ({
+              x: slotToX(slot.index),
+              y: humidityToY(slot.humidity ?? graphMin),
+            })),
+        )
     : "";
 
   const temperatureLabels = slots.filter((slot) => slot.temperature !== null);
@@ -2186,7 +2237,10 @@ function FwsSvgTemperatureGrid({
           <SvgText x={30} y={firewoodRowBottom + 22} size={6.8} anchor="middle">Smoked condition</SvgText>
         </>
       ) : (
-        <SvgText x={30} y={chartBottom + 15} size={10.5} weight={700} anchor="middle">สภาพสุกของยาง</SvgText>
+        <>
+          <SvgText x={30} y={chartBottom + 13} size={8.2} weight={700} anchor="middle">สภาพสุก</SvgText>
+          <SvgText x={30} y={chartBottom + 24} size={8.2} weight={700} anchor="middle">ของยาง</SvgText>
+        </>
       )}
 
       {Array.from({ length: template.dayCount }).map((_, dayIndex) => {
@@ -2408,27 +2462,31 @@ function FwsSvgTemperatureGrid({
         <path d={targetPath} fill="none" stroke="#0f4c81" strokeWidth="1.35" opacity="0.9" />
       ) : null}
 
-      {temperaturePath && !showFirewoodRow ? (
-        <path d={temperaturePath} fill="none" stroke="#d62027" strokeWidth="1.55" opacity="0.96" />
+      {temperaturePath ? (
+        <path
+          d={temperaturePath}
+          fill="none"
+          stroke="#d62027"
+          strokeWidth={showFirewoodRow ? 1.75 : 1.55}
+          opacity={showFirewoodRow ? 0.98 : 0.96}
+        />
       ) : null}
 
       {humidityPath ? (
         <path d={humidityPath} fill="none" stroke="#f59e0b" strokeWidth="1.55" opacity="0.96" />
       ) : null}
 
-      {!showFirewoodRow
-        ? slots
-            .filter((slot) => slot.temperature !== null)
-            .map((slot) => (
-              <circle
-                key={`temperature-${slot.index}`}
-                cx={slotToX(slot.index)}
-                cy={tempToY(slot.temperature ?? graphMin)}
-                r="1.25"
-                fill="#d62027"
-              />
-            ))
-        : null}
+      {slots
+        .filter((slot) => slot.temperature !== null)
+        .map((slot) => (
+          <circle
+            key={`temperature-${slot.index}`}
+            cx={slotToX(slot.index)}
+            cy={tempToY(slot.temperature ?? graphMin)}
+            r={showFirewoodRow ? 1.1 : 1.25}
+            fill="#d62027"
+          />
+        ))}
 
       {showHumidity
         ? slots
@@ -2508,24 +2566,6 @@ function FwsSvgTemperatureGrid({
           </text>
         );
       })}
-
-      {showFirewoodRow && temperaturePath ? (
-        <path d={temperaturePath} fill="none" stroke="#d62027" strokeWidth="1.75" opacity="0.98" />
-      ) : null}
-
-      {showFirewoodRow
-        ? slots
-            .filter((slot) => slot.temperature !== null)
-            .map((slot) => (
-              <circle
-                key={`temperature-top-${slot.index}`}
-                cx={slotToX(slot.index)}
-                cy={tempToY(slot.temperature ?? graphMin)}
-                r="1.1"
-                fill="#d62027"
-              />
-            ))
-        : null}
 
     </g>
   );
@@ -2894,12 +2934,16 @@ function buildReportSlots({
   // sampled data always refer to the same timestamp when a cycle starts mid-day.
   const firstSlot = new Date(start);
   firstSlot.setHours(8, 0, 0, 0);
+  if (start.getTime() < firstSlot.getTime()) {
+    firstSlot.setDate(firstSlot.getDate() - 1);
+  }
   const reportSlotCount = template.dayCount * template.timeSlots.length;
+  const maxSampleDistance = template.intervalHours * 30 * 60 * 1000;
 
   return Array.from({ length: reportSlotCount }, (_, index) => {
     const date = new Date(firstSlot.getTime() + index * template.intervalHours * 60 * 60 * 1000);
-    const closestTemperature = findClosestPoint(indexedTemperaturePoints, date.getTime());
-    const closestHumidity = findClosestPoint(indexedHumidityPoints, date.getTime());
+    const closestTemperature = findClosestPoint(indexedTemperaturePoints, date.getTime(), maxSampleDistance);
+    const closestHumidity = findClosestPoint(indexedHumidityPoints, date.getTime(), maxSampleDistance);
 
     return {
       index,
@@ -2921,10 +2965,9 @@ function roundReportValue(value: number): number {
 function findClosestPoint(
   points: Array<{ time: number; value: number }>,
   targetTime: number,
+  maxDistance: number,
 ): { time: number; value: number } | null {
   if (!points.length) return null;
-
-  const maxDistance = 90 * 60 * 1000;
 
   let closest = points[0];
   let distance = Math.abs(points[0].time - targetTime);
@@ -2947,6 +2990,23 @@ function buildLinePath(points: Array<{ x: number; y: number }>): string {
   return points
     .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
     .join(" ");
+}
+
+function downsampleReportPath(
+  points: Array<{ x: number; y: number }>,
+  maxPoints = 720,
+): Array<{ x: number; y: number }> {
+  if (points.length <= maxPoints) return points;
+
+  const sampled: Array<{ x: number; y: number }> = [points[0]];
+  const step = (points.length - 1) / (maxPoints - 1);
+
+  for (let index = 1; index < maxPoints - 1; index += 1) {
+    sampled.push(points[Math.round(index * step)]);
+  }
+
+  sampled.push(points[points.length - 1]);
+  return sampled;
 }
 
 function clampCycleNumber(cycle: number, oven: Oven): number {
