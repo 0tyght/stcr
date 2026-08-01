@@ -81,6 +81,12 @@ export function OvenDetailPage() {
     if (!oven?.id) return;
     let active = true;
 
+    setDatabaseCycles([]);
+    setSelectedCycle(null);
+    setSelectedDateKey(null);
+    setPoints([]);
+    setHistoryError(null);
+
     void apiClient.getOvenCycles(oven.id)
       .then((cycles) => {
         if (active) setDatabaseCycles(cycles);
@@ -100,7 +106,7 @@ export function OvenDetailPage() {
     if (!oven) return [];
 
     return databaseCycles
-      .filter((cycle) => !(oven.status === "open" && cycle.cycleNumber === oven.cycleCount))
+      .filter((cycle) => cycle.state === "completed")
       .map((cycle) => {
         const start = new Date(cycle.reportStartedAt || cycle.firstPointAt);
         const rawEnd = new Date(cycle.stoppedAt || cycle.lastPointAt);
@@ -135,8 +141,10 @@ export function OvenDetailPage() {
   const effectiveMode =
     realtimeAvailable ? mode : "historical";
   const displayedOperationRange = useMemo(() => {
-    if (effectiveMode === "historical" && selectedRecord) {
-      return { start: selectedRecord.start, end: selectedRecord.end };
+    if (effectiveMode === "historical") {
+      return selectedRecord
+        ? { start: selectedRecord.start, end: selectedRecord.end }
+        : { start: null, end: null };
     }
 
     return {
@@ -164,11 +172,10 @@ export function OvenDetailPage() {
     if (!oven) return null;
 
     if (effectiveMode === "historical") {
-      const record = selectedRecord ?? cycleRecords[0];
-      return record
+      return selectedRecord
         ? {
-            start: record.start,
-            end: new Date(record.start.getTime() + REPORT_CYCLE_MS),
+            start: selectedRecord.start,
+            end: new Date(selectedRecord.start.getTime() + REPORT_CYCLE_MS),
           }
         : null;
     }
@@ -180,10 +187,8 @@ export function OvenDetailPage() {
     );
   }, [
     effectiveMode,
-    cycleRecords,
     oven,
     selectedRecord,
-    selectedCycle,
   ]);
   const historyStartAt =
     cycleRange?.start.toISOString() ?? "";
@@ -193,16 +198,27 @@ export function OvenDetailPage() {
       : "";
   const historyCycleNumber =
     effectiveMode === "historical"
-      ? selectedCycle ?? undefined
+      ? selectedRecord?.cycle
       : oven?.cycleCount;
   const historyIncludeIgnition =
     effectiveMode === "realtime" &&
     !oven?.reportStartedAt;
 
   useEffect(() => {
-    if (!oven?.id || !historyStartAt) return;
+    if (
+      !oven?.id ||
+      !historyStartAt ||
+      (effectiveMode === "historical" && !selectedRecord)
+    ) {
+      setPoints([]);
+      setHistoryLoading(false);
+      setLastHistorySuccessAt(null);
+      return;
+    }
 
     let cancelled = false;
+
+    setPoints([]);
 
     const loadHistory = async () => {
       if (!cancelled) {
@@ -230,6 +246,7 @@ export function OvenDetailPage() {
         }
       } catch (nextError) {
         if (!cancelled) {
+          setPoints([]);
           setHistoryError(
             nextError instanceof Error
               ? nextError.message
@@ -267,6 +284,7 @@ export function OvenDetailPage() {
     historyIncludeIgnition,
     historyStartAt,
     oven?.id,
+    selectedRecord,
     chartViewResetKey,
   ]);
 const ovenAlarms = useMemo(
@@ -337,7 +355,7 @@ const ovenAlarms = useMemo(
   }
 
   function handleDownloadCsv() {
-    if (!oven) return;
+    if (!oven || !points.length) return;
 
     const filename = `${oven.name}-cycle.csv`;
     const confirmed = window.confirm(
@@ -490,22 +508,26 @@ const ovenAlarms = useMemo(
                 <FileDown size={17} />
                 {oven.reportStartedAt ? "โหลดรายงานปัจจุบัน" : "รอข้อมูลเปิดเตา"}
               </button>
-            ) : (
+            ) : selectedRecord ? (
               <Link
                 className="button button-primary"
-                to={`/reports?ovenId=${oven.id}&mode=history&cycle=${
-                  selectedCycle ?? cycleRecords[0]?.cycle ?? oven.cycleCount
-                }`}
+                to={`/reports?ovenId=${oven.id}&mode=history&cycle=${selectedRecord.cycle}`}
               >
                 <FileDown size={17} />
                 เปิดหน้ารายงานย้อนหลัง
               </Link>
+            ) : (
+              <button className="button button-primary" type="button" disabled>
+                <FileDown size={17} />
+                ยังไม่มีรอบย้อนหลัง
+              </button>
             )}
 
             <button
               className="button"
               type="button"
               onClick={handleDownloadCsv}
+              disabled={!points.length}
             >
               <Download size={17} />
               ส่งออก CSV
@@ -517,7 +539,9 @@ const ovenAlarms = useMemo(
           <div className={`status-panel status-banner status-${oven.status}`}>
             <p>สถานะเตา</p>
             <strong>{statusText(oven.status)}</strong>
-            <span>รอบล่าสุด {oven.cycleCount}</span>
+            <span>
+              {oven.status === "open" ? "รอบปัจจุบัน" : "รอบล่าสุด"} {oven.cycleCount}
+            </span>
           </div>
 
           {effectiveMode === "realtime" && realtimeAvailable ? (
@@ -827,7 +851,8 @@ function HistoricalChartSection({
         )}
       </div>
 
-      <div style={styles.chartCardGrid}>
+      {selectedRecord ? (
+        <div style={styles.chartCardGrid}>
         <ChartPanel
           title="อุณหภูมิและความชื้นในห้องอบ"
           description="1 กราฟต่อ 1 รอบอบ แสดงเส้น Upper/Lower เฉพาะอุณหภูมิห้องอบ"
@@ -858,7 +883,13 @@ function HistoricalChartSection({
           timeRange={timeRange}
           resetViewKey={resetViewKey}
         />
-      </div>
+        </div>
+      ) : (
+        <EmptyState
+          title="ยังไม่มีรอบย้อนหลัง"
+          description="กราฟย้อนหลังจะแสดงเมื่อมีรอบที่จบแล้วและมีข้อมูลบันทึกในฐานข้อมูล"
+        />
+      )}
     </section>
   );
 }
