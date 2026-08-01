@@ -29,7 +29,7 @@ import { downloadCsv } from "../services/reportExport";
 import type { LimitMap, Oven, OvenCycleSummary, OvenStatus, SensorKey, TimeSeriesPoint } from "../types";
 import { formatDateTime } from "../utils/format";
 import { getReadingState } from "../utils/limits";
-import { getHistoricalCycleRange } from "../utils/reportCycle";
+import { getHistoricalCycleRange, REPORT_CYCLE_MS } from "../utils/reportCycle";
 import { allSensorKeys } from "../utils/sensors";
 
 type ChartMode = "realtime" | "historical";
@@ -165,7 +165,12 @@ export function OvenDetailPage() {
 
     if (effectiveMode === "historical") {
       const record = selectedRecord ?? cycleRecords[0];
-      return record ? { start: record.start, end: record.end } : null;
+      return record
+        ? {
+            start: record.start,
+            end: new Date(record.start.getTime() + REPORT_CYCLE_MS),
+          }
+        : null;
     }
 
     return getDetailCycleRange(
