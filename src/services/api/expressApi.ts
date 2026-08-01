@@ -5,6 +5,7 @@ import type {
   HistoryQuery,
   LimitMap,
   Oven,
+  OvenCycleSummary,
   OvenUpdateInput,
   ReportDocumentMeta,
   ReportCycleMeta,
@@ -72,6 +73,10 @@ export const expressApi: AppApi = {
     requestArray<TimeSeriesPoint>(
       `/ovens/${encodeURIComponent(query.ovenId)}/history`,
       historyQueryParams(query),
+    ),
+  getOvenCycles: (ovenId) =>
+    requestArray<OvenCycleSummary>(
+      `/ovens/${encodeURIComponent(ovenId)}/cycles`,
     ),
   getAlarms: (filter) =>
     requestArray<Alarm>("/alarms", alarmQueryParams(filter)),

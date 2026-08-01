@@ -10,17 +10,16 @@ import {
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   applyCompanyTheme,
-  companies,
   companyList,
   getCompany,
   type CompanyId,
 } from "../config/companies";
 import {
-  ACCOUNT_STORAGE_KEY,
   COMPANY_STORAGE_KEY,
   getStoredAccountId,
   getStoredCompanyId,
   getStoredThemeMode,
+  saveStoredAccountId,
   THEME_STORAGE_KEY,
   type ThemeMode,
 } from "../config/preferences";
@@ -48,9 +47,8 @@ export function LoginPage({
 
   function selectCompany(nextCompanyId: CompanyId) {
     if (nextCompanyId === companyId) return;
-    const nextCompany = companies[nextCompanyId];
     setCompanyId(nextCompanyId);
-    setUsername(nextCompany.accounts[0]?.id ?? "");
+    setUsername(getStoredAccountId(nextCompanyId));
     setPassword("");
     setLoginError("");
   }
@@ -64,7 +62,7 @@ export function LoginPage({
     setSubmitting(true);
     try {
       await onLogin(username.trim(), password, companyId);
-      localStorage.setItem(ACCOUNT_STORAGE_KEY, username.trim());
+      saveStoredAccountId(companyId, username);
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : "เข้าสู่ระบบไม่สำเร็จ");
     } finally {
@@ -114,7 +112,7 @@ export function LoginPage({
 
         </aside>
 
-        <form className="login-panel login-modern-panel" onSubmit={handleSubmit}>
+        <form className="login-panel login-modern-panel" onSubmit={handleSubmit} autoComplete="off">
           <div className="login-panel-heading">
             <div className="login-active-brand" aria-hidden="true">
               {company.brand.kind === "image" && company.brand.logo ? (
@@ -167,10 +165,12 @@ export function LoginPage({
             <label>
               <span>ชื่อผู้ใช้</span>
               <input
+                key={`username-${companyId}`}
+                name={`stcr-${companyId}-username`}
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
                 type="text"
-                autoComplete="username"
+                autoComplete="off"
                 maxLength={80}
                 required
                 placeholder="กรอกชื่อผู้ใช้"
@@ -180,11 +180,13 @@ export function LoginPage({
             <label>
               <span>รหัสผ่าน</span>
               <input
+                key={`password-${companyId}`}
+                name={`stcr-${companyId}-password`}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 type="password"
                 placeholder="กรอกรหัสผ่าน"
-                autoComplete="current-password"
+                autoComplete="new-password"
                 required
               />
             </label>

@@ -5,6 +5,7 @@ import type {
   HistoryQuery,
   LimitMap,
   Oven,
+  OvenCycleSummary,
   OvenUpdateInput,
   ReportDocumentMeta,
   ReportCycleMeta,
@@ -36,6 +37,7 @@ export interface AppApi {
   getRealtimeOvens(): Promise<Oven[]>;
   getOven(ovenId: string): Promise<Oven>;
   getHistory(query: HistoryQuery): Promise<TimeSeriesPoint[]>;
+  getOvenCycles(ovenId: string): Promise<OvenCycleSummary[]>;
   getAlarms(filter?: AlarmFilter): Promise<Alarm[]>;
   getAuditEvents(): Promise<AuditEvent[]>;
   getReportDocumentMeta(): Promise<ReportDocumentMeta>;

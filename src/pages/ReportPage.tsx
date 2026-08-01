@@ -12,10 +12,11 @@ import { Link, useSearchParams } from "react-router";
 
 import { useAppData } from "../app/providers";
 import { EmptyState } from "../components/ui/EmptyState";
+import { LoadingState } from "../components/ui/LoadingState";
 import { PageHeader } from "../components/ui/PageHeader";
 import { getCurrentCompany, type CompanyConfig } from "../config/companies";
 import { apiClient } from "../services/apiClient";
-import type { Oven, ReportCycleMeta, SensorKey, TimeSeriesPoint } from "../types";
+import type { Oven, OvenCycleSummary, ReportCycleMeta, SensorKey, TimeSeriesPoint } from "../types";
 import { clampCycleStart, getHistoricalCycleRange, REPORT_CYCLE_MS } from "../utils/reportCycle";
 import { allSensorKeys } from "../utils/sensors";
 
@@ -410,6 +411,9 @@ export function ReportPage() {
     : ovens[0];
 
   const [selectedCycle, setSelectedCycle] = useState<number | null>(null);
+  const [availableCycles, setAvailableCycles] = useState<OvenCycleSummary[]>([]);
+  const [cyclesLoading, setCyclesLoading] = useState(false);
+  const [cyclesError, setCyclesError] = useState("");
   const [rangeFromCycle, setRangeFromCycle] = useState<number | null>(null);
   const [rangeToCycle, setRangeToCycle] = useState<number | null>(null);
   const [historicalDownloadMode, setHistoricalDownloadMode] =
@@ -454,15 +458,42 @@ export function ReportPage() {
     };
   }, [company.id]);
 
+  useEffect(() => {
+    if (!oven?.id) return;
+    let active = true;
+    setCyclesLoading(true);
+    setCyclesError("");
+
+    void apiClient.getOvenCycles(oven.id)
+      .then((cycles) => {
+        if (active) setAvailableCycles(cycles);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setAvailableCycles([]);
+        setCyclesError(error instanceof Error ? error.message : "โหลดรายการรอบจากฐานข้อมูลไม่สำเร็จ");
+      })
+      .finally(() => {
+        if (active) setCyclesLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [oven?.id]);
+
+  const historicalCycles = useMemo(
+    () => availableCycles.filter(
+      (cycle) => !(oven?.status === "open" && cycle.cycleNumber === oven.cycleCount),
+    ),
+    [availableCycles, oven?.cycleCount, oven?.status],
+  );
+
   const cycleOptions = useMemo(() => {
     if (!oven) return [];
-
-    const latest = mode === "current"
-      ? Math.max(oven.cycleCount || 1, 1)
-      : getDefaultHistoricalCycle(oven);
-    const availableCycleCount = mode === "current" ? 1 : latest;
-    return Array.from({ length: availableCycleCount }, (_, index) => latest - index);
-  }, [mode, oven]);
+    if (mode === "current") return oven.cycleCount > 0 ? [oven.cycleCount] : [];
+    return historicalCycles.map((cycle) => cycle.cycleNumber);
+  }, [historicalCycles, mode, oven]);
 
   const updateReportLocation = useCallback(
     ({ nextOvenId, nextMode }: { nextOvenId?: string; nextMode?: ReportMode }) => {
@@ -494,16 +525,14 @@ export function ReportPage() {
   useEffect(() => {
     if (!oven) return;
 
-    const fallbackCycle = mode === "current" ? oven.cycleCount : getDefaultHistoricalCycle(oven);
-    const cycle =
-      Number.isFinite(requestedCycle) && requestedCycle > 0 ? requestedCycle : fallbackCycle;
-    const safeCycle = clampReportCycleNumber(cycle, oven, mode);
+    const requestedIsAvailable = cycleOptions.includes(requestedCycle);
+    const safeCycle = requestedIsAvailable ? requestedCycle : cycleOptions[0] ?? null;
 
     setSelectedCycle(safeCycle);
     setRangeFromCycle(safeCycle);
     setRangeToCycle(safeCycle);
     setHistoricalDownloadMode("single");
-  }, [mode, oven?.id, requestedCycle]);
+  }, [cycleOptions, mode, oven?.id, requestedCycle]);
 
   useEffect(() => {
     if (!oven || selectedCycle == null) return;
@@ -575,8 +604,12 @@ export function ReportPage() {
 
   const cycleRange = useMemo(() => {
     if (!oven || selectedCycle == null) return null;
-    return resolveReportCycleRange(getCycleRange(oven, mode, selectedCycle), cycleMeta, mode);
-  }, [cycleMeta, mode, oven, selectedCycle]);
+    const databaseCycle = availableCycles.find((cycle) => cycle.cycleNumber === selectedCycle);
+    const fallback = mode === "history" && databaseCycle
+      ? getDatabaseCycleRange(databaseCycle)
+      : getCycleRange(oven, mode, selectedCycle);
+    return resolveReportCycleRange(fallback, cycleMeta, mode);
+  }, [availableCycles, cycleMeta, mode, oven, selectedCycle]);
 
   const loadReport = useCallback(async () => {
     if (!oven || !cycleRange || selectedCycle == null) return;
@@ -644,10 +677,16 @@ export function ReportPage() {
         throw new Error("ยังไม่พบข้อมูลเตาหรือพื้นที่รายงาน");
       }
 
-      const safeCycle = clampReportCycleNumber(cycle, oven, mode);
+      const safeCycle = mode === "history"
+        ? (cycleOptions.includes(cycle) ? cycle : cycleOptions[0])
+        : clampReportCycleNumber(cycle, oven, mode);
+      if (safeCycle == null) throw new Error("ไม่พบรอบจริงในฐานข้อมูล");
       const nextMeta = await apiClient.getReportCycleMeta(oven.id, safeCycle);
+      const databaseCycle = availableCycles.find((item) => item.cycleNumber === safeCycle);
       const range = resolveReportCycleRange(
-        getCycleRange(oven, mode, safeCycle),
+        mode === "history" && databaseCycle
+          ? getDatabaseCycleRange(databaseCycle)
+          : getCycleRange(oven, mode, safeCycle),
         nextMeta,
         mode,
       );
@@ -679,14 +718,17 @@ export function ReportPage() {
 
       return { blob, filename };
     },
-    [company, mode, oven],
+    [availableCycles, company, cycleOptions, mode, oven],
   );
 
   const downloadSelectedPdf = useCallback(
     async (chooseLocation = false) => {
       if (!oven || selectedCycle == null) return;
 
-      const safeCycle = clampReportCycleNumber(selectedCycle, oven, mode);
+      const safeCycle = mode === "history"
+        ? (cycleOptions.includes(selectedCycle) ? selectedCycle : cycleOptions[0])
+        : clampReportCycleNumber(selectedCycle, oven, mode);
+      if (safeCycle == null) return;
       const range = cycleRange ?? getCycleRange(oven, mode, safeCycle);
       const filename = createPdfFilename(company, safeCycle, range.start);
 
@@ -731,13 +773,13 @@ export function ReportPage() {
         setDownloadingPdf(false);
       }
     },
-    [company, cycleRange, mode, oven, reportForm, selectedCycle],
+    [company, cycleOptions, cycleRange, mode, oven, reportForm, selectedCycle],
   );
 
   const downloadHistoricalRangeZip = useCallback(async () => {
     if (!oven || rangeFromCycle == null || rangeToCycle == null) return;
 
-    const cycles = getCycleRangeList(rangeFromCycle, rangeToCycle, oven);
+    const cycles = getCycleRangeList(rangeFromCycle, rangeToCycle, cycleOptions);
     if (!cycles.length) return;
 
     const high = Math.max(rangeFromCycle, rangeToCycle);
@@ -784,7 +826,7 @@ export function ReportPage() {
       setDownloadMessage("");
       setDownloadingPdf(false);
     }
-  }, [company, oven, rangeFromCycle, rangeToCycle, renderCycleAndCreatePdfBlob]);
+  }, [company, cycleOptions, oven, rangeFromCycle, rangeToCycle, renderCycleAndCreatePdfBlob]);
 
   const downloadCurrentCsv = useCallback(async () => {
     if (!oven || selectedCycle == null || !points.length) return;
@@ -818,6 +860,14 @@ export function ReportPage() {
 
   if (!oven) {
     return <EmptyState title="ยังไม่มีข้อมูลเตา" description="ยังไม่มีข้อมูลเตาสำหรับสร้างรายงาน" />;
+  }
+
+  if (mode === "history" && cyclesLoading) {
+    return <LoadingState />;
+  }
+
+  if (mode === "history" && cyclesError) {
+    return <EmptyState title="โหลดรายการรอบไม่สำเร็จ" description={cyclesError} />;
   }
 
   if (!cycleRange || selectedCycle == null) {
@@ -863,7 +913,7 @@ export function ReportPage() {
 
   const rangeCycles =
     rangeFromCycle != null && rangeToCycle != null
-      ? getCycleRangeList(rangeFromCycle, rangeToCycle, oven)
+      ? getCycleRangeList(rangeFromCycle, rangeToCycle, cycleOptions)
       : [];
 
   return (
@@ -2787,6 +2837,13 @@ function getCycleRange(
   return getHistoricalCycleRange(oven, cycleNumber);
 }
 
+function getDatabaseCycleRange(cycle: OvenCycleSummary): { start: Date; end: Date } {
+  const start = new Date(cycle.reportStartedAt || cycle.firstPointAt);
+  const rawEnd = new Date(cycle.stoppedAt || cycle.lastPointAt);
+  const end = rawEnd > start ? rawEnd : new Date(start.getTime() + 60_000);
+  return { start, end };
+}
+
 function getDefaultHistoricalCycle(oven: Oven): number {
   if (oven.status === "open") return Math.max(1, oven.cycleCount - 1);
   return Math.max(1, oven.cycleCount);
@@ -2889,13 +2946,10 @@ function clampReportCycleNumber(cycle: number, oven: Oven, mode: ReportMode): nu
   return Math.min(safeCycle, getDefaultHistoricalCycle(oven));
 }
 
-function getCycleRangeList(from: number, to: number, oven: Oven): number[] {
-  const safeFrom = clampCycleNumber(from, oven);
-  const safeTo = clampCycleNumber(to, oven);
-  const high = Math.max(safeFrom, safeTo);
-  const low = Math.min(safeFrom, safeTo);
-
-  return Array.from({ length: high - low + 1 }, (_, index) => high - index);
+function getCycleRangeList(from: number, to: number, available: number[]): number[] {
+  const high = Math.max(from, to);
+  const low = Math.min(from, to);
+  return available.filter((cycle) => cycle >= low && cycle <= high);
 }
 
 function waitForRender(ms: number): Promise<void> {

@@ -26,7 +26,7 @@ import { SensorGauge } from "../components/ui/SensorGauge";
 import { StatusBadge } from "../components/ui/StatusBadge";
 import { apiClient } from "../services/apiClient";
 import { downloadCsv } from "../services/reportExport";
-import type { LimitMap, Oven, OvenStatus, SensorKey, TimeSeriesPoint } from "../types";
+import type { LimitMap, Oven, OvenCycleSummary, OvenStatus, SensorKey, TimeSeriesPoint } from "../types";
 import { formatDateTime } from "../utils/format";
 import { getReadingState } from "../utils/limits";
 import { getHistoricalCycleRange } from "../utils/reportCycle";
@@ -64,6 +64,7 @@ export function OvenDetailPage() {
   const [mode, setMode] = useState<ChartMode>("realtime");
   const [historyPickMode, setHistoryPickMode] = useState<HistoryPickMode>("cycle");
   const [selectedCycle, setSelectedCycle] = useState<number | null>(null);
+  const [databaseCycles, setDatabaseCycles] = useState<OvenCycleSummary[]>([]);
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [calendarCursor, setCalendarCursor] = useState<Date>(() => new Date());
   const [points, setPoints] = useState<TimeSeriesPoint[]>([]);
@@ -76,29 +77,46 @@ export function OvenDetailPage() {
 
   const realtimeAvailable = oven ? canUseRealtime(oven.status) : false;
 
+  useEffect(() => {
+    if (!oven?.id) return;
+    let active = true;
+
+    void apiClient.getOvenCycles(oven.id)
+      .then((cycles) => {
+        if (active) setDatabaseCycles(cycles);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setDatabaseCycles([]);
+        setHistoryError(error instanceof Error ? error.message : "โหลดรายการรอบจากฐานข้อมูลไม่สำเร็จ");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [oven?.id]);
+
   const cycleRecords = useMemo<CycleRecord[]>(() => {
     if (!oven) return [];
 
-    const latestCycle = getDefaultHistoricalCycle(oven);
-    const availableCycleCount = Math.min(6, latestCycle);
+    return databaseCycles
+      .filter((cycle) => !(oven.status === "open" && cycle.cycleNumber === oven.cycleCount))
+      .map((cycle) => {
+        const start = new Date(cycle.reportStartedAt || cycle.firstPointAt);
+        const rawEnd = new Date(cycle.stoppedAt || cycle.lastPointAt);
+        const end = rawEnd > start ? rawEnd : new Date(start.getTime() + 60_000);
 
-    return Array.from({ length: availableCycleCount }, (_, index) => {
-      const cycle = latestCycle - index;
-      const range = getDetailCycleRange(oven, "historical", cycle);
-
-      return {
-        cycle,
-        start: range.start,
-        end: range.end,
-        startDateKey: toDateKey(range.start),
-        endDateKey: toDateKey(range.end),
-        label: `รอบที่ ${cycle}`,
-        rangeLabel: `${formatShortThaiDateTime(range.start)} - ${formatShortThaiDateTime(
-          range.end,
-        )}`,
-      };
-    });
-  }, [oven]);
+        return {
+          cycle: cycle.cycleNumber,
+          start,
+          end,
+          startDateKey: toDateKey(start),
+          endDateKey: toDateKey(end),
+          label: `รอบที่ ${cycle.cycleNumber}`,
+          rangeLabel: `${formatShortThaiDateTime(start)} - ${formatShortThaiDateTime(end)}`,
+        };
+      });
+  }, [databaseCycles, oven]);
 
   const selectedRecord = useMemo(() => {
     if (!selectedCycle) return null;
@@ -117,18 +135,39 @@ export function OvenDetailPage() {
   const effectiveMode =
     realtimeAvailable ? mode : "historical";
 
+  useEffect(() => {
+    if (!cycleRecords.length) {
+      setSelectedCycle(null);
+      return;
+    }
+    if (selectedCycle != null && cycleRecords.some((record) => record.cycle === selectedCycle)) {
+      return;
+    }
+
+    const latest = cycleRecords[0];
+    setSelectedCycle(latest.cycle);
+    setSelectedDateKey(latest.endDateKey);
+    setCalendarCursor(latest.end);
+  }, [cycleRecords, selectedCycle]);
+
   const cycleRange = useMemo(() => {
     if (!oven) return null;
+
+    if (effectiveMode === "historical") {
+      const record = selectedRecord ?? cycleRecords[0];
+      return record ? { start: record.start, end: record.end } : null;
+    }
 
     return getDetailCycleRange(
       oven,
       effectiveMode,
-      selectedCycle ??
-        getDefaultHistoricalCycle(oven),
+      oven.cycleCount,
     );
   }, [
     effectiveMode,
+    cycleRecords,
     oven,
+    selectedRecord,
     selectedCycle,
   ]);
   const historyStartAt =
@@ -260,18 +299,13 @@ const ovenAlarms = useMemo(
   }
 
   function handleResetHistory() {
-    if (!oven) return;
-
-    const defaultCycle = getDefaultHistoricalCycle(oven);
-    const record = cycleRecords.find((item) => item.cycle === defaultCycle);
+    const record = cycleRecords[0];
+    if (!record) return;
 
     setHistoryPickMode("cycle");
-    setSelectedCycle(defaultCycle);
-
-    if (record) {
-      setSelectedDateKey(record.endDateKey);
-      setCalendarCursor(record.end);
-    }
+    setSelectedCycle(record.cycle);
+    setSelectedDateKey(record.endDateKey);
+    setCalendarCursor(record.end);
   }
 
   function handleDownloadCurrentReport() {
@@ -487,7 +521,7 @@ const ovenAlarms = useMemo(
               <Link
                 className="button button-primary"
                 to={`/reports?ovenId=${oven.id}&mode=history&cycle=${
-                  selectedCycle ?? getDefaultHistoricalCycle(oven)
+                  selectedCycle ?? cycleRecords[0]?.cycle ?? oven.cycleCount
                 }`}
               >
                 <FileDown size={17} />
@@ -1029,14 +1063,6 @@ function getGaugeLimit(
   }
 
   return oven.limits[sensor];
-}
-
-function getDefaultHistoricalCycle(oven: Oven): number {
-  if (oven.status === "open") {
-    return Math.max(1, oven.cycleCount - 1);
-  }
-
-  return Math.max(1, oven.cycleCount);
 }
 
 function TemperatureRangeCard({ oven }: { oven: Oven }) {

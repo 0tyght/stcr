@@ -1950,6 +1950,51 @@ if (method === "POST" && acknowledgeMatch) {
   return jsonResponse(state.alarms);
 }
 
+const cyclesMatch = path.match(/^\/stcr\/api\/ovens\/([^/]+)\/cycles$/);
+if (method === "GET" && cyclesMatch) {
+  const ovenId = decodeURIComponent(cyclesMatch[1]);
+  if (!visibleOvenById.has(ovenId)) {
+    return errorResponse("Oven not found", 404, "NOT_FOUND");
+  }
+
+  const pool = getDatabasePool();
+  const [rows] = await pool.execute(
+    `SELECT a.cycle_number AS cycleNumber,
+            COALESCE(c.state, 'completed') AS state,
+            CASE WHEN c.fired_at IS NULL THEN NULL
+                 ELSE DATE_FORMAT(c.fired_at, '%Y-%m-%dT%H:%i:%s.%fZ') END AS firedAt,
+            DATE_FORMAT(
+              COALESCE(c.report_started_at, MIN(a.minute_at)),
+              '%Y-%m-%dT%H:%i:%s.%fZ'
+            ) AS reportStartedAt,
+            CASE WHEN c.stopped_at IS NULL THEN NULL
+                 ELSE DATE_FORMAT(c.stopped_at, '%Y-%m-%dT%H:%i:%s.%fZ') END AS stoppedAt,
+            DATE_FORMAT(MIN(a.minute_at), '%Y-%m-%dT%H:%i:%s.%fZ') AS firstPointAt,
+            DATE_FORMAT(MAX(a.minute_at), '%Y-%m-%dT%H:%i:%s.%fZ') AS lastPointAt,
+            COUNT(*) AS pointCount
+     FROM sensor_minute_aggregates a
+     LEFT JOIN oven_cycles c
+       ON c.company_id=a.company_id
+      AND c.oven_id=a.oven_id
+      AND c.cycle_number=a.cycle_number
+     WHERE a.company_id=?
+       AND a.oven_id=?
+       AND a.cycle_number>0
+       AND a.included_in_report=TRUE
+     GROUP BY a.cycle_number, c.id, c.state, c.fired_at,
+              c.report_started_at, c.stopped_at
+     ORDER BY a.cycle_number DESC
+     LIMIT 1000`,
+    [companyId, ovenId],
+  );
+
+  return jsonResponse(rows.map((row) => ({
+    ...row,
+    cycleNumber: Number(row.cycleNumber),
+    pointCount: Number(row.pointCount),
+  })));
+}
+
 const reportMetaMatch = path.match(/^\/stcr\/api\/ovens\/([^/]+)\/cycles\/(\d+)\/report-meta$/);
 if (method === "GET" && reportMetaMatch) {
   const ovenId = decodeURIComponent(reportMetaMatch[1]);

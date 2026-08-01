@@ -41,3 +41,14 @@ export type ReportCycleMeta = {
   outputNetWeightKg: number | null;
   firewoodWeightKg: number | null;
 };
+
+export type OvenCycleSummary = {
+  cycleNumber: number;
+  state: "ignition" | "recording" | "completed";
+  firedAt: string | null;
+  reportStartedAt: string;
+  stoppedAt: string | null;
+  firstPointAt: string;
+  lastPointAt: string;
+  pointCount: number;
+};
