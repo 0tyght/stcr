@@ -1983,6 +1983,7 @@ if (method === "GET" && cyclesMatch) {
        AND a.included_in_report=TRUE
      GROUP BY a.cycle_number, c.id, c.state, c.fired_at,
               c.report_started_at, c.stopped_at
+     HAVING COUNT(*) >= 2
      ORDER BY a.cycle_number DESC
      LIMIT 1000`,
     [companyId, ovenId],
