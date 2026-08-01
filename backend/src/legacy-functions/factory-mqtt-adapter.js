@@ -63,11 +63,18 @@ const sourceUtcOffsetMinutes = Number(
   env.get("STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES") || 0,
 );
 const defaultSensorRanges = {
-  chamberTemp: { min: -40, max: 150 },
+  chamberTemp: { min: 0, max: 150 },
   humidity: { min: 0, max: 100 },
-  furnaceTemp: { min: -40, max: 1000 },
-  blowerTemp: { min: -40, max: 600 },
+  furnaceTemp: { min: 0, max: 1000 },
+  blowerTemp: { min: 0, max: 600 },
 };
+const defaultSpikeLimits = {
+  chamberTemp: 12,
+  humidity: 20,
+  furnaceTemp: 200,
+  blowerTemp: 120,
+};
+const plausibilityStateKey = "stcrSensorPlausibilityStateV1";
 
 function readSensorRanges() {
   const configured = String(
@@ -87,6 +94,113 @@ function readSensorRanges() {
       return [sensorKey, { min, max }];
     }),
   );
+}
+
+function readSpikeLimits() {
+  const configured = String(
+    env.get("STCR_FACTORY_MQTT_SPIKE_LIMITS_JSON") || "",
+  ).trim();
+  if (!configured) return defaultSpikeLimits;
+
+  const parsed = JSON.parse(configured);
+  return Object.fromEntries(
+    Object.keys(defaultSpikeLimits).map((sensorKey) => {
+      const limit = Number(parsed?.[sensorKey]);
+      if (!Number.isFinite(limit) || limit <= 0) {
+        throw new Error(`Invalid spike limit for ${sensorKey}`);
+      }
+      return [sensorKey, limit];
+    }),
+  );
+}
+
+function inspectPlausibility(
+  sensorKey,
+  value,
+  sourceTimestampMs,
+  spikeLimits,
+) {
+  const allStates = global.get(plausibilityStateKey) || {};
+  const stateKey = `${companyId}|${ovenId}|${sensorKey}`;
+  const state = allStates[stateKey];
+
+  if (
+    !state ||
+    !Number.isFinite(Number(state.lastGoodValue)) ||
+    !Number.isFinite(Number(state.lastGoodAt))
+  ) {
+    allStates[stateKey] = {
+      lastGoodValue: value,
+      lastGoodAt: sourceTimestampMs,
+      candidateValue: null,
+      candidateAt: null,
+    };
+    global.set(plausibilityStateKey, allStates);
+    return { accepted: true, confirmed: false };
+  }
+
+  // Do not let a delayed or replayed packet move the live plausibility state
+  // backwards. Ordering and duplicate checks are handled by the DB writer.
+  if (sourceTimestampMs <= Number(state.lastGoodAt)) {
+    return { accepted: true, confirmed: false };
+  }
+
+  const elapsedMinutes = Math.max(
+    1,
+    (sourceTimestampMs - Number(state.lastGoodAt)) / 60_000,
+  );
+  const allowedDelta = spikeLimits[sensorKey] * elapsedMinutes;
+  const delta = Math.abs(value - Number(state.lastGoodValue));
+
+  if (delta <= allowedDelta) {
+    allStates[stateKey] = {
+      lastGoodValue: value,
+      lastGoodAt: sourceTimestampMs,
+      candidateValue: null,
+      candidateAt: null,
+    };
+    global.set(plausibilityStateKey, allStates);
+    return { accepted: true, confirmed: false };
+  }
+
+  const candidateValue = Number(state.candidateValue);
+  const candidateAt = Number(state.candidateAt);
+  const confirmsCandidate =
+    Number.isFinite(candidateValue) &&
+    Number.isFinite(candidateAt) &&
+    sourceTimestampMs > candidateAt &&
+    Math.abs(value - candidateValue) <= spikeLimits[sensorKey];
+
+  if (confirmsCandidate) {
+    allStates[stateKey] = {
+      lastGoodValue: value,
+      lastGoodAt: sourceTimestampMs,
+      candidateValue: null,
+      candidateAt: null,
+    };
+    global.set(plausibilityStateKey, allStates);
+    return {
+      accepted: true,
+      confirmed: true,
+      previousValue: Number(state.lastGoodValue),
+      candidateValue,
+      allowedDelta,
+    };
+  }
+
+  allStates[stateKey] = {
+    ...state,
+    candidateValue: value,
+    candidateAt: sourceTimestampMs,
+  };
+  global.set(plausibilityStateKey, allStates);
+  return {
+    accepted: false,
+    confirmed: false,
+    previousValue: Number(state.lastGoodValue),
+    candidateValue: value,
+    allowedDelta,
+  };
 }
 
 function inspection(status, detail, extra = {}) {
@@ -286,10 +400,12 @@ const definitions = [
 ];
 
 let sensorRanges;
+let spikeLimits;
 try {
   sensorRanges = readSensorRanges();
+  spikeLimits = readSpikeLimits();
 } catch (error) {
-  return reject(`MQTT sensor range configuration is invalid: ${error.message}`, {
+  return reject(`MQTT sensor filter configuration is invalid: ${error.message}`, {
     ovenNumber,
     ovenId,
     cycleNumber,
@@ -308,6 +424,8 @@ const sequence = sourceTimestampMs;
 const readings = [];
 const missingSensors = [];
 const invalidSensors = [];
+const suspectSensors = [];
+const confirmedSensors = [];
 for (const [sensorKey, sourceKey, unit] of definitions) {
   const rawValue = source[sourceKey];
   const numericValue = Number(rawValue);
@@ -335,6 +453,36 @@ for (const [sensorKey, sourceKey, unit] of definitions) {
     continue;
   }
 
+  const plausibility = inspectPlausibility(
+    sensorKey,
+    numericValue,
+    sourceTimestampMs,
+    spikeLimits,
+  );
+  if (!plausibility.accepted) {
+    suspectSensors.push({
+      sensorKey,
+      sourceKey,
+      value: numericValue,
+      previousValue: plausibility.previousValue,
+      allowedDelta: plausibility.allowedDelta,
+      reason: "unconfirmed-spike",
+    });
+    if (!missingSensors.includes(sensorKey)) {
+      missingSensors.push(sensorKey);
+    }
+    continue;
+  }
+  if (plausibility.confirmed) {
+    confirmedSensors.push({
+      sensorKey,
+      value: numericValue,
+      previousValue: plausibility.previousValue,
+      candidateValue: plausibility.candidateValue,
+      reason: "confirmed-change",
+    });
+  }
+
   readings.push({
     sensorKey,
     sensorId: `factory-${companyId}-${ovenId}-${sensorKey}`,
@@ -351,6 +499,12 @@ for (const invalid of invalidSensors) {
   if (!missingSensors.includes(invalid.sensorKey)) {
     missingSensors.push(invalid.sensorKey);
   }
+}
+for (const suspect of suspectSensors) {
+  qualityReasons.push(`unconfirmed-spike:${suspect.sensorKey}`);
+}
+for (const confirmed of confirmedSensors) {
+  qualityReasons.push(`confirmed-change:${confirmed.sensorKey}`);
 }
 const quality = qualityReasons.length ? "suspect" : "good";
 for (const reading of readings) {
@@ -371,6 +525,8 @@ msg._mqttEnvelope = {
   readings,
   missingSensors,
   invalidSensors,
+  suspectSensors,
+  confirmedSensors,
   batchId,
   deviceId,
 };
@@ -397,6 +553,8 @@ return inspection(
     pageUsed: false,
     missingSensors,
     invalidSensors,
+    suspectSensors,
+    confirmedSensors,
     originalSourceTimestamp: source.time_stamp,
     normalizedSourceTimestamp: sourceTimestamp,
     normalizedPayload: {

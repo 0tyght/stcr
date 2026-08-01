@@ -44,6 +44,7 @@ try {
     throw new Error("Express health endpoint failed");
   }
 
+  await import("./sensor-filter-test.mjs");
   console.log("Express runtime self-test passed");
 } finally {
   if (server) await new Promise((resolveClose) => server.close(resolveClose));

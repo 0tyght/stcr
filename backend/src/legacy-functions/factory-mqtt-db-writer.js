@@ -432,8 +432,9 @@ async function applyCycleLifecycle(
       `UPDATE oven_cycles
        SET state = 'completed', stopped_at = COALESCE(stopped_at, ?)
        WHERE company_id = ? AND oven_id = ?
-         AND state IN ('ignition', 'recording')`,
-      [eventAt, companyId, ovenId],
+         AND state IN ('ignition', 'recording')
+         AND fired_at <= ?`,
+      [eventAt, companyId, ovenId, eventAt],
     );
     return;
   }
@@ -444,8 +445,9 @@ async function applyCycleLifecycle(
     `UPDATE oven_cycles
      SET state = 'completed', stopped_at = COALESCE(stopped_at, ?)
      WHERE company_id = ? AND oven_id = ? AND cycle_number <> ?
-       AND state IN ('ignition', 'recording')`,
-    [eventAt, companyId, ovenId, cycleNumber],
+       AND state IN ('ignition', 'recording')
+       AND fired_at <= ?`,
+    [eventAt, companyId, ovenId, cycleNumber, eventAt],
   );
   await connection.execute(
     `INSERT INTO oven_cycles (
@@ -453,8 +455,19 @@ async function applyCycleLifecycle(
        report_started_at, ready_temperature, ready_hold_seconds
      ) VALUES (?, ?, ?, 'recording', ?, ?, ?, 0)
      ON DUPLICATE KEY UPDATE
-       report_started_at = IF(state = 'ignition', COALESCE(report_started_at, fired_at), report_started_at),
-       state = IF(state = 'ignition', 'recording', state)`,
+       state = CASE
+         WHEN state = 'ignition' THEN 'recording'
+         WHEN state = 'completed'
+          AND (stopped_at IS NULL OR VALUES(fired_at) > stopped_at)
+           THEN 'recording'
+         ELSE state
+       END,
+       report_started_at = IF(
+         state = 'recording',
+         COALESCE(report_started_at, fired_at, VALUES(fired_at)),
+         report_started_at
+       ),
+       stopped_at = IF(state = 'recording', NULL, stopped_at)`,
     [
       companyId,
       ovenId,
@@ -886,12 +899,41 @@ try {
           : "local-buffer-ingested",
         true,
       );
-    } else if ((envelope.invalidSensors || []).length) {
+    } else if (
+      (envelope.invalidSensors || []).length ||
+      (envelope.suspectSensors || []).length ||
+      (envelope.missingSensors || []).length
+    ) {
+      const diagnostics = [
+        ...(envelope.invalidSensors || []).map(
+          (item) => `invalid:${item.sensorKey}=${item.value}`,
+        ),
+        ...(envelope.suspectSensors || []).map(
+          (item) =>
+            `spike:${item.sensorKey}=${item.value};previous=${item.previousValue}`,
+        ),
+        ...(envelope.missingSensors || [])
+          .filter(
+            (sensorKey) =>
+              !(envelope.invalidSensors || []).some(
+                (item) => item.sensorKey === sensorKey,
+              ) &&
+              !(envelope.suspectSensors || []).some(
+                (item) => item.sensorKey === sensorKey,
+              ),
+          )
+          .map((sensorKey) => `missing:${sensorKey}`),
+      ];
       await saveRawMessage(
         getPool(),
-        { ...envelope, normalizationStatus: "rejected" },
+        {
+          ...envelope,
+          normalizationStatus: (envelope.invalidSensors || []).length
+            ? "rejected"
+            : "pending",
+        },
         referenceDate,
-        `invalid: ${envelope.invalidSensors.map((item) => `${item.sensorKey}=${item.value}`).join(", ")}`,
+        diagnostics.join(", "),
         true,
       );
     } else if (storeRawMessages && envelope.type === "pending") {
