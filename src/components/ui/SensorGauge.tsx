@@ -32,9 +32,9 @@ export function SensorGauge({
   const definition = sensorByKey[sensor];
   const unit = definition.unit === "C" ? "°C" : "%";
   const precision = sensor === "chamberTemp" || sensor === "humidity" ? 2 : 0;
-  const formattedValue = formatNumber(value, precision);
   const readingAgeMs = Date.now() - Date.parse(updatedAt);
   const readingIsStale = !Number.isFinite(readingAgeMs) || readingAgeMs > 5 * 60_000;
+  const formattedValue = readingIsStale ? "—" : formatNumber(value, precision);
 
   const hasLimit = showLimit && !!limit && sensor !== "blowerTemp";
   const scale = getSensorScale(sensor);
@@ -49,7 +49,11 @@ export function SensorGauge({
   const outerStartPoint = pointOnGauge(OUTER_RADIUS, 0);
   const outerEndPoint = pointOnGauge(OUTER_RADIUS, 1);
 
-  const tone = hasLimit ? getGaugeTone(value, limit.lower, limit.upper) : "normal";
+  const tone = readingIsStale
+    ? "normal"
+    : hasLimit
+      ? getGaugeTone(value, limit.lower, limit.upper)
+      : "normal";
   const progressColor = hasLimit ? getToneColor(tone) : definition.color;
 
   const outerSegments = hasLimit
@@ -83,8 +87,20 @@ export function SensorGauge({
       <div className="gauge-card-head">
         <span>{definition.label}</span>
 
-        <strong style={{ color: hasLimit ? getToneColor(tone) : definition.color }}>
-          {hasLimit ? getToneLabel(value, limit.lower, limit.upper) : "ปกติ"}
+        <strong
+          style={{
+            color: readingIsStale
+              ? "var(--muted)"
+              : hasLimit
+                ? getToneColor(tone)
+                : definition.color,
+          }}
+        >
+          {readingIsStale
+            ? "ขาดข้อมูล"
+            : hasLimit
+              ? getToneLabel(value, limit.lower, limit.upper)
+              : "ปกติ"}
         </strong>
       </div>
 

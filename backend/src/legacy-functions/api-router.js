@@ -372,12 +372,15 @@ function databaseTimestamp(value) {
   return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
 }
 
-function emptyReadings(updatedAt) {
+function emptyReadings() {
+  // A missing sensor must never look like a fresh 0 reading. Individual
+  // sensors receive their real timestamp below when a valid value exists.
+  const unavailableAt = new Date(0).toISOString();
   return {
-    chamberTemp: { key: "chamberTemp", value: 0, unit: "C", updatedAt },
-    humidity: { key: "humidity", value: 0, unit: "%", updatedAt },
-    furnaceTemp: { key: "furnaceTemp", value: 0, unit: "C", updatedAt },
-    blowerTemp: { key: "blowerTemp", value: 0, unit: "C", updatedAt },
+    chamberTemp: { key: "chamberTemp", value: 0, unit: "C", updatedAt: unavailableAt },
+    humidity: { key: "humidity", value: 0, unit: "%", updatedAt: unavailableAt },
+    furnaceTemp: { key: "furnaceTemp", value: 0, unit: "C", updatedAt: unavailableAt },
+    blowerTemp: { key: "blowerTemp", value: 0, unit: "C", updatedAt: unavailableAt },
   };
 }
 
@@ -474,7 +477,7 @@ async function loadRuntimeStateFromDatabase() {
     };
 
     const lastUpdatedAt = databaseTimestamp(row.readingAt || row.lastSeenAt) || new Date(0).toISOString();
-    const readings = emptyReadings(lastUpdatedAt);
+    const readings = emptyReadings();
     if (row.readingAt) {
       const latestValues = {
         chamberTemp: [validSensorValue("chamberTemp", row.chamberTemp), row.chamberAt],
