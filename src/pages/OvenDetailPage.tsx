@@ -324,9 +324,9 @@ const ovenAlarms = useMemo(
 
     setHistoryPickMode("date");
     setSelectedDateKey(dateKey);
+    setSelectedCycle(records[0]?.cycle ?? null);
 
     if (records.length) {
-      setSelectedCycle(records[0].cycle);
       setCalendarCursor(createDateFromKey(dateKey));
     }
   }
