@@ -359,9 +359,13 @@ export function TimeSeriesChart({
               {
                 type: "inside",
                 throttle: 80,
+                startValue: timeRange?.start.getTime(),
+                endValue: timeRange?.end.getTime(),
               },
               {
                 type: "slider",
+                startValue: timeRange?.start.getTime(),
+                endValue: timeRange?.end.getTime(),
                 height: 24,
                 bottom: 22,
                 borderColor: palette.zoomBorder,
