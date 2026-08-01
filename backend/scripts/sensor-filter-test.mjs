@@ -15,9 +15,11 @@ const savedEnvironment = {
 process.env.STCR_DEPLOYMENT_MODE = "production";
 process.env.STCR_FACTORY_MQTT_TOPIC_ROUTES_JSON = JSON.stringify({
   sensor: { companyId: "ttn", messageType: "sensor" },
+  sensor_gr: { companyId: "gr", messageType: "sensor" },
 });
 process.env.STCR_FACTORY_MQTT_OVEN_MAPS_JSON = JSON.stringify({
   ttn: { 1: "oven-1" },
+  gr: { 14: "oven-14" },
 });
 process.env.STCR_FACTORY_MQTT_SENSOR_RANGES_JSON = JSON.stringify({
   chamberTemp: { min: 0, max: 150 },
@@ -60,6 +62,30 @@ function message(values, timestampMs) {
   };
 }
 
+function grMessage(values, timestampMs) {
+  return {
+    topic: "sensor_gr",
+    payload: JSON.stringify({
+      oven: 14,
+      cycle: 87,
+      startoven: values.startOven,
+      time_stamp: new Date(timestampMs).toISOString(),
+      roomtemp: values.room,
+      humanity: values.humidity,
+      oventemp: values.furnace ?? null,
+      blower: values.blower ?? null,
+      page: 1,
+    }),
+    factoryMqtt: {
+      receivedAt: new Date(timestampMs).toISOString(),
+      route: { companyId: "gr", messageType: "sensor" },
+      qos: 1,
+      retain: false,
+      duplicate: false,
+    },
+  };
+}
+
 try {
   const globalStore = new RuntimeStore();
   const runner = await createLegacyFunctionRunner({
@@ -81,6 +107,33 @@ try {
   );
   assert(normal?._mqttEnvelope?.type === "sensor", "Normal reading was not accepted");
   assert(normal._mqttEnvelope.readings.length === 4, "Normal reading is incomplete");
+
+  const grOptionalSensors = await runner(
+    grMessage(
+      { startOven: 0, room: 40.8, humidity: 53.2 },
+      base + 500,
+    ),
+  );
+  assert(
+    grOptionalSensors?._mqttEnvelope?.type === "sensor",
+    "GR chamber/humidity packet was incorrectly marked incomplete",
+  );
+  assert(
+    grOptionalSensors._mqttEnvelope.readings.length === 2 &&
+      grOptionalSensors._mqttEnvelope.missingRequiredSensors.length === 0,
+    "GR optional furnace/blower handling is incorrect",
+  );
+
+  const grInvalidState = await runner(
+    grMessage(
+      { startOven: 85, room: 0.21, humidity: 0.02, furnace: 1 },
+      base + 750,
+    ),
+  );
+  assert(
+    !grInvalidState?._mqttEnvelope && grInvalidState?.payload?.status === "rejected",
+    "Malformed GR startoven value was not rejected",
+  );
 
   const impossible = await runner(
     message(

@@ -34,18 +34,65 @@ async function checkDatabase() {
   }
 }
 
+function configuredSensorTopics() {
+  try {
+    const routes = JSON.parse(
+      String(process.env.STCR_FACTORY_MQTT_TOPIC_ROUTES_JSON || "{}"),
+    );
+    return Object.entries(routes)
+      .filter(([, route]) => route?.messageType === "sensor")
+      .map(([topic]) => topic);
+  } catch {
+    return [];
+  }
+}
+
+function readMqttDataHealth(mqttHealth) {
+  const staleAfterMs = envNumber(
+    "STCR_FACTORY_MQTT_DATA_STALE_SECONDS",
+    300,
+    30,
+    3600,
+  ) * 1000;
+  const now = Date.now();
+  const startedAt = Date.parse(mqttHealth.startedAt || "");
+  const withinStartupGrace = Number.isFinite(startedAt) && now - startedAt <= staleAfterMs;
+  const sensorTopics = configuredSensorTopics();
+  const topics = Object.fromEntries(sensorTopics.map((topic) => {
+    const lastReceivedAt = mqttHealth.topics?.[topic]?.lastReceivedAt || null;
+    const lastReceivedMs = Date.parse(lastReceivedAt || "");
+    const fresh = Number.isFinite(lastReceivedMs) && now - lastReceivedMs <= staleAfterMs;
+    return [topic, { state: fresh ? "up" : withinStartupGrace ? "starting" : "stale", lastReceivedAt }];
+  }));
+  const values = Object.values(topics);
+  const healthy = values.length === 0 || values.every((topic) => topic.state !== "stale");
+
+  return { healthy, topics };
+}
+
 export async function readReadiness() {
   const database = await checkDatabase();
   const mqttRequired = envBoolean("STCR_FACTORY_MQTT_ENABLED", false);
   const mqttHealth = globalStore.get("stcrMqttHealth") || {};
-  const mqtt = !mqttRequired || mqttHealth.connected === true;
+  const mqttConnected = !mqttRequired || mqttHealth.connected === true;
+  const mqttData = mqttRequired
+    ? readMqttDataHealth(mqttHealth)
+    : { healthy: true, topics: {} };
+  const mqtt = mqttConnected && mqttData.healthy;
 
   return {
     ok: database && mqtt,
     components: {
       database: database ? "up" : "down",
-      mqtt: mqttRequired ? (mqtt ? "up" : "down") : "disabled",
+      mqtt: mqttRequired
+        ? !mqttConnected
+          ? "down"
+          : mqttData.healthy
+            ? "up"
+            : "stale"
+        : "disabled",
     },
+    mqttTopics: mqttData.topics,
   };
 }
 

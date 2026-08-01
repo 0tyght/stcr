@@ -398,6 +398,12 @@ const definitions = [
   ["furnaceTemp", "oventemp", "C"],
   ["blowerTemp", "blower", "C"],
 ];
+// GR guarantees chamber temperature and humidity on a usable packet. Furnace
+// and blower are optional because availability differs by oven/page. TTN's
+// established packet contract requires all four sensors.
+const requiredSensorKeys = companyId === "gr"
+  ? ["chamberTemp", "humidity"]
+  : definitions.map(([sensorKey]) => sensorKey);
 
 let sensorRanges;
 let spikeLimits;
@@ -514,7 +520,10 @@ for (const reading of readings) {
 
 const batchId = `mqtt-${ovenNumber}-${cycleNumber}-${sourceTimestampMs}`;
 const deviceId = `factory-${companyId}-oven-${ovenNumber}`;
-const incomplete = missingSensors.length > 0;
+const missingRequiredSensors = missingSensors.filter((sensorKey) =>
+  requiredSensorKeys.includes(sensorKey),
+);
+const incomplete = missingRequiredSensors.length > 0;
 
 msg._mqttEnvelope = {
   ...commonEnvelope,
@@ -524,6 +533,7 @@ msg._mqttEnvelope = {
   qualityReasons,
   readings,
   missingSensors,
+  missingRequiredSensors,
   invalidSensors,
   suspectSensors,
   confirmedSensors,
@@ -552,6 +562,7 @@ return inspection(
     page: source.page,
     pageUsed: false,
     missingSensors,
+    missingRequiredSensors,
     invalidSensors,
     suspectSensors,
     confirmedSensors,

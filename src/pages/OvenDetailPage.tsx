@@ -134,6 +134,16 @@ export function OvenDetailPage() {
   const calendarCells = useMemo(() => getCalendarCells(calendarCursor), [calendarCursor]);
   const effectiveMode =
     realtimeAvailable ? mode : "historical";
+  const displayedOperationRange = useMemo(() => {
+    if (effectiveMode === "historical" && selectedRecord) {
+      return { start: selectedRecord.start, end: selectedRecord.end };
+    }
+
+    return {
+      start: oven?.startedAt ? new Date(oven.startedAt) : null,
+      end: oven?.stoppedAt ? new Date(oven.stoppedAt) : null,
+    };
+  }, [effectiveMode, oven?.startedAt, oven?.stoppedAt, selectedRecord]);
 
   useEffect(() => {
     if (!cycleRecords.length) {
@@ -431,7 +441,7 @@ const ovenAlarms = useMemo(
           <div className="panel-heading">
             <div>
               <h2>Operation</h2>
-              <p>เวลาเปิดเตา เวลาเลิกใช้งาน และจำนวนรอบสะสม</p>
+              <p>เวลาเปิดเตาและเวลาเลิกใช้งานตามรอบที่กำลังดู</p>
             </div>
           </div>
 
@@ -442,7 +452,11 @@ const ovenAlarms = useMemo(
                 เวลาเปิดเตา
               </h3>
 
-              <strong>{oven.startedAt ? formatDateTime(oven.startedAt) : "-"}</strong>
+              <strong>
+                {displayedOperationRange.start
+                  ? formatDateTime(displayedOperationRange.start)
+                  : "-"}
+              </strong>
             </div>
 
             <div className="time-block">
@@ -451,7 +465,11 @@ const ovenAlarms = useMemo(
                 เวลาเลิกใช้งาน
               </h3>
 
-              <strong>{oven.stoppedAt ? formatDateTime(oven.stoppedAt) : "-"}</strong>
+              <strong>
+                {displayedOperationRange.end
+                  ? formatDateTime(displayedOperationRange.end)
+                  : "-"}
+              </strong>
             </div>
           </div>
 
@@ -494,7 +512,7 @@ const ovenAlarms = useMemo(
           <div className={`status-panel status-banner status-${oven.status}`}>
             <p>สถานะเตา</p>
             <strong>{statusText(oven.status)}</strong>
-            <span>{oven.cycleCount} รอบทั้งหมด</span>
+            <span>รอบล่าสุด {oven.cycleCount}</span>
           </div>
 
           {effectiveMode === "realtime" && realtimeAvailable ? (

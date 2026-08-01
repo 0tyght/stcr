@@ -712,8 +712,16 @@ async function readReportHistory(companyId, ovenId, historyQuery) {
   }
 
   if (historyQuery.cycleNumber) {
-    conditions.push("a.cycle_number=?");
-    values.push(Number(historyQuery.cycleNumber));
+    // Numeric counters may also exist on unlinked diagnostic rows. Resolve
+    // the canonical cycle id so history never mixes those rows into a cycle.
+    conditions.push(
+      `a.cycle_id=(
+        SELECT c.id FROM oven_cycles c
+        WHERE c.company_id=? AND c.oven_id=? AND c.cycle_number=?
+        LIMIT 1
+      )`,
+    );
+    values.push(companyId, ovenId, Number(historyQuery.cycleNumber));
   }
 
   const pool = getDatabasePool();
@@ -1972,14 +1980,26 @@ if (method === "GET" && cyclesMatch) {
             ) AS reportStartedAt,
             CASE WHEN c.stopped_at IS NULL THEN NULL
                  ELSE DATE_FORMAT(c.stopped_at, '%Y-%m-%dT%H:%i:%s.%fZ') END AS stoppedAt,
-            DATE_FORMAT(COALESCE(MIN(a.minute_at), c.report_started_at, c.fired_at), '%Y-%m-%dT%H:%i:%s.%fZ') AS firstPointAt,
-            DATE_FORMAT(COALESCE(MAX(a.minute_at), c.report_started_at, c.fired_at), '%Y-%m-%dT%H:%i:%s.%fZ') AS lastPointAt,
-            COUNT(a.minute_at) AS pointCount
+            DATE_FORMAT(COALESCE(
+              MIN(CASE WHEN a.chamber_temp_count>0
+                        AND ${rangeCondition("a.chamber_temp_avg", "chamberTemp")}
+                       THEN a.minute_at END),
+              c.report_started_at, c.fired_at
+            ), '%Y-%m-%dT%H:%i:%s.%fZ') AS firstPointAt,
+            DATE_FORMAT(COALESCE(
+              MAX(CASE WHEN a.chamber_temp_count>0
+                        AND ${rangeCondition("a.chamber_temp_avg", "chamberTemp")}
+                       THEN a.minute_at END),
+              c.report_started_at, c.fired_at
+            ), '%Y-%m-%dT%H:%i:%s.%fZ') AS lastPointAt,
+            COUNT(CASE WHEN a.chamber_temp_count>0
+                        AND ${rangeCondition("a.chamber_temp_avg", "chamberTemp")}
+                       THEN 1 END) AS pointCount
      FROM oven_cycles c
      LEFT JOIN sensor_minute_aggregates a
        ON a.company_id=c.company_id
       AND a.oven_id=c.oven_id
-      AND a.cycle_number=c.cycle_number
+      AND a.cycle_id=c.id
       AND a.included_in_report=TRUE
      WHERE c.company_id=?
        AND c.oven_id=?
@@ -1987,7 +2007,7 @@ if (method === "GET" && cyclesMatch) {
        AND c.state<>'cancelled'
      GROUP BY c.cycle_number, c.id, c.state, c.fired_at,
               c.report_started_at, c.stopped_at
-     HAVING c.state IN ('ignition','recording') OR COUNT(a.minute_at) >= 2
+     HAVING c.state IN ('ignition','recording') OR pointCount >= 2
      ORDER BY (c.state IN ('ignition','recording')) DESC,
               COALESCE(c.report_started_at,c.fired_at) DESC,
               c.id DESC

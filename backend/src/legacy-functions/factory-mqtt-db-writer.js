@@ -782,7 +782,10 @@ async function persistMinuteBucket(bucket) {
     syncCycleMemory(bucket, cycle);
 
     const { rootState, companyState, oven } = findMemoryOven(bucket);
-    if (rootState && companyState && oven && chamber.count && humidity.count && furnace.count) {
+    const hasRequiredMetrics = bucket.companyId === "gr"
+      ? chamber.count > 0 && humidity.count > 0
+      : chamber.count > 0 && humidity.count > 0 && furnace.count > 0 && blower.count > 0;
+    if (rootState && companyState && oven && hasRequiredMetrics) {
       const point = {
         timestamp: minuteAt.toISOString(),
         chamberTemp: chamber.avg,

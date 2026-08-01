@@ -99,15 +99,16 @@ function inspectPayload(topic, payload, route) {
       const oven = Number(parsed.oven);
       latestOven = Number.isSafeInteger(oven) ? oven : null;
       if (route?.messageType === "sensor") {
-        const fields = [
+        const commonFields = [
           "startoven",
           "oven",
           "cycle",
           "roomtemp",
           "humanity",
-          "oventemp",
-          "blower",
         ];
+        const fields = route.companyId === "gr"
+          ? commonFields
+          : [...commonFields, "oventemp", "blower"];
         missingOrInvalidFields = fields.filter((field) => {
           const value = parsed[field];
           return value == null || value === "" || !Number.isFinite(Number(value));
