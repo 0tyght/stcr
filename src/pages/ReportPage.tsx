@@ -1181,7 +1181,6 @@ export function ReportPage() {
               cycle={selectedCycle}
               cycleRange={cycleRange}
               cycleMeta={cycleMeta}
-              points={points}
               slots={reportSlots}
               company={company}
               form={reportForm}
@@ -1569,7 +1568,6 @@ function FwsSvgReport({
   cycle,
   cycleRange,
   cycleMeta,
-  points,
   slots,
   company,
   form,
@@ -1579,7 +1577,6 @@ function FwsSvgReport({
   cycle: number;
   cycleRange: { start: Date; end: Date };
   cycleMeta: ReportCycleMeta | null;
-  points: TimeSeriesPoint[];
   slots: ReportSlot[];
   company: CompanyConfig;
   form: ReportFormState;
@@ -1644,7 +1641,6 @@ function FwsSvgReport({
           y={graphY}
           width={mainW}
           height={graphH}
-          points={points}
           slots={slots}
           upper={upper}
           lower={lower}
@@ -2020,7 +2016,6 @@ function FwsSvgTemperatureGrid({
   y,
   width,
   height,
-  points,
   slots,
   upper,
   lower,
@@ -2030,7 +2025,6 @@ function FwsSvgTemperatureGrid({
   y: number;
   width: number;
   height: number;
-  points: TimeSeriesPoint[];
   slots: ReportSlot[];
   upper: number;
   lower: number;
@@ -2084,60 +2078,19 @@ function FwsSvgTemperatureGrid({
       })),
   );
 
-  const gridStartTime = slots[0]?.date.getTime() ?? 0;
-  const gridDurationMs = reportSlotCount * template.intervalHours * 60 * 60 * 1000;
-  const gridEndTime = gridStartTime + gridDurationMs;
-  const timeToX = (time: number) => left + ((time - gridStartTime) / gridDurationMs) * chartW;
-
-  const rawTemperaturePath = showFirewoodRow
-    ? buildLinePath(
-        downsampleReportPath(
-          points
-            .map((point) => ({
-              time: new Date(point.timestamp).getTime(),
-              value: point.chamberTemp,
-            }))
-            .filter((point) =>
-              Number.isFinite(point.time) &&
-              Number.isFinite(point.value) &&
-              point.time >= gridStartTime &&
-              point.time <= gridEndTime,
-            )
-            .map((point) => ({ x: timeToX(point.time), y: tempToY(point.value) }))
-            .sort((a, b) => a.x - b.x),
-        ),
-      )
-    : "";
-
-  const temperaturePath = showFirewoodRow ? rawTemperaturePath : sampledTemperaturePath;
+  // Both report templates plot the same scheduled samples used by their labels.
+  // This keeps every dot, value and line segment on the exact same report column.
+  const temperaturePath = sampledTemperaturePath;
 
   const humidityPath = showHumidity
-    ? showFirewoodRow
-      ? buildLinePath(
-          downsampleReportPath(
-            points
-              .map((point) => ({
-                time: new Date(point.timestamp).getTime(),
-                value: point.humidity,
-              }))
-              .filter((point) =>
-                Number.isFinite(point.time) &&
-                Number.isFinite(point.value) &&
-                point.time >= gridStartTime &&
-                point.time <= gridEndTime,
-              )
-              .map((point) => ({ x: timeToX(point.time), y: humidityToY(point.value) }))
-              .sort((a, b) => a.x - b.x),
-          ),
-        )
-      : buildLinePath(
-          slots
-            .filter((slot) => slot.humidity !== null)
-            .map((slot) => ({
-              x: slotToX(slot.index),
-              y: humidityToY(slot.humidity ?? graphMin),
-            })),
-        )
+    ? buildLinePath(
+        slots
+          .filter((slot) => slot.humidity !== null)
+          .map((slot) => ({
+            x: slotToX(slot.index),
+            y: humidityToY(slot.humidity ?? graphMin),
+          })),
+      )
     : "";
 
   const temperatureLabels = slots.filter((slot) => slot.temperature !== null);
@@ -2170,7 +2123,7 @@ function FwsSvgTemperatureGrid({
     return {
       x: slotToX(slot.index),
       pointY,
-      labelY: pointY + (placeAbove ? -3.2 : 3.2),
+      labelY: pointY + (placeAbove ? -5 : 5),
       textAnchor: placeAbove ? "start" : "end",
     } as const;
   }
@@ -2483,7 +2436,7 @@ function FwsSvgTemperatureGrid({
             key={`temperature-${slot.index}`}
             cx={slotToX(slot.index)}
             cy={tempToY(slot.temperature ?? graphMin)}
-            r={showFirewoodRow ? 1.1 : 1.25}
+            r={showFirewoodRow ? 1.55 : 1.65}
             fill="#d62027"
           />
         ))}
@@ -2496,7 +2449,7 @@ function FwsSvgTemperatureGrid({
                 key={`humidity-${slot.index}`}
                 cx={slotToX(slot.index)}
                 cy={humidityToY(slot.humidity ?? graphMin)}
-                r="1.25"
+                r="1.55"
                 fill="#f59e0b"
               />
             ))
@@ -2523,12 +2476,13 @@ function FwsSvgTemperatureGrid({
             y={labelY}
             transform={`rotate(-90 ${x} ${labelY})`}
             textAnchor={textAnchor}
+            dominantBaseline="central"
             fontFamily="Sarabun"
-            fontSize={showFirewoodRow ? 5.3 : 5.8}
+            fontSize={showFirewoodRow ? 7.4 : 7}
             fontWeight="bold"
             fill="#a31218"
             stroke="#ffffff"
-            strokeWidth={showFirewoodRow ? 1.45 : 1.8}
+            strokeWidth={showFirewoodRow ? 2 : 1.9}
             strokeLinejoin="round"
             paintOrder="stroke"
           >
@@ -2553,8 +2507,9 @@ function FwsSvgTemperatureGrid({
             y={labelY}
             transform={`rotate(-90 ${x} ${labelY})`}
             textAnchor={textAnchor}
+            dominantBaseline="central"
             fontFamily="Sarabun"
-            fontSize="5.8"
+            fontSize={showFirewoodRow ? 7.4 : 7}
             fontWeight="bold"
             fill="#b45309"
             stroke="#ffffff"
@@ -2990,23 +2945,6 @@ function buildLinePath(points: Array<{ x: number; y: number }>): string {
   return points
     .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
     .join(" ");
-}
-
-function downsampleReportPath(
-  points: Array<{ x: number; y: number }>,
-  maxPoints = 720,
-): Array<{ x: number; y: number }> {
-  if (points.length <= maxPoints) return points;
-
-  const sampled: Array<{ x: number; y: number }> = [points[0]];
-  const step = (points.length - 1) / (maxPoints - 1);
-
-  for (let index = 1; index < maxPoints - 1; index += 1) {
-    sampled.push(points[Math.round(index * step)]);
-  }
-
-  sampled.push(points[points.length - 1]);
-  return sampled;
 }
 
 function clampCycleNumber(cycle: number, oven: Oven): number {

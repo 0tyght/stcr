@@ -74,7 +74,30 @@ const defaultSpikeLimits = {
   furnaceTemp: 200,
   blowerTemp: 120,
 };
+const defaultRequiredSensors = {
+  ttn: ["chamberTemp", "humidity", "furnaceTemp", "blowerTemp"],
+  gr: ["chamberTemp", "humidity"],
+};
 const plausibilityStateKey = "stcrSensorPlausibilityStateV1";
+
+function readRequiredSensors() {
+  const configured = String(
+    env.get("STCR_FACTORY_MQTT_REQUIRED_SENSORS_JSON") || "",
+  ).trim();
+  if (!configured) return defaultRequiredSensors[companyId];
+
+  const parsed = JSON.parse(configured);
+  const candidate = parsed?.[companyId];
+  const knownSensors = new Set(Object.keys(defaultSensorRanges));
+  if (
+    !Array.isArray(candidate) ||
+    candidate.length < 1 ||
+    candidate.some((sensorKey) => !knownSensors.has(sensorKey))
+  ) {
+    throw new Error(`Invalid required sensor profile for ${companyId}`);
+  }
+  return [...new Set(candidate)];
+}
 
 function readSensorRanges() {
   const configured = String(
@@ -398,18 +421,13 @@ const definitions = [
   ["furnaceTemp", "oventemp", "C"],
   ["blowerTemp", "blower", "C"],
 ];
-// GR guarantees chamber temperature and humidity on a usable packet. Furnace
-// and blower are optional because availability differs by oven/page. TTN's
-// established packet contract requires all four sensors.
-const requiredSensorKeys = companyId === "gr"
-  ? ["chamberTemp", "humidity"]
-  : definitions.map(([sensorKey]) => sensorKey);
-
 let sensorRanges;
 let spikeLimits;
+let requiredSensorKeys;
 try {
   sensorRanges = readSensorRanges();
   spikeLimits = readSpikeLimits();
+  requiredSensorKeys = readRequiredSensors();
 } catch (error) {
   return reject(`MQTT sensor filter configuration is invalid: ${error.message}`, {
     ovenNumber,
@@ -532,6 +550,7 @@ msg._mqttEnvelope = {
   quality,
   qualityReasons,
   readings,
+  requiredSensorKeys,
   missingSensors,
   missingRequiredSensors,
   invalidSensors,

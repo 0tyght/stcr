@@ -187,6 +187,7 @@ function addToMinuteBucket(value, receivedAtDate) {
     firstReceivedAt: receivedAtDate.toISOString(),
     lastReceivedAt: receivedAtDate.toISOString(),
     startOven: value.startOven,
+    requiredSensorKeys: value.requiredSensorKeys || SENSOR_KEYS,
     quality: value.quality || "good",
     metrics: Object.fromEntries(
       SENSOR_KEYS.map((sensorKey) => [sensorKey, createMetric()]),
@@ -195,6 +196,7 @@ function addToMinuteBucket(value, receivedAtDate) {
 
   bucket.cycleNumber = value.cycleNumber;
   bucket.startOven = value.startOven;
+  bucket.requiredSensorKeys = value.requiredSensorKeys || bucket.requiredSensorKeys || SENSOR_KEYS;
   bucket.lastSourceAt = sourceDate.toISOString();
   bucket.lastReceivedAt = receivedAtDate.toISOString();
   if (value.quality === "suspect") {
@@ -216,6 +218,7 @@ function mergeBuckets(target, source) {
   if (!target) return source;
   target.cycleNumber = source.cycleNumber;
   target.startOven = source.startOven;
+  target.requiredSensorKeys = source.requiredSensorKeys || target.requiredSensorKeys || SENSOR_KEYS;
   target.firstSourceAt =
     target.firstSourceAt < source.firstSourceAt
       ? target.firstSourceAt
@@ -782,9 +785,18 @@ async function persistMinuteBucket(bucket) {
     syncCycleMemory(bucket, cycle);
 
     const { rootState, companyState, oven } = findMemoryOven(bucket);
-    const hasRequiredMetrics = bucket.companyId === "gr"
-      ? chamber.count > 0 && humidity.count > 0
-      : chamber.count > 0 && humidity.count > 0 && furnace.count > 0 && blower.count > 0;
+    const metricCounts = {
+      chamberTemp: chamber.count,
+      humidity: humidity.count,
+      furnaceTemp: furnace.count,
+      blowerTemp: blower.count,
+    };
+    const requiredSensorKeys = Array.isArray(bucket.requiredSensorKeys)
+      ? bucket.requiredSensorKeys
+      : SENSOR_KEYS;
+    const hasRequiredMetrics = requiredSensorKeys.every(
+      (sensorKey) => Number(metricCounts[sensorKey] || 0) > 0,
+    );
     if (rootState && companyState && oven && hasRequiredMetrics) {
       const point = {
         timestamp: minuteAt.toISOString(),

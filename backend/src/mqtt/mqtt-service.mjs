@@ -84,6 +84,36 @@ function incrementHealthCounter(name) {
   setMqttHealth({ [name]: Number(health[name] || 0) + 1 });
 }
 
+const sensorSourceFields = {
+  chamberTemp: "roomtemp",
+  humidity: "humanity",
+  furnaceTemp: "oventemp",
+  blowerTemp: "blower",
+};
+
+function requiredSensorFields(companyId) {
+  const defaults = {
+    ttn: Object.keys(sensorSourceFields),
+    gr: ["chamberTemp", "humidity"],
+  };
+  const configured = String(
+    process.env.STCR_FACTORY_MQTT_REQUIRED_SENSORS_JSON || "",
+  ).trim();
+  if (!configured) {
+    return (defaults[companyId] || []).map((key) => sensorSourceFields[key]);
+  }
+  try {
+    const parsed = JSON.parse(configured);
+    const profile = parsed?.[companyId];
+    if (!Array.isArray(profile)) {
+      return (defaults[companyId] || []).map((key) => sensorSourceFields[key]);
+    }
+    return profile.map((key) => sensorSourceFields[key]).filter(Boolean);
+  } catch {
+    return (defaults[companyId] || []).map((key) => sensorSourceFields[key]);
+  }
+}
+
 function inspectPayload(topic, payload, route) {
   const health = globalStore.get("stcrMqttHealth") || { topics: {} };
   const previous = health.topics?.[topic] || { count: 0 };
@@ -99,16 +129,12 @@ function inspectPayload(topic, payload, route) {
       const oven = Number(parsed.oven);
       latestOven = Number.isSafeInteger(oven) ? oven : null;
       if (route?.messageType === "sensor") {
-        const commonFields = [
+        const fields = [
           "startoven",
           "oven",
           "cycle",
-          "roomtemp",
-          "humanity",
+          ...requiredSensorFields(route.companyId),
         ];
-        const fields = route.companyId === "gr"
-          ? commonFields
-          : [...commonFields, "oventemp", "blower"];
         missingOrInvalidFields = fields.filter((field) => {
           const value = parsed[field];
           return value == null || value === "" || !Number.isFinite(Number(value));
