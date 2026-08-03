@@ -89,11 +89,11 @@ function updateRealtimeMemory(value, receivedAtDate) {
   const timestamp = receivedAtDate.toISOString();
 
   if (value.type === "test") {
-    oven.status = value.ovenState === 1 ? "open" : "closed";
+    // The status topic is a connectivity heartbeat at the factory. The
+    // per-oven startoven field on the sensor topic owns the production state.
+    oven.lastUpdatedAt = timestamp;
   } else {
-    if (oven.status === "offline") {
-      oven.status = fallbackStatus(value.startOven);
-    }
+    oven.status = fallbackStatus(value.startOven);
 
     for (const reading of value.readings || []) {
       oven.readings ||= {};
@@ -360,16 +360,11 @@ function isHeartbeatDue(state, receivedAtDate) {
 }
 
 async function persistStatus(value, receivedAtDate) {
-  const status = value.ovenState === 1 ? "open" : "closed";
   const states = getPersistStates();
   const key = persistStateKey(value);
   const state = states[key];
 
-  if (
-    state?.status === status &&
-    state?.cycleNumber === value.cycleNumber &&
-    !isHeartbeatDue(state, receivedAtDate)
-  ) {
+  if (!isHeartbeatDue(state, receivedAtDate)) {
     return;
   }
 
@@ -378,7 +373,7 @@ async function persistStatus(value, receivedAtDate) {
   try {
     await connection.beginTransaction();
     const [ovenRows] = await connection.execute(
-      `SELECT chamber_lower AS chamberLower
+      `SELECT id
        FROM ovens
        WHERE company_id = ? AND id = ? AND enabled = TRUE
        LIMIT 1 FOR UPDATE`,
@@ -391,18 +386,10 @@ async function persistStatus(value, receivedAtDate) {
     }
 
     await connection.execute(
-      `UPDATE ovens SET status = ?, last_seen_at = ?
+      `UPDATE ovens SET last_seen_at = ?
        WHERE company_id = ? AND id = ?`,
-      [status, receivedAtDate, value.companyId, value.ovenId],
+      [receivedAtDate, value.companyId, value.ovenId],
     );
-    await applyCycleLifecycle(connection, {
-      companyId: value.companyId,
-      ovenId: value.ovenId,
-      cycleNumber: value.cycleNumber,
-      isOpen: value.ovenState === 1,
-      eventAt: validDate(value.sourceTimestamp, receivedAtDate),
-      readyTemperature: Number(ovenRows[0].chamberLower),
-    });
     await connection.commit();
   } catch (error) {
     await connection.rollback();
@@ -412,8 +399,7 @@ async function persistStatus(value, receivedAtDate) {
   }
 
   states[key] = {
-    status,
-    cycleNumber: value.cycleNumber,
+    ...(state || {}),
     lastSeenAt: receivedAtDate.toISOString(),
   };
   global.set(PERSIST_STATE_KEY, states);
@@ -430,7 +416,14 @@ async function persistStatus(value, receivedAtDate) {
 
 async function applyCycleLifecycle(
   connection,
-  { companyId, ovenId, cycleNumber, isOpen, eventAt, readyTemperature },
+  {
+    companyId,
+    ovenId,
+    sourceCycleNumber,
+    isOpen,
+    eventAt,
+    readyTemperature,
+  },
 ) {
   if (!isOpen) {
     await connection.execute(
@@ -441,90 +434,162 @@ async function applyCycleLifecycle(
          AND fired_at <= ?`,
       [eventAt, companyId, ovenId, eventAt],
     );
-    return;
+    return null;
   }
 
-  if (!Number.isSafeInteger(cycleNumber) || cycleNumber < 1) return;
+  if (
+    !Number.isSafeInteger(sourceCycleNumber) ||
+    sourceCycleNumber < 1
+  ) {
+    return null;
+  }
 
+  const [activeRows] = await connection.execute(
+    `SELECT id,
+            cycle_number AS cycleNumber,
+            source_cycle_number AS sourceCycleNumber,
+            state,
+            fired_at AS firedAt,
+            report_started_at AS reportStartedAt,
+            stopped_at AS stoppedAt
+     FROM oven_cycles
+     WHERE company_id = ? AND oven_id = ?
+       AND state IN ('ignition', 'recording')
+     ORDER BY fired_at DESC, id DESC
+     LIMIT 1
+     FOR UPDATE`,
+    [companyId, ovenId],
+  );
+
+  const active = activeRows[0] || null;
+  if (
+    active &&
+    Number(active.sourceCycleNumber ?? active.cycleNumber) ===
+      sourceCycleNumber
+  ) {
+    return active;
+  }
+
+  // A changed PLC counter without an observed close is also a cycle boundary.
+  // Close every stale active row before creating the next production round.
   await connection.execute(
     `UPDATE oven_cycles
      SET state = 'completed', stopped_at = COALESCE(stopped_at, ?)
-     WHERE company_id = ? AND oven_id = ? AND cycle_number <> ?
+     WHERE company_id = ? AND oven_id = ?
        AND state IN ('ignition', 'recording')
        AND fired_at <= ?`,
-    [eventAt, companyId, ovenId, cycleNumber, eventAt],
+    [eventAt, companyId, ovenId, eventAt],
   );
+
+  const [numberRows] = await connection.execute(
+    `SELECT COALESCE(MAX(cycle_number), 0) AS maximumCycleNumber
+     FROM oven_cycles
+     WHERE company_id = ? AND oven_id = ?`,
+    [companyId, ovenId],
+  );
+  const maximumCycleNumber = Number(
+    numberRows[0]?.maximumCycleNumber || 0,
+  );
+  const cycleNumber = Math.max(
+    sourceCycleNumber,
+    maximumCycleNumber + 1,
+  );
+
   await connection.execute(
     `INSERT INTO oven_cycles (
-       company_id, oven_id, cycle_number, state, fired_at,
+       company_id, oven_id, cycle_number, source_cycle_number, state, fired_at,
        report_started_at, ready_temperature, ready_hold_seconds
-     ) VALUES (?, ?, ?, 'recording', ?, ?, ?, 0)
-     ON DUPLICATE KEY UPDATE
-       state = CASE
-         WHEN state = 'ignition' THEN 'recording'
-         WHEN state = 'completed'
-          AND (stopped_at IS NULL OR VALUES(fired_at) > stopped_at)
-           THEN 'recording'
-         ELSE state
-       END,
-       report_started_at = IF(
-         state = 'recording',
-         COALESCE(report_started_at, fired_at, VALUES(fired_at)),
-         report_started_at
-       ),
-       stopped_at = IF(state = 'recording', NULL, stopped_at)`,
+     ) VALUES (?, ?, ?, ?, 'recording', ?, ?, ?, 0)`,
     [
       companyId,
       ovenId,
       cycleNumber,
+      sourceCycleNumber,
       eventAt,
       eventAt,
       readyTemperature,
     ],
   );
+
+  const [createdRows] = await connection.execute(
+    `SELECT id,
+            cycle_number AS cycleNumber,
+            source_cycle_number AS sourceCycleNumber,
+            state,
+            fired_at AS firedAt,
+            report_started_at AS reportStartedAt,
+            stopped_at AS stoppedAt
+     FROM oven_cycles
+     WHERE company_id = ? AND oven_id = ? AND cycle_number = ?
+     LIMIT 1
+     FOR UPDATE`,
+    [companyId, ovenId, cycleNumber],
+  );
+  return createdRows[0] || null;
 }
 
 async function persistHeartbeat(value, receivedAtDate) {
   const states = getPersistStates();
   const key = persistStateKey(value);
   const state = states[key];
+  const status = fallbackStatus(value.startOven);
 
-  if (!isHeartbeatDue(state, receivedAtDate)) {
+  if (
+    state?.status === status &&
+    state?.sourceCycleNumber === value.cycleNumber &&
+    !isHeartbeatDue(state, receivedAtDate)
+  ) {
     return;
   }
 
-  const currentMemoryStatus =
-    findMemoryOven(value).oven?.status || fallbackStatus(value.startOven);
   const pool = getPool();
-  const [result] = await pool.execute(
-    `UPDATE ovens
-     SET
-       status = CASE
-         WHEN status = 'offline' THEN ?
-         ELSE status
-       END,
-       last_seen_at = ?
-     WHERE company_id = ?
-       AND id = ?
-       AND enabled = TRUE`,
-    [
-      fallbackStatus(value.startOven),
-      receivedAtDate,
-      value.companyId,
-      value.ovenId,
-    ],
-  );
+  const connection = await pool.getConnection();
+  let cycle = null;
+  try {
+    await connection.beginTransaction();
+    const [ovenRows] = await connection.execute(
+      `SELECT chamber_lower AS chamberLower
+       FROM ovens
+       WHERE company_id = ? AND id = ? AND enabled = TRUE
+       LIMIT 1 FOR UPDATE`,
+      [value.companyId, value.ovenId],
+    );
+    if (!ovenRows[0]) {
+      await connection.rollback();
+      node.warn(
+        `MQTT heartbeat: oven ${value.companyId}/${value.ovenId} not found`,
+      );
+      return;
+    }
 
-  if (!result.affectedRows) {
-    node.warn(`MQTT heartbeat: oven ${value.companyId}/${value.ovenId} not found`);
-    return;
+    await connection.execute(
+      `UPDATE ovens SET status = ?, last_seen_at = ?
+       WHERE company_id = ? AND id = ?`,
+      [status, receivedAtDate, value.companyId, value.ovenId],
+    );
+    cycle = await applyCycleLifecycle(connection, {
+      companyId: value.companyId,
+      ovenId: value.ovenId,
+      sourceCycleNumber: value.cycleNumber,
+      isOpen: value.startOven === 1,
+      eventAt: validDate(value.sourceTimestamp, receivedAtDate),
+      readyTemperature: Number(ovenRows[0].chamberLower),
+    });
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
   }
 
   states[key] = {
-    status: currentMemoryStatus,
+    status,
+    sourceCycleNumber: value.cycleNumber,
     lastSeenAt: receivedAtDate.toISOString(),
   };
   global.set(PERSIST_STATE_KEY, states);
+  if (cycle) syncCycleMemory(value, cycle);
 }
 
 async function resolveCycleLifecycle(
@@ -537,10 +602,10 @@ async function resolveCycleLifecycle(
     return null;
   }
 
-  await applyCycleLifecycle(connection, {
+  const cycle = await applyCycleLifecycle(connection, {
     companyId: bucket.companyId,
     ovenId: bucket.ovenId,
-    cycleNumber: bucket.cycleNumber,
+    sourceCycleNumber: bucket.cycleNumber,
     isOpen: bucket.startOven === 1,
     eventAt: firstSourceAt,
     readyTemperature: Number(ovenRow.chamberLower),
@@ -552,23 +617,10 @@ async function resolveCycleLifecycle(
     return null;
   }
 
-  const [cycleRows] = await connection.execute(
-    `SELECT id, state, fired_at AS firedAt,
-            report_started_at AS reportStartedAt,
-            stopped_at AS stoppedAt
-     FROM oven_cycles
-     WHERE company_id = ?
-       AND oven_id = ?
-       AND cycle_number = ?
-     LIMIT 1
-     FOR UPDATE`,
-    [bucket.companyId, bucket.ovenId, bucket.cycleNumber],
-  );
-
-  const cycle = cycleRows[0] || null;
   if (!cycle || cycle.state !== "recording" || !cycle.reportStartedAt) {
     return cycle;
   }
+  bucket.cycleNumber = Number(cycle.cycleNumber);
   const reportMinuteAt = minuteStart(validDate(cycle.reportStartedAt));
 
   // Backfill points already received for this same cycle after the oven opened.
@@ -598,7 +650,7 @@ function syncCycleMemory(bucket, cycle) {
   const { rootState, oven } = findMemoryOven(bucket);
   if (!rootState || !oven) return;
 
-  oven.cycleCount = bucket.cycleNumber;
+  oven.cycleCount = Number(cycle.cycleNumber);
   oven.firedAt = validDate(cycle.firedAt).toISOString();
 
   if (cycle.reportStartedAt) {
@@ -641,7 +693,8 @@ async function persistMinuteBucket(bucket) {
        WHERE company_id = ?
          AND id = ?
          AND enabled = TRUE
-       LIMIT 1`,
+       LIMIT 1
+       FOR UPDATE`,
       [bucket.companyId, bucket.ovenId],
     );
 

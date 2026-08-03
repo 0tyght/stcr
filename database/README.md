@@ -28,9 +28,12 @@ canonical table. Impossible values never enter realtime, history or reports.
 Rejected, duplicate or incomplete MQTT payloads may be retained in
 `factory_mqtt_messages` for diagnosis.
 
-An open oven status creates the matching `oven_cycles` row immediately. A
-closed status completes that cycle. Reports and historical graphs query the
-canonical minute table by `company_id`, `oven_id` and `cycle_id`.
+An open sensor state creates an `oven_cycles` row immediately. A closed state
+completes that cycle. Every closed-to-open transition creates a new STCR cycle,
+even if the PLC repeats its cycle counter. The repeated PLC value is retained
+as `source_cycle_number`; `cycle_number` is the monotonic production round used
+by the website and reports. Reports and historical graphs query the canonical
+minute table by `company_id`, `oven_id` and `cycle_id`.
 
 All database timestamps are UTC. The company timezone is applied only at the
 display and export boundary.

@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS oven_cycles (
   company_id VARCHAR(32) NOT NULL,
   oven_id VARCHAR(64) NOT NULL,
   cycle_number INT NOT NULL,
+  source_cycle_number INT NULL,
   state ENUM('ignition', 'recording', 'completed', 'cancelled') NOT NULL,
   fired_at DATETIME(3) NOT NULL,
   report_started_at DATETIME(3) NULL,
@@ -125,6 +126,7 @@ CREATE TABLE IF NOT EXISTS oven_cycles (
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   PRIMARY KEY (id),
   UNIQUE KEY uq_cycles_company_oven_number (company_id, oven_id, cycle_number),
+  KEY ix_cycles_source_number (company_id, oven_id, source_cycle_number, fired_at),
   KEY ix_cycles_report_range (company_id, oven_id, report_started_at, stopped_at),
   CONSTRAINT fk_cycles_oven FOREIGN KEY (company_id, oven_id) REFERENCES ovens(company_id, id)
 ) ENGINE=InnoDB;
