@@ -29,11 +29,11 @@ Rejected, duplicate or incomplete MQTT payloads may be retained in
 `factory_mqtt_messages` for diagnosis.
 
 An open sensor state creates an `oven_cycles` row immediately. A closed state
-completes that cycle. Every closed-to-open transition creates a new STCR cycle,
-even if the PLC repeats its cycle counter. The repeated PLC value is retained
-as `source_cycle_number`; `cycle_number` is the monotonic production round used
-by the website and reports. Reports and historical graphs query the canonical
-minute table by `company_id`, `oven_id` and `cycle_id`.
+marks that cycle as stopped. `cycle_number` is always the official production
+round received from the factory; a temporary close/open signal does not make
+the website invent another number. `source_cycle_number` retains the PLC value
+for traceability. Reports and historical graphs query the canonical minute
+table by `company_id`, `oven_id` and `cycle_id`.
 
 All database timestamps are UTC. The company timezone is applied only at the
 display and export boundary.

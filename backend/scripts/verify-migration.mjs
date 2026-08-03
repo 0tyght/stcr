@@ -78,9 +78,10 @@ if (
 }
 if (
   !mqttWriter.includes("source_cycle_number AS sourceCycleNumber") ||
-  mqttWriter.includes("stopped_at = IF(state = 'recording', NULL, stopped_at)")
+  !mqttWriter.includes("sourceCycleNumber,\n      sourceCycleNumber") ||
+  mqttWriter.includes("maximumCycleNumber")
 ) {
-  throw new Error("MQTT cycle lifecycle can still reopen a completed cycle");
+  throw new Error("MQTT lifecycle must preserve the official PLC cycle number");
 }
 
 console.log("Express production structure verification passed");

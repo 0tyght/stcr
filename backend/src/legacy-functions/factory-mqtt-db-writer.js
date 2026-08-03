@@ -471,7 +471,7 @@ async function applyCycleLifecycle(
   }
 
   // A changed PLC counter without an observed close is also a cycle boundary.
-  // Close every stale active row before creating the next production round.
+  // Close every stale active row before selecting the next official PLC round.
   await connection.execute(
     `UPDATE oven_cycles
      SET state = 'completed', stopped_at = COALESCE(stopped_at, ?)
@@ -481,29 +481,24 @@ async function applyCycleLifecycle(
     [eventAt, companyId, ovenId, eventAt],
   );
 
-  const [numberRows] = await connection.execute(
-    `SELECT COALESCE(MAX(cycle_number), 0) AS maximumCycleNumber
-     FROM oven_cycles
-     WHERE company_id = ? AND oven_id = ?`,
-    [companyId, ovenId],
-  );
-  const maximumCycleNumber = Number(
-    numberRows[0]?.maximumCycleNumber || 0,
-  );
-  const cycleNumber = Math.max(
-    sourceCycleNumber,
-    maximumCycleNumber + 1,
-  );
-
   await connection.execute(
     `INSERT INTO oven_cycles (
        company_id, oven_id, cycle_number, source_cycle_number, state, fired_at,
        report_started_at, ready_temperature, ready_hold_seconds
-     ) VALUES (?, ?, ?, ?, 'recording', ?, ?, ?, 0)`,
+     ) VALUES (?, ?, ?, ?, 'recording', ?, ?, ?, 0)
+     ON DUPLICATE KEY UPDATE
+       source_cycle_number = VALUES(source_cycle_number),
+       state = 'recording',
+       fired_at = LEAST(fired_at, VALUES(fired_at)),
+       report_started_at = LEAST(
+         COALESCE(report_started_at, VALUES(report_started_at)),
+         VALUES(report_started_at)
+       ),
+       stopped_at = NULL`,
     [
       companyId,
       ovenId,
-      cycleNumber,
+      sourceCycleNumber,
       sourceCycleNumber,
       eventAt,
       eventAt,
@@ -523,7 +518,7 @@ async function applyCycleLifecycle(
      WHERE company_id = ? AND oven_id = ? AND cycle_number = ?
      LIMIT 1
      FOR UPDATE`,
-    [companyId, ovenId, cycleNumber],
+    [companyId, ovenId, sourceCycleNumber],
   );
   return createdRows[0] || null;
 }
@@ -632,7 +627,8 @@ async function resolveCycleLifecycle(
      WHERE company_id = ?
        AND oven_id = ?
        AND cycle_number = ?
-       AND minute_at >= ?`,
+       AND minute_at >= ?
+       AND cycle_phase IN ('ignition', 'recording')`,
     [
       cycle.id,
       bucket.companyId,
