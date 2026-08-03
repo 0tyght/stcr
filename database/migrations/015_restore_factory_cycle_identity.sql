@@ -12,6 +12,8 @@ CREATE TEMPORARY TABLE stcr_cycle_merge_map (
   official_cycle_number INT NOT NULL
 ) ENGINE=InnoDB;
 
+START TRANSACTION;
+
 INSERT INTO stcr_cycle_merge_map (
   synthetic_id,
   target_id,
@@ -124,6 +126,8 @@ SET official.source_cycle_number = official.cycle_number,
 UPDATE oven_cycles
 SET source_cycle_number = cycle_number
 WHERE source_cycle_number IS NULL;
+
+COMMIT;
 
 DROP TEMPORARY TABLE stcr_cycle_merge_summary;
 DROP TEMPORARY TABLE stcr_cycle_merge_members;
