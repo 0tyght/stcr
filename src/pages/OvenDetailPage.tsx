@@ -29,7 +29,11 @@ import { downloadCsv } from "../services/reportExport";
 import type { LimitMap, Oven, OvenCycleSummary, OvenStatus, SensorKey, TimeSeriesPoint } from "../types";
 import { formatDateTime } from "../utils/format";
 import { getReadingState } from "../utils/limits";
-import { getHistoricalCycleRange, REPORT_CYCLE_MS } from "../utils/reportCycle";
+import {
+  getHistoricalCycleRange,
+  REPORT_CYCLE_DAYS,
+  REPORT_CYCLE_MS,
+} from "../utils/reportCycle";
 import { allSensorKeys } from "../utils/sensors";
 
 type ChartMode = "realtime" | "historical";
@@ -76,6 +80,14 @@ export function OvenDetailPage() {
   const [chartViewResetKey, setChartViewResetKey] = useState(0);
 
   const realtimeAvailable = oven ? canUseRealtime(oven.status) : false;
+  const invalidOpenCycle = Boolean(
+    oven?.status === "open" && oven.cycleCount < 1,
+  );
+  const unusuallyLongCycle = Boolean(
+    oven?.status === "open" &&
+      oven.startedAt &&
+      Date.now() - Date.parse(oven.startedAt) > REPORT_CYCLE_MS,
+  );
 
   useEffect(() => {
     if (!oven?.id) return;
@@ -217,14 +229,18 @@ export function OvenDetailPage() {
     }
 
     let cancelled = false;
+    let requestInFlight = false;
 
     setPoints([]);
+    setHistoryLoading(true);
+    setHistoryError(null);
+    setLastHistorySuccessAt(null);
 
-    const loadHistory = async () => {
-      if (!cancelled) {
-        setHistoryLoading(true);
-        setHistoryError(null);
-      }
+    const loadHistory = async (showLoading: boolean) => {
+      if (cancelled || requestInFlight) return;
+
+      requestInFlight = true;
+      if (showLoading) setHistoryLoading(true);
 
       try {
         const nextPoints = await apiClient.getHistory({
@@ -242,11 +258,11 @@ export function OvenDetailPage() {
 
         if (!cancelled) {
           setPoints(nextPoints);
+          setHistoryError(null);
           setLastHistorySuccessAt(new Date().toISOString());
         }
       } catch (nextError) {
         if (!cancelled) {
-          setPoints([]);
           setHistoryError(
             nextError instanceof Error
               ? nextError.message
@@ -254,18 +270,19 @@ export function OvenDetailPage() {
           );
         }
       } finally {
-        if (!cancelled) {
+        requestInFlight = false;
+        if (!cancelled && showLoading) {
           setHistoryLoading(false);
         }
       }
     };
 
-    void loadHistory();
+    void loadHistory(true);
 
     const timer =
       effectiveMode === "realtime"
         ? window.setInterval(
-            () => void loadHistory(),
+            () => void loadHistory(false),
             60_000,
           )
         : null;
@@ -455,6 +472,18 @@ const ovenAlarms = useMemo(
         {!realtimeAvailable ? (
           <p className="mode-note mode-note-warning">
             เตานี้อยู่สถานะ {statusText(oven.status)} จึงดูได้เฉพาะข้อมูลย้อนหลังตามรอบอบ
+          </p>
+        ) : null}
+
+        {invalidOpenCycle ? (
+          <p className="mode-note mode-note-warning" role="alert">
+            ต้นทางแจ้งว่าเตาเปิด แต่เลขรอบเป็น 0 จึงยังสร้างรอบรายงานไม่ได้ กรุณาตรวจเลขรอบที่ PLC/Node-RED
+          </p>
+        ) : null}
+
+        {unusuallyLongCycle ? (
+          <p className="mode-note mode-note-warning" role="alert">
+            รอบนี้เปิดนานเกิน {REPORT_CYCLE_DAYS} วัน กรุณาตรวจว่าโรงงานลืมปิดเตาหรือไม่ ระบบยังไม่ตัดรอบเองเพื่อไม่แก้ข้อมูลจริงโดยคาดเดา
           </p>
         ) : null}
       </section>

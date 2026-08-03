@@ -314,7 +314,8 @@ async function validateSessionAccount(session) {
 }
 
 async function addAudit(state, session, action, target, detail) {
-  const createdAt = new Date().toISOString();
+  const createdAtDate = new Date();
+  const createdAt = createdAtDate.toISOString();
   const auditEvent = {
     id: `audit-${session.companyId}-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`,
     actor: session.username,
@@ -332,7 +333,7 @@ async function addAudit(state, session, action, target, detail) {
       `INSERT INTO audit_events (
          company_id, actor, action_name, target_type, target_id, detail, created_at
        ) VALUES (?, ?, ?, 'application', ?, ?, ?)`,
-      [session.companyId, session.username, action, target, JSON.stringify({ message: detail }), createdAt],
+      [session.companyId, session.username, action, target, JSON.stringify({ message: detail }), createdAtDate],
     );
   } catch (error) {
     node.warn(`Audit database persistence failed: ${error.message}`);
