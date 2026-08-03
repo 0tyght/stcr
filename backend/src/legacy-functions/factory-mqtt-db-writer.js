@@ -584,7 +584,11 @@ async function persistHeartbeat(value, receivedAtDate) {
     lastSeenAt: receivedAtDate.toISOString(),
   };
   global.set(PERSIST_STATE_KEY, states);
-  if (cycle) syncCycleMemory(value, cycle);
+  if (cycle) {
+    syncCycleMemory(value, cycle);
+  } else {
+    syncSourceCycleMemory(value);
+  }
 }
 
 async function resolveCycleLifecycle(
@@ -663,6 +667,17 @@ function syncCycleMemory(bucket, cycle) {
     delete oven.stoppedAt;
   }
 
+  global.set("stcrState", rootState);
+}
+
+function syncSourceCycleMemory(bucket) {
+  if (!Number.isSafeInteger(bucket.cycleNumber) || bucket.cycleNumber < 0) {
+    return;
+  }
+  const { rootState, oven } = findMemoryOven(bucket);
+  if (!rootState || !oven) return;
+
+  oven.cycleCount = bucket.cycleNumber;
   global.set("stcrState", rootState);
 }
 
