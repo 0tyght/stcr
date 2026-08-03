@@ -62,9 +62,6 @@ if (
 if (!schema.includes("CREATE TABLE IF NOT EXISTS sensor_minute_aggregates")) {
   throw new Error("Canonical minute-history table is missing");
 }
-if (!schema.includes("source_cycle_number INT NULL")) {
-  throw new Error("PLC cycle provenance column is missing");
-}
 
 const mqttWriter = await readFile(
   resolve(root, "backend/src/legacy-functions/factory-mqtt-db-writer.js"),
@@ -75,13 +72,6 @@ if (
   mqttWriter.includes("UPDATE sensor_readings")
 ) {
   throw new Error("MQTT runtime still writes duplicate sensor history");
-}
-if (
-  !mqttWriter.includes("source_cycle_number AS sourceCycleNumber") ||
-  !mqttWriter.includes("sourceCycleNumber,\n      sourceCycleNumber") ||
-  mqttWriter.includes("maximumCycleNumber")
-) {
-  throw new Error("MQTT lifecycle must preserve the official PLC cycle number");
 }
 
 console.log("Express production structure verification passed");

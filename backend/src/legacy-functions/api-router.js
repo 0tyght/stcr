@@ -442,7 +442,6 @@ async function loadRuntimeStateFromDatabase() {
      LEFT JOIN oven_cycles c ON c.id=(
        SELECT c2.id FROM oven_cycles c2
        WHERE c2.company_id=o.company_id AND c2.oven_id=o.id
-         AND c2.state<>'cancelled'
        ORDER BY (c2.state IN ('ignition','recording')) DESC,
                 COALESCE(c2.report_started_at,c2.fired_at,c2.created_at) DESC,
                 c2.id DESC LIMIT 1
