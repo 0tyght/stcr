@@ -6,7 +6,9 @@ export function summarizeHistory(
   limits: LimitMap,
 ): ReportSummary[] {
   return sensors.map((sensor) => {
-    const values = points.map((point) => point[sensor]);
+    const values = points
+      .map((point) => point[sensor])
+      .filter((value): value is number => value != null && Number.isFinite(value));
     if (!values.length) {
       return {
         sensor,

@@ -15,6 +15,9 @@ export type SensorReading = {
   value: number;
   unit: SensorUnit;
   updatedAt: string;
+  quality?: "good" | "invalid" | "suspect" | "missing";
+  invalidValue?: number;
+  errorReason?: string;
 };
 
 export type SensorSnapshot = Record<SensorKey, SensorReading>;
@@ -29,10 +32,10 @@ export type LimitMap = Record<SensorKey, LimitRule>;
 
 export type TimeSeriesPoint = {
   timestamp: string;
-  chamberTemp: number;
-  humidity: number;
-  furnaceTemp: number;
-  blowerTemp: number;
+  chamberTemp: number | null;
+  humidity: number | null;
+  furnaceTemp: number | null;
+  blowerTemp: number | null;
 };
 
 export type HistoryRangePreset = "today" | "24h" | "cycle" | "7d" | "30d" | "custom";

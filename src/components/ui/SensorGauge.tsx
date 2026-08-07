@@ -20,12 +20,14 @@ export function SensorGauge({
   sensor,
   value,
   updatedAt,
+  quality = "good",
   limit,
   showLimit = true,
 }: {
   sensor: SensorKey;
   value: number;
   updatedAt: string;
+  quality?: "good" | "invalid" | "suspect" | "missing";
   limit?: LimitRule;
   showLimit?: boolean;
 }) {
@@ -36,6 +38,12 @@ export function SensorGauge({
   const readingIsStale = !Number.isFinite(readingAgeMs) || readingAgeMs > 5 * 60_000;
   const formattedValue = readingIsStale ? "—" : formatNumber(value, precision);
 
+  const readingIsInvalid = quality === "invalid" || quality === "suspect";
+  const readingIsMissing = quality === "missing";
+  const readingIsUnavailable = readingIsStale || readingIsInvalid || readingIsMissing;
+  const displayValue = readingIsInvalid
+    ? "ERR"
+    : readingIsUnavailable ? "N/A" : formattedValue;
   const hasLimit = showLimit && !!limit && sensor !== "blowerTemp";
   const scale = getSensorScale(sensor);
   const ratio = clamp((value - scale.min) / Math.max(scale.max - scale.min, 1), 0, 1);
@@ -45,12 +53,14 @@ export function SensorGauge({
   const progressCapRatio =
     (INNER_STROKE_WIDTH / 2) / (Math.PI * INNER_RADIUS);
   const progressArcEndRatio =
-    ratio > 0 ? Math.max(0, ratio - progressCapRatio) : 0;
+    !readingIsUnavailable && ratio > 0 ? Math.max(0, ratio - progressCapRatio) : 0;
   const outerStartPoint = pointOnGauge(OUTER_RADIUS, 0);
   const outerEndPoint = pointOnGauge(OUTER_RADIUS, 1);
 
-  const tone = readingIsStale
-    ? "normal"
+  const tone = readingIsInvalid
+    ? "danger"
+    : readingIsUnavailable
+      ? "normal"
     : hasLimit
       ? getGaugeTone(value, limit.lower, limit.upper)
       : "normal";
@@ -89,14 +99,16 @@ export function SensorGauge({
 
         <strong
           style={{
-            color: readingIsStale
-              ? "var(--muted)"
+            color: readingIsInvalid
+              ? "#ef4444"
+              : readingIsUnavailable
+                ? "var(--muted)"
               : hasLimit
                 ? getToneColor(tone)
                 : definition.color,
           }}
         >
-          {readingIsStale
+          {readingIsInvalid ? "ERROR" : readingIsMissing ? "NO DATA" : readingIsStale
             ? "ขาดข้อมูล"
             : hasLimit
               ? getToneLabel(value, limit.lower, limit.upper)
@@ -118,7 +130,7 @@ export function SensorGauge({
           className="gauge-svg"
           viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
           role="img"
-          aria-label={`${definition.label} ${formattedValue}${unit}`}
+          aria-label={`${definition.label} ${displayValue}${unit}`}
           style={{
             width: 245,
             maxWidth: "100%",
@@ -185,7 +197,7 @@ export function SensorGauge({
             strokeWidth={INNER_STROKE_WIDTH}
             strokeLinecap="round"
           />
-          {ratio > 0 ? (
+          {!readingIsUnavailable && ratio > 0 ? (
             <path
               d={describeGaugeArc(
                 INNER_RADIUS,
@@ -210,7 +222,7 @@ export function SensorGauge({
               fontWeight: 850,
             }}
           >
-            {formattedValue}
+            {displayValue}
             <tspan
               dx="4"
               style={{

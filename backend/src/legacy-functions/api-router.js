@@ -22,10 +22,10 @@ const sessionAccountRecheckMs = 60 * 1000;
 const httpIngestEnabled =
   String(env.get("STCR_HTTP_INGEST_ENABLED") || "false").toLowerCase() === "true";
 const defaultSensorRanges = {
-  chamberTemp: { min: -40, max: 150 },
+  chamberTemp: { min: 0, max: 150 },
   humidity: { min: 0, max: 100 },
-  furnaceTemp: { min: -40, max: 1000 },
-  blowerTemp: { min: -40, max: 600 },
+  furnaceTemp: { min: 0, max: 1000 },
+  blowerTemp: { min: 0, max: 600 },
 };
 
 function readSensorRanges() {
@@ -378,10 +378,10 @@ function emptyReadings() {
   // sensors receive their real timestamp below when a valid value exists.
   const unavailableAt = new Date(0).toISOString();
   return {
-    chamberTemp: { key: "chamberTemp", value: 0, unit: "C", updatedAt: unavailableAt },
-    humidity: { key: "humidity", value: 0, unit: "%", updatedAt: unavailableAt },
-    furnaceTemp: { key: "furnaceTemp", value: 0, unit: "C", updatedAt: unavailableAt },
-    blowerTemp: { key: "blowerTemp", value: 0, unit: "C", updatedAt: unavailableAt },
+    chamberTemp: { key: "chamberTemp", value: 0, unit: "C", updatedAt: unavailableAt, quality: "missing" },
+    humidity: { key: "humidity", value: 0, unit: "%", updatedAt: unavailableAt, quality: "missing" },
+    furnaceTemp: { key: "furnaceTemp", value: 0, unit: "C", updatedAt: unavailableAt, quality: "missing" },
+    blowerTemp: { key: "blowerTemp", value: 0, unit: "C", updatedAt: unavailableAt, quality: "missing" },
   };
 }
 
@@ -490,6 +490,7 @@ async function loadRuntimeStateFromDatabase() {
         if (value != null) {
           readings[sensorKey].value = value;
           readings[sensorKey].updatedAt = databaseTimestamp(valueAt) || lastUpdatedAt;
+          readings[sensorKey].quality = "good";
         }
       }
     }
@@ -996,10 +997,10 @@ function normalizeTelemetryBatch(body) {
   if (!new Set(["gr", "ttn"]).has(companyId)) return null;
 
   const physicalRanges = {
-    chamberTemp: [-20, 150, "C"],
+    chamberTemp: [0, 150, "C"],
     humidity: [0, 100, "%"],
-    furnaceTemp: [-20, 1200, "C"],
-    blowerTemp: [-20, 500, "C"],
+    furnaceTemp: [0, 1000, "C"],
+    blowerTemp: [0, 600, "C"],
   };
   const normalized = [];
   const seen = new Set();
@@ -1567,10 +1568,10 @@ const settingsRoutePath = path.startsWith("/stcr/api")
       "blowerTemp",
     ];
     const physicalRanges = {
-      chamberTemp: [-20, 150],
+      chamberTemp: [0, 150],
       humidity: [0, 100],
-      furnaceTemp: [-20, 1200],
-      blowerTemp: [-20, 500],
+      furnaceTemp: [0, 1000],
+      blowerTemp: [0, 600],
     };
 
     const valid = globalLimitSensors.every((sensor) => {
@@ -2189,10 +2190,10 @@ if (method === "PUT" && limitsMatch) {
   const body = requestBody();
   if (!body) return errorResponse("Invalid JSON body");
   const physicalRanges = {
-    chamberTemp: [-20, 150],
+    chamberTemp: [0, 150],
     humidity: [0, 100],
-    furnaceTemp: [-20, 1200],
-    blowerTemp: [-20, 500],
+    furnaceTemp: [0, 1000],
+    blowerTemp: [0, 600],
   };
   const valid = sensorKeys.every((sensor) => {
     const lower = Number(body[sensor]?.lower);

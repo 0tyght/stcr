@@ -101,6 +101,46 @@ function updateRealtimeMemory(value, receivedAtDate) {
         ...(oven.readings[reading.sensorKey] || {}),
         value: reading.value,
         updatedAt: timestamp,
+        quality: "good",
+        invalidValue: undefined,
+        errorReason: undefined,
+      };
+    }
+
+    for (const invalid of value.invalidSensors || []) {
+      oven.readings ||= {};
+      oven.readings[invalid.sensorKey] = {
+        ...(oven.readings[invalid.sensorKey] || {}),
+        quality: "invalid",
+        invalidValue: invalid.value,
+        errorReason: invalid.reason || "outside-physical-range",
+        updatedAt: timestamp,
+      };
+    }
+
+    for (const suspect of value.suspectSensors || []) {
+      oven.readings ||= {};
+      oven.readings[suspect.sensorKey] = {
+        ...(oven.readings[suspect.sensorKey] || {}),
+        quality: "suspect",
+        invalidValue: suspect.value,
+        errorReason: suspect.reason || "unconfirmed-spike",
+        updatedAt: timestamp,
+      };
+    }
+
+    for (const sensorKey of value.missingSensors || []) {
+      if (
+        (value.invalidSensors || []).some((item) => item.sensorKey === sensorKey) ||
+        (value.suspectSensors || []).some((item) => item.sensorKey === sensorKey)
+      ) continue;
+      oven.readings ||= {};
+      oven.readings[sensorKey] = {
+        ...(oven.readings[sensorKey] || {}),
+        quality: "missing",
+        invalidValue: undefined,
+        errorReason: "missing",
+        updatedAt: timestamp,
       };
     }
 

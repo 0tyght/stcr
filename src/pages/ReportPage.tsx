@@ -2877,13 +2877,19 @@ function buildReportSlots({
       time: new Date(point.timestamp).getTime(),
       value: point.chamberTemp,
     }))
-    .filter((point) => Number.isFinite(point.time) && Number.isFinite(point.value));
+    .filter(
+      (point): point is { time: number; value: number } =>
+        Number.isFinite(point.time) && point.value != null && Number.isFinite(point.value),
+    );
   const indexedHumidityPoints = points
     .map((point) => ({
       time: new Date(point.timestamp).getTime(),
       value: point.humidity,
     }))
-    .filter((point) => Number.isFinite(point.time) && Number.isFinite(point.value));
+    .filter(
+      (point): point is { time: number; value: number } =>
+        Number.isFinite(point.time) && point.value != null && Number.isFinite(point.value),
+    );
 
   // Anchor each company schedule at 08:00 local time so printed labels and
   // sampled data always refer to the same timestamp when a cycle starts mid-day.

@@ -620,6 +620,7 @@ const ovenAlarms = useMemo(
                 sensor={sensor}
                 value={oven.readings[sensor].value}
                 updatedAt={oven.readings[sensor].updatedAt}
+                quality={oven.readings[sensor].quality}
                 limit={getGaugeLimit(oven, sensor)}
                 showLimit={Boolean(oven.reportStartedAt) && sensor !== "humidity"}
               />

@@ -8,6 +8,8 @@ import { getReadingState } from "../../utils/limits";
 export function OvenCard({ oven }: { oven: Oven }) {
   const isLive = oven.status === "open";
   const chamberFresh = readingIsFresh(oven.readings.chamberTemp.updatedAt);
+  const chamberQuality = oven.readings.chamberTemp.quality ?? "good";
+  const chamberUsable = chamberFresh && chamberQuality === "good";
   const chamberState = chamberFresh
     ? getReadingState(oven.readings.chamberTemp.value, "chamberTemp", oven.limits)
     : "offline";
@@ -30,7 +32,9 @@ export function OvenCard({ oven }: { oven: Oven }) {
             {formatTime(oven.lastUpdatedAt)}
           </strong>
           <span>{isLive ? "Realtime ในห้องอบ" : "ค่าล่าสุดก่อนหยุด"}</span>
-          {isLive && chamberFresh ? (
+          {isLive && (chamberQuality === "invalid" || chamberQuality === "suspect") ? (
+            <strong className="reading-inline tone-danger">ERR</strong>
+          ) : isLive && chamberUsable ? (
             <strong className={`reading-inline tone-${chamberState}`}>
               <Thermometer size={15} />
               {formatSensorValue("chamberTemp", oven.readings.chamberTemp.value)}
@@ -49,15 +53,15 @@ export function OvenCard({ oven }: { oven: Oven }) {
         <div className="oven-mini-strip" aria-label="ค่า realtime แบบย่อ">
           <span>
             <Droplets size={13} />
-            {formatMiniReading(oven.readings.humidity.value, oven.readings.humidity.updatedAt, 1, "%")}
+            {formatMiniReading(oven.readings.humidity.value, oven.readings.humidity.updatedAt, 1, "%", oven.readings.humidity.quality)}
           </span>
           <span>
             <Flame size={13} />
-            {formatMiniReading(oven.readings.furnaceTemp.value, oven.readings.furnaceTemp.updatedAt, 0, "°C")}
+            {formatMiniReading(oven.readings.furnaceTemp.value, oven.readings.furnaceTemp.updatedAt, 0, "°C", oven.readings.furnaceTemp.quality)}
           </span>
           <span>
             <Wind size={13} />
-            {formatMiniReading(oven.readings.blowerTemp.value, oven.readings.blowerTemp.updatedAt, 1, "°C")}
+            {formatMiniReading(oven.readings.blowerTemp.value, oven.readings.blowerTemp.updatedAt, 1, "°C", oven.readings.blowerTemp.quality)}
           </span>
         </div>
       ) : (
@@ -82,6 +86,10 @@ function formatMiniReading(
   updatedAt: string,
   precision: number,
   unit: string,
+  quality: "good" | "invalid" | "suspect" | "missing" | undefined,
 ): string {
+  if (quality === "invalid" || quality === "suspect") return "ERR";
+  if (quality === "missing") return "N/A";
+
   return readingIsFresh(updatedAt) ? `${formatNumber(value, precision)}${unit}` : "—";
 }

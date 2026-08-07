@@ -861,15 +861,34 @@ function buildSensorChartData(
   const actual: SensorChartData["actual"] = [];
   const gaps: SensorChartData["gaps"] = [];
   let previous: { timestamp: number; value: number } | null = null;
+  let explicitGapStart: { timestamp: number; value: number } | null = null;
 
   for (const point of points) {
     const timestamp = Date.parse(point.timestamp);
     const rawValue = point[sensor] as number | null | undefined;
     const value = rawValue == null ? Number.NaN : Number(rawValue);
 
-    if (!Number.isFinite(timestamp) || !Number.isFinite(value)) continue;
+    if (!Number.isFinite(timestamp)) continue;
+    if (!Number.isFinite(value)) {
+      if (previous) {
+        actual.push([timestamp, null]);
+        explicitGapStart = previous;
+      }
+      continue;
+    }
+
+    const hadExplicitGap = explicitGapStart !== null;
+    if (explicitGapStart) {
+      gaps.push(
+        [explicitGapStart.timestamp, explicitGapStart.value],
+        [timestamp, value],
+        [timestamp + 1, null],
+      );
+      explicitGapStart = null;
+    }
 
     const hasGap =
+      !hadExplicitGap &&
       previous !== null &&
       timestamp - previous.timestamp > GAP_THRESHOLD_MS;
 
@@ -900,7 +919,8 @@ function getAxisBounds(
 
   for (const sensor of sensors) {
     for (const point of points) {
-      const value = Number(point[sensor]);
+      const rawValue = point[sensor];
+      const value = rawValue == null ? Number.NaN : Number(rawValue);
       if (Number.isFinite(value)) {
         values.push(value);
       }
