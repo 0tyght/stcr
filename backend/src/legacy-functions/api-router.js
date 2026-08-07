@@ -733,19 +733,10 @@ async function readReportHistory(companyId, ovenId, historyQuery) {
 
   await pool.query("SET time_zone = '+00:00'");
 
-  const requestedRangeMs =
-    historyQuery.startAt && historyQuery.endAt
-      ? Math.max(
-          0,
-          Date.parse(historyQuery.endAt) -
-            Date.parse(historyQuery.startAt),
-        )
-      : 0;
-
-  const bucketSeconds =
-    requestedRangeMs > 24 * 60 * 60 * 1000
-      ? 600
-      : 60;
+  // Keep chart density consistent between a newly opened oven and an oven
+  // that has been running for several days. The database retains one-minute
+  // aggregates, while every browser chart receives a ten-minute summary.
+  const bucketSeconds = 600;
 
   const [rows] = await pool.execute(
     `SELECT
