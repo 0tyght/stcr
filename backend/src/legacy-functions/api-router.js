@@ -13,7 +13,10 @@ const allowedOrigins = String(
 const allowedOrigin = requestOrigin && allowedOrigins.includes(requestOrigin) ? requestOrigin : "";
 const sensorKeys = ["chamberTemp", "humidity", "furnaceTemp", "blowerTemp"];
 const maxBodyBytes = 32 * 1024;
-const maxHistoryRangeMs = 14 * 24 * 60 * 60 * 1000;
+// A normal smoking cycle is six days, but the actual source cycle can be
+// longer when an operator misses the close action. Ten-minute chart buckets
+// keep a thirty-day exceptional cycle well within the response limit.
+const maxHistoryRangeMs = 30 * 24 * 60 * 60 * 1000;
 const configuredOfflineSeconds = Number(env.get("STCR_OFFLINE_THRESHOLD_SECONDS") || 300);
 const offlineThresholdMs = Number.isFinite(configuredOfflineSeconds) && configuredOfflineSeconds >= 30
   ? configuredOfflineSeconds * 1000
@@ -2113,7 +2116,7 @@ if (method === "GET" && historyMatch) {
   const ovenId = decodeURIComponent(historyMatch[1]);
   const points = state.history[ovenId];
   if (!points || !visibleOvenById.has(ovenId)) return errorResponse("Oven not found", 404, "NOT_FOUND");
-  if (!validHistoryQuery(query)) return errorResponse("ช่วงเวลาหรือรอบรายงานไม่ถูกต้อง (สูงสุด 14 วัน)", 400, "INVALID_HISTORY_RANGE");
+  if (!validHistoryQuery(query)) return errorResponse("ช่วงเวลาหรือรอบรายงานไม่ถูกต้อง (สูงสุด 30 วัน)", 400, "INVALID_HISTORY_RANGE");
   try {
     return jsonResponse(await readReportHistory(companyId, ovenId, query));
   } catch (error) {

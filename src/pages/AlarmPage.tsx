@@ -7,6 +7,7 @@ import { PageHeader } from "../components/ui/PageHeader";
 import { StatusBadge } from "../components/ui/StatusBadge";
 import { getErrorMessage } from "../services/api/errors";
 import type {
+  Alarm,
   AlarmFilter,
   AlarmSeverity,
   AlarmStatus,
@@ -40,6 +41,16 @@ const initialFilter: AlarmFilter = {
   ovenId: "all",
   search: "",
 };
+
+function alarmCategoryLabel(alarm: Alarm): string {
+  if (alarm.sensor) {
+    return sensorByKey[alarm.sensor]?.label ?? "ข้อมูลเซนเซอร์";
+  }
+  if (alarm.title === "รอบอบอาจเกินหนึ่งรอบ") {
+    return "รอบอบ";
+  }
+  return "การเชื่อมต่อ";
+}
 
 export function AlarmPage() {
   const {
@@ -252,9 +263,7 @@ export function AlarmPage() {
                       <StatusBadge kind={alarm.severity} />
                     </td>
                     <td>
-                      {alarm.sensor
-                        ? sensorByKey[alarm.sensor].label
-                        : "การเชื่อมต่อ"}
+                      {alarmCategoryLabel(alarm)}
                     </td>
                     <td>
                       <strong>{alarm.title}</strong>

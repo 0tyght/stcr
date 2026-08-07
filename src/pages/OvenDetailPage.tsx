@@ -152,6 +152,14 @@ export function OvenDetailPage() {
     return cycleRecords.find((record) => record.cycle === selectedCycle) ?? null;
   }, [cycleRecords, selectedCycle]);
 
+  const selectedCycleIsUnusuallyLong = Boolean(
+    selectedRecord &&
+      selectedRecord.end.getTime() - selectedRecord.start.getTime() >
+        REPORT_CYCLE_MS,
+  );
+  const hasSuspectedCombinedCycle =
+    unusuallyLongCycle || selectedCycleIsUnusuallyLong;
+
   const selectedDateRecords = useMemo(() => {
     if (!selectedDateKey) return [];
 
@@ -198,7 +206,9 @@ export function OvenDetailPage() {
       return selectedRecord
         ? {
             start: selectedRecord.start,
-            end: new Date(selectedRecord.start.getTime() + REPORT_CYCLE_MS),
+            // Use the actual end of a completed cycle. A delayed close event
+            // must not silently hide data after the usual six-day window.
+            end: selectedRecord.end,
           }
         : null;
     }
@@ -492,9 +502,9 @@ const ovenAlarms = useMemo(
           </p>
         ) : null}
 
-        {unusuallyLongCycle ? (
+        {hasSuspectedCombinedCycle ? (
           <p className="mode-note mode-note-warning" role="alert">
-            รอบนี้เปิดนานเกิน {REPORT_CYCLE_DAYS} วัน กรุณาตรวจว่าโรงงานลืมปิดเตาหรือไม่ ระบบยังไม่ตัดรอบเองเพื่อไม่แก้ข้อมูลจริงโดยคาดเดา
+            การอบรอบนี้ต่อเนื่องเกิน {REPORT_CYCLE_DAYS} วัน ระบบคาดว่าเป็นการอบจริงสองรอบ อาจเกิดจากการลืมกดปิดเตา กราฟจะแสดงข้อมูลจริงต่อเนื่องจนจบรอบ โปรดตรวจสอบก่อนจัดทำรายงาน
           </p>
         ) : null}
       </section>
@@ -1140,11 +1150,12 @@ function getDetailCycleRange(
 ): { start: Date; end: Date } {
   if (mode === "realtime" && oven.startedAt) {
     const start = new Date(oven.startedAt);
-    const end = new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000);
 
     return {
       start,
-      end,
+      // Follow the actual open cycle. This can legitimately extend beyond
+      // six days when the source has not reported a close event.
+      end: new Date(),
     };
   }
 
@@ -1152,7 +1163,7 @@ function getDetailCycleRange(
     const start = new Date(oven.firedAt);
     return {
       start,
-      end: new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000),
+      end: new Date(),
     };
   }
 

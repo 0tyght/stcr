@@ -19,6 +19,9 @@ const SENSOR_KEYS = [
   "furnaceTemp",
   "blowerTemp",
 ];
+const EXPECTED_CYCLE_DAYS = 6;
+const EXPECTED_CYCLE_MS = EXPECTED_CYCLE_DAYS * 24 * 60 * 60 * 1000;
+const LONG_CYCLE_ALARM_TITLE = "รอบอบอาจเกินหนึ่งรอบ";
 const heartbeatSeconds = Math.max(
   10,
   Number(env.get("STCR_FACTORY_MQTT_HEARTBEAT_SECONDS") || 60),
@@ -149,6 +152,151 @@ function updateRealtimeMemory(value, receivedAtDate) {
     }
   }
   global.set("stcrState", rootState);
+}
+
+function longCycleAlarmId(companyId, ovenId, cycleNumber) {
+  return `long-cycle-${companyId}-${ovenId}-${cycleNumber}`;
+}
+
+function longCycleDetail(elapsedMs) {
+  const elapsedDays = Math.max(0, elapsedMs / (24 * 60 * 60 * 1000));
+  return `การอบรอบนี้ต่อเนื่อง ${elapsedDays.toFixed(1)} วัน เกินระยะปกติ ${EXPECTED_CYCLE_DAYS} วัน ระบบคาดว่าเป็นการอบจริงสองรอบ อาจเกิดจากการลืมกดปิดเตา`;
+}
+
+function syncLongCycleAlarmMemory(result) {
+  if (!result || result.action === "none") return;
+
+  const { rootState, companyState } = findMemoryOven(result);
+  if (!rootState || !companyState) return;
+
+  companyState.alarms ||= [];
+
+  if (result.action === "resolved") {
+    companyState.alarms = companyState.alarms.map((alarm) =>
+      alarm.ovenId === result.ovenId &&
+      alarm.title === LONG_CYCLE_ALARM_TITLE &&
+      alarm.status !== "resolved"
+        ? { ...alarm, status: "resolved", resolvedAt: result.resolvedAt }
+        : alarm,
+    );
+    global.set("stcrState", rootState);
+    return;
+  }
+
+  const existingIndex = companyState.alarms.findIndex(
+    (alarm) => alarm.id === result.id,
+  );
+  const existing = existingIndex >= 0 ? companyState.alarms[existingIndex] : null;
+  const alarm = {
+    id: result.id,
+    ovenId: result.ovenId,
+    severity: "warning",
+    status: existing?.status === "acknowledged" ? "acknowledged" : "active",
+    title: LONG_CYCLE_ALARM_TITLE,
+    detail: result.detail,
+    createdAt: result.createdAt,
+  };
+
+  if (existingIndex >= 0) {
+    companyState.alarms[existingIndex] = alarm;
+  } else {
+    companyState.alarms.unshift(alarm);
+  }
+  global.set("stcrState", rootState);
+}
+
+async function reconcileLongCycleAlarm(
+  connection,
+  { companyId, ovenId, isOpen, cycle, eventAt },
+) {
+  const referenceAt = validDate(eventAt);
+
+  if (!isOpen) {
+    await connection.execute(
+      `UPDATE alarms
+       SET status = 'resolved', resolved_at = COALESCE(resolved_at, ?)
+       WHERE company_id = ?
+         AND oven_id = ?
+         AND title = ?
+         AND status IN ('active', 'acknowledged')`,
+      [referenceAt, companyId, ovenId, LONG_CYCLE_ALARM_TITLE],
+    );
+    return {
+      action: "resolved",
+      companyId,
+      ovenId,
+      resolvedAt: referenceAt.toISOString(),
+    };
+  }
+
+  let activeCycle = cycle || null;
+  if (!activeCycle) {
+    const [cycles] = await connection.execute(
+      `SELECT id,
+              cycle_number AS cycleNumber,
+              fired_at AS firedAt,
+              report_started_at AS reportStartedAt
+       FROM oven_cycles
+       WHERE company_id = ?
+         AND oven_id = ?
+         AND state = 'recording'
+       ORDER BY COALESCE(report_started_at, fired_at) DESC, id DESC
+       LIMIT 1
+       FOR UPDATE`,
+      [companyId, ovenId],
+    );
+    activeCycle = cycles[0] || null;
+  }
+
+  const cycleNumber = Number(activeCycle?.cycleNumber);
+  const startedAt = activeCycle?.reportStartedAt || activeCycle?.firedAt;
+  const startedAtMs = Date.parse(String(startedAt || ""));
+  const elapsedMs = referenceAt.getTime() - startedAtMs;
+
+  if (
+    !activeCycle ||
+    !Number.isSafeInteger(cycleNumber) ||
+    cycleNumber < 1 ||
+    !Number.isFinite(startedAtMs) ||
+    elapsedMs <= EXPECTED_CYCLE_MS
+  ) {
+    return { action: "none" };
+  }
+
+  const id = longCycleAlarmId(companyId, ovenId, cycleNumber);
+  const createdAt = new Date(startedAtMs + EXPECTED_CYCLE_MS);
+  const detail = longCycleDetail(elapsedMs);
+
+  await connection.execute(
+    `INSERT INTO alarms (
+       id, company_id, oven_id, cycle_id, sensor_key, severity, status,
+       title, detail, measured_value, limit_value, created_at
+     ) VALUES (?, ?, ?, ?, NULL, 'warning', 'active', ?, ?, NULL, NULL, ?)
+     ON DUPLICATE KEY UPDATE
+       status = IF(status = 'resolved', 'active', status),
+       acknowledged_at = IF(status = 'active', NULL, acknowledged_at),
+       resolved_at = NULL,
+       detail = VALUES(detail),
+       created_at = IF(created_at IS NULL, VALUES(created_at), created_at)`,
+    [
+      id,
+      companyId,
+      ovenId,
+      activeCycle.id,
+      LONG_CYCLE_ALARM_TITLE,
+      detail,
+      createdAt,
+    ],
+  );
+
+  return {
+    action: "active",
+    id,
+    companyId,
+    ovenId,
+    detail,
+    createdAt: createdAt.toISOString(),
+  };
 }
 
 function createMetric() {
@@ -415,6 +563,7 @@ async function persistStatus(value, receivedAtDate) {
 
   const pool = getPool();
   const connection = await pool.getConnection();
+  let longCycleAlarmResult = null;
   try {
     await connection.beginTransaction();
     const [ovenRows] = await connection.execute(
@@ -443,6 +592,12 @@ async function persistStatus(value, receivedAtDate) {
       eventAt: validDate(value.sourceTimestamp, receivedAtDate),
       readyTemperature: Number(ovenRows[0].chamberLower),
     });
+    longCycleAlarmResult = await reconcileLongCycleAlarm(connection, {
+      companyId: value.companyId,
+      ovenId: value.ovenId,
+      isOpen: value.ovenState === 1,
+      eventAt: validDate(value.sourceTimestamp, receivedAtDate),
+    });
     await connection.commit();
   } catch (error) {
     await connection.rollback();
@@ -457,6 +612,7 @@ async function persistStatus(value, receivedAtDate) {
     lastSeenAt: receivedAtDate.toISOString(),
   };
   global.set(PERSIST_STATE_KEY, states);
+  syncLongCycleAlarmMemory(longCycleAlarmResult);
 
   if (storeRawMessages) {
     await saveRawMessage(
@@ -593,7 +749,7 @@ async function resolveCycleLifecycle(
   }
 
   const [cycleRows] = await connection.execute(
-    `SELECT id, state, fired_at AS firedAt,
+    `SELECT id, cycle_number AS cycleNumber, state, fired_at AS firedAt,
             report_started_at AS reportStartedAt,
             stopped_at AS stoppedAt
      FROM oven_cycles
@@ -661,6 +817,7 @@ function syncCycleMemory(bucket, cycle) {
 async function persistMinuteBucket(bucket) {
   const pool = getPool();
   const connection = await pool.getConnection();
+  let longCycleAlarmResult = null;
 
   const chamber = metricValues(bucket.metrics.chamberTemp);
   const humidity = metricValues(bucket.metrics.humidity);
@@ -821,8 +978,17 @@ async function persistMinuteBucket(bucket) {
       ],
     );
 
+    longCycleAlarmResult = await reconcileLongCycleAlarm(connection, {
+      companyId: bucket.companyId,
+      ovenId: bucket.ovenId,
+      isOpen: bucket.startOven === 1,
+      cycle,
+      eventAt: lastSourceAt,
+    });
+
     await connection.commit();
     syncCycleMemory(bucket, cycle);
+    syncLongCycleAlarmMemory(longCycleAlarmResult);
 
     const { rootState, companyState, oven } = findMemoryOven(bucket);
     const metricCounts = {
