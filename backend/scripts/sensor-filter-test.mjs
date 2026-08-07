@@ -9,6 +9,7 @@ const savedEnvironment = {
   maps: process.env.STCR_FACTORY_MQTT_OVEN_MAPS_JSON,
   ranges: process.env.STCR_FACTORY_MQTT_SENSOR_RANGES_JSON,
   spikes: process.env.STCR_FACTORY_MQTT_SPIKE_LIMITS_JSON,
+  requiredSensors: process.env.STCR_FACTORY_MQTT_REQUIRED_SENSORS_JSON,
   offset: process.env.STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES,
 };
 
@@ -19,7 +20,7 @@ process.env.STCR_FACTORY_MQTT_TOPIC_ROUTES_JSON = JSON.stringify({
 });
 process.env.STCR_FACTORY_MQTT_OVEN_MAPS_JSON = JSON.stringify({
   ttn: { 1: "oven-1" },
-  gr: { 14: "oven-14" },
+  gr: { 11: "oven-11", 14: "oven-14", 18: "oven-18", 19: "oven-19" },
 });
 process.env.STCR_FACTORY_MQTT_SENSOR_RANGES_JSON = JSON.stringify({
   chamberTemp: { min: 0, max: 150 },
@@ -33,6 +34,7 @@ process.env.STCR_FACTORY_MQTT_SPIKE_LIMITS_JSON = JSON.stringify({
   furnaceTemp: 200,
   blowerTemp: 120,
 });
+delete process.env.STCR_FACTORY_MQTT_REQUIRED_SENSORS_JSON;
 process.env.STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES = "0";
 
 function assert(condition, message) {
@@ -62,11 +64,11 @@ function message(values, timestampMs) {
   };
 }
 
-function grMessage(values, timestampMs) {
+function grMessage(values, timestampMs, oven = 14) {
   return {
     topic: "sensor_gr",
     payload: JSON.stringify({
-      oven: 14,
+      oven,
       cycle: 87,
       startoven: values.startOven,
       time_stamp: new Date(timestampMs).toISOString(),
@@ -122,6 +124,66 @@ try {
     grOptionalSensors._mqttEnvelope.readings.length === 2 &&
       grOptionalSensors._mqttEnvelope.missingRequiredSensors.length === 0,
     "GR optional furnace/blower handling is incorrect",
+  );
+
+  const grBasicProfile = await runner(
+    grMessage(
+      { startOven: 0, room: 42.1, humidity: 51.3, furnace: "000", blower: "000" },
+      base + 550,
+      11,
+    ),
+  );
+  assert(
+    grBasicProfile?._mqttEnvelope?.readings.length === 2 &&
+      grBasicProfile._mqttEnvelope.readings.every(
+        (item) => item.sensorKey === "chamberTemp" || item.sensorKey === "humidity",
+      ),
+    "GR ovens 11-17 must ignore unsupported zero placeholders",
+  );
+
+  const grFurnaceProfile = await runner(
+    grMessage(
+      { startOven: 0, room: 43.1, humidity: 50.3, furnace: 277, blower: "000" },
+      base + 600,
+      18,
+    ),
+  );
+  assert(
+    grFurnaceProfile?._mqttEnvelope?.readings.length === 3 &&
+      grFurnaceProfile._mqttEnvelope.readings.some(
+        (item) => item.sensorKey === "furnaceTemp" && item.value === 277,
+      ) &&
+      !grFurnaceProfile._mqttEnvelope.readings.some(
+        (item) => item.sensorKey === "blowerTemp",
+      ),
+    "GR oven 18 must accept furnace and ignore unsupported blower",
+  );
+
+  const grFullProfile = await runner(
+    grMessage(
+      { startOven: 0, room: 44.1, humidity: 49.3, furnace: 288, blower: 155 },
+      base + 650,
+      19,
+    ),
+  );
+  assert(
+    grFullProfile?._mqttEnvelope?.readings.length === 4,
+    "GR ovens 19-26 must require and accept all four readings",
+  );
+
+  process.env.STCR_FACTORY_MQTT_REQUIRED_SENSORS_JSON = JSON.stringify({
+    ttn: ["chamberTemp", "humidity", "furnaceTemp", "blowerTemp"],
+  });
+  const grProfileWithTtnOnlyOverride = await runner(
+    grMessage(
+      { startOven: 0, room: 44.2, humidity: 49.2, furnace: 289, blower: 156 },
+      base + 700,
+      19,
+    ),
+  );
+  assert(
+    grProfileWithTtnOnlyOverride?._mqttEnvelope?.readings.length === 4,
+    "A TTN-only override must not downgrade the GR per-oven profile",
   );
 
   const grInvalidState = await runner(
@@ -196,7 +258,7 @@ try {
     "Confirmed changed value was not labelled",
   );
 
-  console.log("Sensor hard-range and spike-confirmation tests passed");
+  console.log("Sensor profile, hard-range and spike-confirmation tests passed");
 } finally {
   const restore = (name, value) => {
     if (value === undefined) delete process.env[name];
@@ -207,6 +269,7 @@ try {
   restore("STCR_FACTORY_MQTT_OVEN_MAPS_JSON", savedEnvironment.maps);
   restore("STCR_FACTORY_MQTT_SENSOR_RANGES_JSON", savedEnvironment.ranges);
   restore("STCR_FACTORY_MQTT_SPIKE_LIMITS_JSON", savedEnvironment.spikes);
+  restore("STCR_FACTORY_MQTT_REQUIRED_SENSORS_JSON", savedEnvironment.requiredSensors);
   restore(
     "STCR_FACTORY_MQTT_SOURCE_UTC_OFFSET_MINUTES",
     savedEnvironment.offset,

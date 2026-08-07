@@ -24,6 +24,7 @@ import { LoadingState } from "../components/ui/LoadingState";
 import { PageHeader } from "../components/ui/PageHeader";
 import { SensorGauge } from "../components/ui/SensorGauge";
 import { StatusBadge } from "../components/ui/StatusBadge";
+import { getStoredCompanyId } from "../config/preferences";
 import { apiClient } from "../services/apiClient";
 import { downloadCsv } from "../services/reportExport";
 import type { LimitMap, Oven, OvenCycleSummary, OvenStatus, SensorKey, TimeSeriesPoint } from "../types";
@@ -34,6 +35,7 @@ import {
   REPORT_CYCLE_DAYS,
   REPORT_CYCLE_MS,
 } from "../utils/reportCycle";
+import { getOvenSensorProfile } from "../utils/sensorProfile";
 import { allSensorKeys } from "../utils/sensors";
 
 type ChartMode = "realtime" | "historical";
@@ -65,6 +67,15 @@ export function OvenDetailPage() {
   const { ovens, alarms, loading, refresh, refreshing } = useAppData();
 
   const oven = ovens.find((item) => item.id === ovenId);
+  const supportedSensors = oven
+    ? getOvenSensorProfile(getStoredCompanyId(), oven.number)
+    : allSensorKeys;
+  const supportedEnvironmentSensors = environmentSensors.filter((sensor) =>
+    supportedSensors.includes(sensor),
+  );
+  const supportedHeatSensors = heatSensors.filter((sensor) =>
+    supportedSensors.includes(sensor),
+  );
 
   const [mode, setMode] = useState<ChartMode>("realtime");
   const [historyPickMode, setHistoryPickMode] = useState<HistoryPickMode>("cycle");
@@ -614,7 +625,7 @@ const ovenAlarms = useMemo(
       {effectiveMode === "realtime" ? (
         <>
           <section className="realtime-gauge-grid" aria-label="ค่า realtime จากเซนเซอร์">
-            {realtimeGaugeOrder.map((sensor) => (
+            {realtimeGaugeOrder.filter((sensor) => supportedSensors.includes(sensor)).map((sensor) => (
               <SensorGauge
                 key={sensor}
                 sensor={sensor}
@@ -632,10 +643,10 @@ const ovenAlarms = useMemo(
               title="อุณหภูมิและความชื้นในห้องอบ"
               description="1 กราฟต่อ 1 รอบอบ แสดงเส้น Upper/Lower เฉพาะอุณหภูมิห้องอบ"
               points={points}
-              sensors={environmentSensors}
+              sensors={supportedEnvironmentSensors}
               limits={oven.limits}
               mode={effectiveMode}
-              rightAxisSensors={["humidity"]}
+              rightAxisSensors={supportedEnvironmentSensors.includes("humidity") ? ["humidity"] : []}
               leftAxisName="อุณหภูมิ °C"
               rightAxisName="ความชื้น %"
               limitSensors={["chamberTemp"]}
@@ -643,21 +654,23 @@ const ovenAlarms = useMemo(
                     resetViewKey={chartViewResetKey}
       />
 
-            <ChartPanel
-              title="อุณหภูมิเตาเผาและ Blower"
-              description="เส้น Upper/Lower ใช้เฉพาะอุณหภูมิเตาเผา"
-              points={points}
-              sensors={heatSensors}
-              limits={oven.limits}
-              mode={effectiveMode}
-              rightAxisSensors={[]}
-              leftAxisName="อุณหภูมิ °C"
-              rightAxisName=""
-              limitSensors={["furnaceTemp"]}
-              limitLabel="เตาเผา"
-              timeRange={cycleRange ?? undefined}
-                    resetViewKey={chartViewResetKey}
-      />
+            {supportedHeatSensors.length ? (
+              <ChartPanel
+                title="อุณหภูมิเตาเผาและ Blower"
+                description="เส้น Upper/Lower ใช้เฉพาะอุณหภูมิเตาเผา"
+                points={points}
+                sensors={supportedHeatSensors}
+                limits={oven.limits}
+                mode={effectiveMode}
+                rightAxisSensors={[]}
+                leftAxisName="อุณหภูมิ °C"
+                rightAxisName=""
+                limitSensors={supportedHeatSensors.includes("furnaceTemp") ? ["furnaceTemp"] : []}
+                limitLabel="เตาเผา"
+                timeRange={cycleRange ?? undefined}
+                resetViewKey={chartViewResetKey}
+              />
+            ) : null}
           </section>
         </>
       ) : (
@@ -672,6 +685,8 @@ const ovenAlarms = useMemo(
           calendarCells={calendarCells}
           points={points}
           limits={oven.limits}
+          environmentSensors={supportedEnvironmentSensors}
+          heatSensors={supportedHeatSensors}
           timeRange={cycleRange ?? undefined}
           onChangePickMode={setHistoryPickMode}
           onSelectCycle={handleSelectCycle}
@@ -736,6 +751,8 @@ function HistoricalChartSection({
   calendarCells,
   points,
   limits,
+  environmentSensors,
+  heatSensors,
   timeRange,
   onChangePickMode,
   onSelectCycle,
@@ -755,6 +772,8 @@ function HistoricalChartSection({
   calendarCells: Date[];
   points: TimeSeriesPoint[];
   limits: LimitMap;
+  environmentSensors: SensorKey[];
+  heatSensors: SensorKey[];
   timeRange?: { start: Date; end: Date };
   onChangePickMode: (mode: HistoryPickMode) => void;
   onSelectCycle: (cycle: number) => void;
@@ -890,7 +909,7 @@ function HistoricalChartSection({
           sensors={environmentSensors}
           limits={limits}
           mode="historical"
-          rightAxisSensors={["humidity"]}
+          rightAxisSensors={environmentSensors.includes("humidity") ? ["humidity"] : []}
           leftAxisName="อุณหภูมิ °C"
           rightAxisName="ความชื้น %"
           limitSensors={["chamberTemp"]}
@@ -898,7 +917,7 @@ function HistoricalChartSection({
           resetViewKey={resetViewKey}
         />
 
-        <ChartPanel
+        {heatSensors.length ? <ChartPanel
           title="อุณหภูมิเตาเผาและ Blower"
           description="เส้น Upper/Lower ใช้เฉพาะอุณหภูมิเตาเผา"
           points={points}
@@ -908,11 +927,11 @@ function HistoricalChartSection({
           rightAxisSensors={[]}
           leftAxisName="อุณหภูมิ °C"
           rightAxisName=""
-          limitSensors={["furnaceTemp"]}
+          limitSensors={heatSensors.includes("furnaceTemp") ? ["furnaceTemp"] : []}
           limitLabel="เตาเผา"
           timeRange={timeRange}
           resetViewKey={resetViewKey}
-        />
+        /> : null}
         </div>
       ) : (
         <EmptyState

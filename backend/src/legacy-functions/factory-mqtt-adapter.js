@@ -78,16 +78,40 @@ const defaultRequiredSensors = {
   ttn: ["chamberTemp", "humidity", "furnaceTemp", "blowerTemp"],
   gr: ["chamberTemp", "humidity"],
 };
+const defaultRequiredSensorsByOven = {
+  gr: {
+    18: ["chamberTemp", "humidity", "furnaceTemp"],
+    19: ["chamberTemp", "humidity", "furnaceTemp", "blowerTemp"],
+    20: ["chamberTemp", "humidity", "furnaceTemp", "blowerTemp"],
+    21: ["chamberTemp", "humidity", "furnaceTemp", "blowerTemp"],
+    22: ["chamberTemp", "humidity", "furnaceTemp", "blowerTemp"],
+    23: ["chamberTemp", "humidity", "furnaceTemp", "blowerTemp"],
+    24: ["chamberTemp", "humidity", "furnaceTemp", "blowerTemp"],
+    25: ["chamberTemp", "humidity", "furnaceTemp", "blowerTemp"],
+    26: ["chamberTemp", "humidity", "furnaceTemp", "blowerTemp"],
+  },
+};
 const plausibilityStateKey = "stcrSensorPlausibilityStateV1";
 
 function readRequiredSensors() {
   const configured = String(
     env.get("STCR_FACTORY_MQTT_REQUIRED_SENSORS_JSON") || "",
   ).trim();
-  if (!configured) return defaultRequiredSensors[companyId];
+  if (!configured) {
+    return (
+      defaultRequiredSensorsByOven[companyId]?.[ovenNumber] ||
+      defaultRequiredSensors[companyId]
+    );
+  }
 
   const parsed = JSON.parse(configured);
   const candidate = parsed?.[companyId];
+  if (candidate === undefined) {
+    return (
+      defaultRequiredSensorsByOven[companyId]?.[ovenNumber] ||
+      defaultRequiredSensors[companyId]
+    );
+  }
   const knownSensors = new Set(Object.keys(defaultSensorRanges));
   if (
     !Array.isArray(candidate) ||
@@ -451,6 +475,8 @@ const invalidSensors = [];
 const suspectSensors = [];
 const confirmedSensors = [];
 for (const [sensorKey, sourceKey, unit] of definitions) {
+  if (!requiredSensorKeys.includes(sensorKey)) continue;
+
   const rawValue = source[sourceKey];
   const numericValue = Number(rawValue);
   const missing =

@@ -1,15 +1,18 @@
 import { CalendarDays, Clock3, Droplets, Flame, Gauge, Thermometer, Wind } from "lucide-react";
 import { Link } from "react-router";
 import { StatusBadge } from "../../components/ui/StatusBadge";
+import { getStoredCompanyId } from "../../config/preferences";
 import type { Oven } from "../../types";
 import { formatDate, formatNumber, formatSensorValue, formatTime } from "../../utils/format";
 import { getReadingState } from "../../utils/limits";
+import { getOvenSensorProfile } from "../../utils/sensorProfile";
 
 export function OvenCard({ oven }: { oven: Oven }) {
   const isLive = oven.status === "open";
   const chamberFresh = readingIsFresh(oven.readings.chamberTemp.updatedAt);
   const chamberQuality = oven.readings.chamberTemp.quality ?? "good";
   const chamberUsable = chamberFresh && chamberQuality === "good";
+  const supportedSensors = getOvenSensorProfile(getStoredCompanyId(), oven.number);
   const chamberState = chamberFresh
     ? getReadingState(oven.readings.chamberTemp.value, "chamberTemp", oven.limits)
     : "offline";
@@ -51,18 +54,24 @@ export function OvenCard({ oven }: { oven: Oven }) {
       </div>
       {isLive ? (
         <div className="oven-mini-strip" aria-label="ค่า realtime แบบย่อ">
-          <span>
-            <Droplets size={13} />
-            {formatMiniReading(oven.readings.humidity.value, oven.readings.humidity.updatedAt, 1, "%", oven.readings.humidity.quality)}
-          </span>
-          <span>
-            <Flame size={13} />
-            {formatMiniReading(oven.readings.furnaceTemp.value, oven.readings.furnaceTemp.updatedAt, 0, "°C", oven.readings.furnaceTemp.quality)}
-          </span>
-          <span>
-            <Wind size={13} />
-            {formatMiniReading(oven.readings.blowerTemp.value, oven.readings.blowerTemp.updatedAt, 1, "°C", oven.readings.blowerTemp.quality)}
-          </span>
+          {supportedSensors.includes("humidity") ? (
+            <span>
+              <Droplets size={13} />
+              {formatMiniReading(oven.readings.humidity.value, oven.readings.humidity.updatedAt, 1, "%", oven.readings.humidity.quality)}
+            </span>
+          ) : null}
+          {supportedSensors.includes("furnaceTemp") ? (
+            <span>
+              <Flame size={13} />
+              {formatMiniReading(oven.readings.furnaceTemp.value, oven.readings.furnaceTemp.updatedAt, 0, "°C", oven.readings.furnaceTemp.quality)}
+            </span>
+          ) : null}
+          {supportedSensors.includes("blowerTemp") ? (
+            <span>
+              <Wind size={13} />
+              {formatMiniReading(oven.readings.blowerTemp.value, oven.readings.blowerTemp.updatedAt, 1, "°C", oven.readings.blowerTemp.quality)}
+            </span>
+          ) : null}
         </div>
       ) : (
         <div className="oven-state-note">ดูข้อมูลย้อนหลังได้จากรายละเอียดเตา</div>

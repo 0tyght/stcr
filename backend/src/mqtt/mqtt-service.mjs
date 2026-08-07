@@ -91,7 +91,18 @@ const sensorSourceFields = {
   blowerTemp: "blower",
 };
 
-function requiredSensorFields(companyId) {
+function requiredSensorFields(companyId, ovenNumber) {
+  const grProfiles = {
+    18: ["chamberTemp", "humidity", "furnaceTemp"],
+    19: Object.keys(sensorSourceFields),
+    20: Object.keys(sensorSourceFields),
+    21: Object.keys(sensorSourceFields),
+    22: Object.keys(sensorSourceFields),
+    23: Object.keys(sensorSourceFields),
+    24: Object.keys(sensorSourceFields),
+    25: Object.keys(sensorSourceFields),
+    26: Object.keys(sensorSourceFields),
+  };
   const defaults = {
     ttn: Object.keys(sensorSourceFields),
     gr: ["chamberTemp", "humidity"],
@@ -100,13 +111,21 @@ function requiredSensorFields(companyId) {
     process.env.STCR_FACTORY_MQTT_REQUIRED_SENSORS_JSON || "",
   ).trim();
   if (!configured) {
-    return (defaults[companyId] || []).map((key) => sensorSourceFields[key]);
+    const profile =
+      companyId === "gr" && grProfiles[ovenNumber]
+        ? grProfiles[ovenNumber]
+        : (defaults[companyId] || []);
+    return profile.map((key) => sensorSourceFields[key]);
   }
   try {
     const parsed = JSON.parse(configured);
     const profile = parsed?.[companyId];
     if (!Array.isArray(profile)) {
-      return (defaults[companyId] || []).map((key) => sensorSourceFields[key]);
+      const fallback =
+        companyId === "gr" && grProfiles[ovenNumber]
+          ? grProfiles[ovenNumber]
+          : (defaults[companyId] || []);
+      return fallback.map((key) => sensorSourceFields[key]);
     }
     return profile.map((key) => sensorSourceFields[key]).filter(Boolean);
   } catch {
@@ -133,7 +152,7 @@ function inspectPayload(topic, payload, route) {
           "startoven",
           "oven",
           "cycle",
-          ...requiredSensorFields(route.companyId),
+          ...requiredSensorFields(route.companyId, oven),
         ];
         missingOrInvalidFields = fields.filter((field) => {
           const value = parsed[field];
