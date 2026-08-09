@@ -216,6 +216,10 @@ export async function startMqttService() {
   );
 
   async function processMessage(message) {
+    if (message?._longCycleReconcileTick) {
+      await writer(message);
+      return true;
+    }
     const adapted = await adapter(message);
     if (adapted?._mqttEnvelope || adapted?._minuteFlushTick) {
       await writer(adapted);
@@ -391,8 +395,34 @@ export async function startMqttService() {
   }, flushIntervalMs);
   flushTimer.unref?.();
 
+  const longCycleReconcileIntervalMs = envNumber(
+    "STCR_LONG_CYCLE_RECONCILE_INTERVAL_MS",
+    300000,
+    60000,
+    3600000,
+  );
+  const reconcileLongCycles = () => {
+    const receivedAt = new Date().toISOString();
+    return runSerial(() => processMessage({
+      _longCycleReconcileTick: true,
+      factoryMqtt: { receivedAt },
+    }));
+  };
+  await reconcileLongCycles();
+  const longCycleReconcileTimer = setInterval(() => {
+    void reconcileLongCycles().catch((error) => {
+      if (error?.code === "SERIAL_QUEUE_FULL") {
+        incrementHealthCounter("rejectedLongCycleReconcileQueueFull");
+        return;
+      }
+      console.error("[express-mqtt] Long-cycle reconciliation failed", error);
+    });
+  }, longCycleReconcileIntervalMs);
+  longCycleReconcileTimer.unref?.();
+
   return async function stopMqttService() {
     clearInterval(flushTimer);
+    clearInterval(longCycleReconcileTimer);
     await new Promise((resolveStop) => client.end(true, resolveStop));
     const pool = globalStore.get("stcrMqttDbPool");
     if (pool?.end) await pool.end().catch(() => undefined);

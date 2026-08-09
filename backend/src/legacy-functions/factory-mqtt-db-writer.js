@@ -8,6 +8,7 @@
 
 const envelope = msg._mqttEnvelope;
 const isFlushTick = Boolean(msg._minuteFlushTick);
+const isLongCycleReconcileTick = Boolean(msg._longCycleReconcileTick);
 
 const BUCKETS_KEY = "stcrMinuteBuckets";
 const FLUSH_LOCK_KEY = "stcrMinuteFlushRunning";
@@ -35,7 +36,7 @@ const storeRawMessages =
     env.get("STCR_FACTORY_MQTT_STORE_RAW_MESSAGES") || "false",
   ).toLowerCase() === "true";
 
-if (!envelope && !isFlushTick) {
+if (!envelope && !isFlushTick && !isLongCycleReconcileTick) {
   return null;
 }
 
@@ -297,6 +298,95 @@ async function reconcileLongCycleAlarm(
     detail,
     createdAt: createdAt.toISOString(),
   };
+}
+
+async function reconcileStoredLongCycleAlarms(referenceAt) {
+  const pool = getPool();
+  const connection = await pool.getConnection();
+  const results = [];
+
+  try {
+    await connection.beginTransaction();
+    const [cycles] = await connection.execute(
+      `SELECT id,
+              company_id AS companyId,
+              oven_id AS ovenId,
+              cycle_number AS cycleNumber,
+              fired_at AS firedAt,
+              report_started_at AS reportStartedAt
+       FROM oven_cycles
+       WHERE state = 'recording'
+         AND stopped_at IS NULL
+         AND TIMESTAMPDIFF(
+               SECOND,
+               COALESCE(report_started_at, fired_at),
+               ?
+             ) > ?
+       ORDER BY company_id, oven_id, id
+       FOR UPDATE`,
+      [referenceAt, EXPECTED_CYCLE_MS / 1000],
+    );
+
+    for (const cycle of cycles) {
+      results.push(
+        await reconcileLongCycleAlarm(connection, {
+          companyId: cycle.companyId,
+          ovenId: cycle.ovenId,
+          isOpen: true,
+          cycle,
+          eventAt: referenceAt,
+        }),
+      );
+    }
+
+    const [resolvedAlarms] = await connection.execute(
+      `SELECT a.company_id AS companyId, a.oven_id AS ovenId
+       FROM alarms a
+       LEFT JOIN oven_cycles c ON c.id = a.cycle_id
+       WHERE a.title = ?
+         AND a.status IN ('active', 'acknowledged')
+         AND (
+           c.id IS NULL
+           OR c.state NOT IN ('ignition', 'recording')
+           OR c.stopped_at IS NOT NULL
+         )`,
+      [LONG_CYCLE_ALARM_TITLE],
+    );
+
+    if (resolvedAlarms.length) {
+      await connection.execute(
+        `UPDATE alarms a
+         LEFT JOIN oven_cycles c ON c.id = a.cycle_id
+         SET a.status = 'resolved',
+             a.resolved_at = COALESCE(a.resolved_at, ?)
+         WHERE a.title = ?
+           AND a.status IN ('active', 'acknowledged')
+           AND (
+             c.id IS NULL
+             OR c.state NOT IN ('ignition', 'recording')
+             OR c.stopped_at IS NOT NULL
+           )`,
+        [referenceAt, LONG_CYCLE_ALARM_TITLE],
+      );
+      results.push(
+        ...resolvedAlarms.map((alarm) => ({
+          action: "resolved",
+          companyId: alarm.companyId,
+          ovenId: alarm.ovenId,
+          resolvedAt: referenceAt.toISOString(),
+        })),
+      );
+    }
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+
+  for (const result of results) syncLongCycleAlarmMemory(result);
 }
 
 function createMetric() {
@@ -1073,9 +1163,14 @@ async function flushCompletedBuckets(referenceDate) {
   }
 }
 
-const referenceDate = isFlushTick
+const referenceDate = isFlushTick || isLongCycleReconcileTick
   ? validDate(msg.factoryMqtt?.receivedAt, new Date())
   : validDate(envelope.receivedAt, new Date());
+
+if (isLongCycleReconcileTick) {
+  await reconcileStoredLongCycleAlarms(referenceDate);
+  return null;
+}
 
 if (isFlushTick) {
   await flushCompletedBuckets(referenceDate);
