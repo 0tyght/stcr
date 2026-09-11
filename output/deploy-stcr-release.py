@@ -74,7 +74,8 @@ def main() -> None:
         run(
             client,
             "hostname; whoami; readlink -f /opt/stcr/current; "
-            "curl -fsS http://127.0.0.1:3001/readyz",
+            "curl -fsS http://127.0.0.1:3001/healthz; echo; "
+            "curl -sS http://127.0.0.1:3001/readyz || true",
         )
 
         release = f"/opt/stcr/releases/{args.sha}"
@@ -195,12 +196,17 @@ runuser -u stcr -- env HOME=/home/stcr PM2_HOME=/home/stcr/.pm2 \
   /usr/bin/pm2 save
 
 for attempt in {{1..30}}; do
-  if curl -fsS http://127.0.0.1:3001/readyz; then
+  if curl -fsS http://127.0.0.1:3001/healthz; then
     break
   fi
   sleep 1
 done
-curl -fsS http://127.0.0.1:3001/readyz
+curl -fsS http://127.0.0.1:3001/healthz
+readiness="$(curl -sS http://127.0.0.1:3001/readyz)"
+case "$readiness" in
+  *'"database":"up"'*) printf '%s\n' "$readiness" ;;
+  *) printf 'Database readiness failed: %s\n' "$readiness" >&2; exit 1 ;;
+esac
 test "$(readlink -f /opt/stcr/current)" = "$release"
 test "$(grep '^STCR_OFFLINE_THRESHOLD_SECONDS=' /etc/stcr/stcr.env)" = \
   'STCR_OFFLINE_THRESHOLD_SECONDS=300'

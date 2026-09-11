@@ -278,8 +278,13 @@ wait_for_http() {
   return 1
 }
 
-wait_for_http http://127.0.0.1:3001/readyz
-wait_for_http http://127.0.0.1:8300/readyz
+wait_for_http http://127.0.0.1:3001/healthz
+wait_for_http http://127.0.0.1:8300/healthz
 wait_for_http http://127.0.0.1:8300/runtime-config.json
+readiness="$(curl -sS http://127.0.0.1:3001/readyz)"
+case "$readiness" in
+  (*'"database":"up"'*) printf '%s\n' "$readiness" ;;
+  (*) printf 'Database readiness failed: %s\n' "$readiness" >&2; exit 1 ;;
+esac
 echo
 echo "STCR isolated deployment completed at $STCR_RELEASE_SHA"
