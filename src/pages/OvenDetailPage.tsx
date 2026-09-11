@@ -97,7 +97,9 @@ export function OvenDetailPage() {
   const unusuallyLongCycle = Boolean(
     oven?.status === "open" &&
       oven.startedAt &&
-      Date.now() - Date.parse(oven.startedAt) > REPORT_CYCLE_MS,
+      oven.lastUpdatedAt &&
+      Date.parse(oven.lastUpdatedAt) - Date.parse(oven.startedAt) >
+        REPORT_CYCLE_MS,
   );
 
   useEffect(() => {
@@ -157,9 +159,6 @@ export function OvenDetailPage() {
       selectedRecord.end.getTime() - selectedRecord.start.getTime() >
         REPORT_CYCLE_MS,
   );
-  const hasSuspectedCombinedCycle =
-    unusuallyLongCycle || selectedCycleIsUnusuallyLong;
-
   const selectedDateRecords = useMemo(() => {
     if (!selectedDateKey) return [];
 
@@ -171,6 +170,10 @@ export function OvenDetailPage() {
   const calendarCells = useMemo(() => getCalendarCells(calendarCursor), [calendarCursor]);
   const effectiveMode =
     realtimeAvailable ? mode : "historical";
+  const hasSuspectedCombinedCycle =
+    effectiveMode === "realtime"
+      ? unusuallyLongCycle
+      : selectedCycleIsUnusuallyLong;
   const displayedOperationRange = useMemo(() => {
     if (effectiveMode === "historical") {
       return selectedRecord
