@@ -73,5 +73,11 @@ if (
 ) {
   throw new Error("MQTT runtime still writes duplicate sensor history");
 }
+if (
+  !mqttWriter.includes("MAX(last_source_at) AS referenceAt") ||
+  !mqttWriter.includes("eventAt: cycle.referenceAt")
+) {
+  throw new Error("Long-cycle reconciliation must follow source time during durable replay");
+}
 
 console.log("Express production structure verification passed");

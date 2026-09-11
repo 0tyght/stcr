@@ -30,6 +30,11 @@ mechanism.
 - GR: import `output/node-red/gr-production-complete-v9.json` after running
   `npm run node-red:gr:db-ack`.
 - TTN: import `output/node-red/ttn-production-complete-v10.json`.
+- Before either import, run `npm run node-red:mqtt:prepare`. This replaces only
+  the STCR broker reference with `27.254.134.55:8883`, enables validation of the
+  server's IP certificate, and assigns a company-specific persistent client ID.
+  Enter the company MQTT username and password on the factory computer; they
+  are deliberately not stored in the exported flow or Git.
 - Install `node-red-node-sqlite` on each factory computer.
 - Configure each factory with its own MQTT account and company-scoped topics.
 - Do not import either production flow on the development computer as a

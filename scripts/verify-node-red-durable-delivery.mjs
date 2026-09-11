@@ -36,6 +36,32 @@ for (const filename of files) {
     ),
     `${filename}: missing QoS 1 database ACK subscriber`,
   );
+  const ackNode = nodes.find(
+    (node) =>
+      node.type === "mqtt in" &&
+      node.topic === `stcr/ack/${company}` &&
+      String(node.qos) === "1",
+  );
+  const broker = nodes.find(
+    (node) => node.type === "mqtt-broker" && node.id === ackNode.broker,
+  );
+  assert(broker, `${filename}: STCR MQTT broker configuration is missing`);
+  assert(
+    broker.broker === "27.254.134.55" && String(broker.port) === "8883",
+    `${filename}: STCR MQTT broker must use 27.254.134.55:8883`,
+  );
+  assert(broker.usetls === true && broker.tls, `${filename}: MQTT TLS is not enabled`);
+  assert(broker.cleansession === false, `${filename}: MQTT session must be persistent`);
+  assert(
+    broker.clientid === `stcr-${company}-factory-01`,
+    `${filename}: MQTT client ID is not company-specific`,
+  );
+  const tls = nodes.find((node) => node.type === "tls-config" && node.id === broker.tls);
+  assert(tls, `${filename}: MQTT TLS configuration is missing`);
+  assert(
+    tls.verifyservercert === true && !String(tls.servername || "").trim(),
+    `${filename}: MQTT IP certificate verification is not enforced`,
+  );
   assert(
     nodes.some(
       (node) =>

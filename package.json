@@ -27,6 +27,7 @@
     "api-key:create": "node backend/tools/create-api-key.mjs",
     "password:hash": "node backend/tools/hash-password.mjs",
     "node-red:gr:db-ack": "node scripts/upgrade-gr-node-red-db-ack.mjs",
+    "node-red:mqtt:prepare": "node scripts/prepare-node-red-production-mqtt.mjs",
     "node-red:delivery:verify": "node scripts/verify-node-red-durable-delivery.mjs output/node-red/gr-production-complete-v9.json output/node-red/ttn-production-complete-v10.json",
     "backend:security-test": "node backend/scripts/security-test.mjs",
     "backend:smoke": "node backend/scripts/production-smoke.mjs",

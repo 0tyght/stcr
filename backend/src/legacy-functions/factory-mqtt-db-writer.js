@@ -308,23 +308,31 @@ async function reconcileStoredLongCycleAlarms(referenceAt) {
   try {
     await connection.beginTransaction();
     const [cycles] = await connection.execute(
-      `SELECT id,
-              company_id AS companyId,
-              oven_id AS ovenId,
-              cycle_number AS cycleNumber,
-              fired_at AS firedAt,
-              report_started_at AS reportStartedAt
-       FROM oven_cycles
-       WHERE state = 'recording'
-         AND stopped_at IS NULL
+      `SELECT c.id,
+              c.company_id AS companyId,
+              c.oven_id AS ovenId,
+              c.cycle_number AS cycleNumber,
+              c.fired_at AS firedAt,
+              c.report_started_at AS reportStartedAt,
+              telemetry.referenceAt
+       FROM oven_cycles c
+       INNER JOIN (
+         SELECT company_id, oven_id, MAX(last_source_at) AS referenceAt
+         FROM sensor_minute_aggregates
+         GROUP BY company_id, oven_id
+       ) telemetry
+         ON telemetry.company_id = c.company_id
+        AND telemetry.oven_id = c.oven_id
+       WHERE c.state = 'recording'
+         AND c.stopped_at IS NULL
          AND TIMESTAMPDIFF(
                SECOND,
-               COALESCE(report_started_at, fired_at),
-               ?
+               COALESCE(c.report_started_at, c.fired_at),
+               telemetry.referenceAt
              ) > ?
-       ORDER BY company_id, oven_id, id
+       ORDER BY c.company_id, c.oven_id, c.id
        FOR UPDATE`,
-      [referenceAt, EXPECTED_CYCLE_MS / 1000],
+      [EXPECTED_CYCLE_MS / 1000],
     );
 
     for (const cycle of cycles) {
@@ -334,7 +342,7 @@ async function reconcileStoredLongCycleAlarms(referenceAt) {
           ovenId: cycle.ovenId,
           isOpen: true,
           cycle,
-          eventAt: referenceAt,
+          eventAt: cycle.referenceAt,
         }),
       );
     }
@@ -343,20 +351,40 @@ async function reconcileStoredLongCycleAlarms(referenceAt) {
       `SELECT a.company_id AS companyId, a.oven_id AS ovenId
        FROM alarms a
        LEFT JOIN oven_cycles c ON c.id = a.cycle_id
+       LEFT JOIN (
+         SELECT company_id, oven_id, MAX(last_source_at) AS referenceAt
+         FROM sensor_minute_aggregates
+         GROUP BY company_id, oven_id
+       ) telemetry
+         ON telemetry.company_id = c.company_id
+        AND telemetry.oven_id = c.oven_id
        WHERE a.title = ?
          AND a.status IN ('active', 'acknowledged')
          AND (
            c.id IS NULL
            OR c.state NOT IN ('ignition', 'recording')
            OR c.stopped_at IS NOT NULL
+           OR telemetry.referenceAt IS NULL
+           OR TIMESTAMPDIFF(
+                SECOND,
+                COALESCE(c.report_started_at, c.fired_at),
+                telemetry.referenceAt
+              ) <= ?
          )`,
-      [LONG_CYCLE_ALARM_TITLE],
+      [LONG_CYCLE_ALARM_TITLE, EXPECTED_CYCLE_MS / 1000],
     );
 
     if (resolvedAlarms.length) {
       await connection.execute(
         `UPDATE alarms a
          LEFT JOIN oven_cycles c ON c.id = a.cycle_id
+         LEFT JOIN (
+           SELECT company_id, oven_id, MAX(last_source_at) AS referenceAt
+           FROM sensor_minute_aggregates
+           GROUP BY company_id, oven_id
+         ) telemetry
+           ON telemetry.company_id = c.company_id
+          AND telemetry.oven_id = c.oven_id
          SET a.status = 'resolved',
              a.resolved_at = COALESCE(a.resolved_at, ?)
          WHERE a.title = ?
@@ -365,8 +393,14 @@ async function reconcileStoredLongCycleAlarms(referenceAt) {
              c.id IS NULL
              OR c.state NOT IN ('ignition', 'recording')
              OR c.stopped_at IS NOT NULL
+             OR telemetry.referenceAt IS NULL
+             OR TIMESTAMPDIFF(
+                  SECOND,
+                  COALESCE(c.report_started_at, c.fired_at),
+                  telemetry.referenceAt
+                ) <= ?
            )`,
-        [referenceAt, LONG_CYCLE_ALARM_TITLE],
+        [referenceAt, LONG_CYCLE_ALARM_TITLE, EXPECTED_CYCLE_MS / 1000],
       );
       results.push(
         ...resolvedAlarms.map((alarm) => ({
