@@ -114,11 +114,12 @@ if grep -q '^STCR_OFFLINE_THRESHOLD_SECONDS=' "$target_env"; then
 else
   printf '\\nSTCR_OFFLINE_THRESHOLD_SECONDS=300\\n' >> "$target_env"
 fi
+allowed_origins='https://report.tytc-rubber.site,http://27.254.134.55'
 if grep -q '^STCR_ALLOWED_ORIGINS=' "$target_env"; then
-  sed -i 's|^STCR_ALLOWED_ORIGINS=.*|STCR_ALLOWED_ORIGINS=https://report.tytc-rubber.site|' \
+  sed -i "s|^STCR_ALLOWED_ORIGINS=.*|STCR_ALLOWED_ORIGINS=$allowed_origins|" \
     "$target_env"
 else
-  printf '\\nSTCR_ALLOWED_ORIGINS=https://report.tytc-rubber.site\\n' >> "$target_env"
+  printf '\\nSTCR_ALLOWED_ORIGINS=%s\\n' "$allowed_origins" >> "$target_env"
 fi
 sensor_ranges='{{"chamberTemp":{{"min":0,"max":150}},"humidity":{{"min":0,"max":100}},"furnaceTemp":{{"min":0,"max":1000}},"blowerTemp":{{"min":0,"max":600}}}}'
 spike_limits='{{"chamberTemp":12,"humidity":20,"furnaceTemp":200,"blowerTemp":120}}'
@@ -204,7 +205,7 @@ test "$(readlink -f /opt/stcr/current)" = "$release"
 test "$(grep '^STCR_OFFLINE_THRESHOLD_SECONDS=' /etc/stcr/stcr.env)" = \
   'STCR_OFFLINE_THRESHOLD_SECONDS=300'
 test "$(grep '^STCR_ALLOWED_ORIGINS=' /etc/stcr/stcr.env)" = \
-  'STCR_ALLOWED_ORIGINS=https://report.tytc-rubber.site'
+  "STCR_ALLOWED_ORIGINS=$allowed_origins"
 test "$(grep '^STCR_FACTORY_MQTT_SENSOR_RANGES_JSON=' /etc/stcr/stcr.env)" = \
   "STCR_FACTORY_MQTT_SENSOR_RANGES_JSON='$sensor_ranges'"
 test "$(grep '^STCR_FACTORY_MQTT_SPIKE_LIMITS_JSON=' /etc/stcr/stcr.env)" = \

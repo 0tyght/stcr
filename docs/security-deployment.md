@@ -6,7 +6,7 @@
 
 1. ใช้ HTTPS และ Reverse Proxy แบบ Same Origin.
 2. ให้ Express bind ที่ `127.0.0.1:3001`; ห้ามเปิดพอร์ตนี้สู่ Internet โดยตรง.
-3. กำหนด `STCR_ALLOWED_ORIGINS` เป็น Domain จริงเท่านั้น.
+3. กำหนด `STCR_ALLOWED_ORIGINS` เป็น origin ที่อนุญาตแบบเจาะจง โดยใช้ HTTPS สำหรับโดเมน; HTTP อนุญาตเฉพาะ IP literal ที่ต้องใช้เข้าระบบโดยตรง.
 4. ใช้ MariaDB account เฉพาะระบบและสิทธิ์เท่าที่จำเป็น ห้ามใช้ `root`.
 5. ใช้ MQTT TLS, credentials เฉพาะระบบ และ ACL จำกัด Topic.
 6. ตั้ง `STCR_API_KEY_PEPPER` อย่างน้อย 32 ตัวอักษรและเก็บนอก Git.

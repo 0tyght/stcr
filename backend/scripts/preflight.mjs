@@ -1,4 +1,5 @@
 import { access } from "node:fs/promises";
+import { isIP } from "node:net";
 import { resolve } from "node:path";
 import mysql from "mysql2/promise";
 
@@ -49,8 +50,9 @@ if (production) {
   for (const origin of origins) {
     const url = new URL(origin);
     const local = ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
-    if (url.protocol !== "https:" && !local) {
-      throw new Error(`Production origin must use HTTPS: ${origin}`);
+    const literalIp = isIP(url.hostname) !== 0;
+    if (url.protocol !== "https:" && !local && !(url.protocol === "http:" && literalIp)) {
+      throw new Error(`Production origin must use HTTPS unless it is an explicit IP address: ${origin}`);
     }
     if (url.pathname !== "/" || url.search || url.hash) {
       throw new Error(`Allowed origin must not contain a path, query, or hash: ${origin}`);

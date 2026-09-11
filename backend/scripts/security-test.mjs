@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 
-process.env.STCR_ALLOWED_ORIGINS = "https://stcr.example.com";
+process.env.STCR_ALLOWED_ORIGINS = "https://stcr.example.com,http://27.254.134.55";
 process.env.STCR_HTTP_ACCESS_LOG = "false";
 process.env.STCR_FACTORY_MQTT_ENABLED = "false";
 
@@ -21,6 +21,12 @@ try {
   if (!health.ok) throw new Error("Health endpoint failed");
   if (health.headers.get("access-control-allow-origin") !== "https://stcr.example.com") {
     throw new Error("Allowed CORS origin was not returned");
+  }
+  const ipHealth = await fetch(`${base}/healthz`, {
+    headers: { Origin: "http://27.254.134.55" },
+  });
+  if (ipHealth.headers.get("access-control-allow-origin") !== "http://27.254.134.55") {
+    throw new Error("Allowed IP CORS origin was not returned");
   }
   if (health.headers.get("x-content-type-options") !== "nosniff") {
     throw new Error("Security headers are missing");
