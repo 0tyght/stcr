@@ -29,3 +29,13 @@ scripts/__pycache__/
 *.log
 output/*.tmp
 output/*.pid
+
+# Generated Node-RED exports can contain production broker and LINE credentials.
+output/node-red/
+
+# Generated document work products are kept locally, outside the application release.
+artifacts/
+tmp/
+output/__pycache__/
+output/pdf/TTN_*.pdf
+scripts/create_ttn_fillable_questionnaire_portrait.py

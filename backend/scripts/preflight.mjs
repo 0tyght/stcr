@@ -21,6 +21,7 @@ const required = production
   : [];
 const mqttEnabled = String(process.env.STCR_FACTORY_MQTT_ENABLED || "false").toLowerCase() === "true";
 if (mqttEnabled) required.push("STCR_FACTORY_MQTT_URL");
+if (mqttEnabled && production) required.push("STCR_FACTORY_MQTT_CLIENT_ID");
 
 const missing = required.filter((name) => !String(process.env[name] || "").trim());
 if (missing.length) throw new Error(`Missing environment values: ${missing.join(", ")}`);
@@ -73,6 +74,12 @@ if (mqttEnabled) {
     String(process.env.STCR_FACTORY_MQTT_TLS_REJECT_UNAUTHORIZED || "true").toLowerCase() === "false"
   ) {
     throw new Error("MQTT TLS certificate verification cannot be disabled in production");
+  }
+  if (
+    production &&
+    String(process.env.STCR_FACTORY_MQTT_CLEAN_SESSION || "false").toLowerCase() === "true"
+  ) {
+    throw new Error("Production MQTT must use a persistent session (STCR_FACTORY_MQTT_CLEAN_SESSION=false)");
   }
 
   const routesText = String(process.env.STCR_FACTORY_MQTT_TOPIC_ROUTES_JSON || "").trim();

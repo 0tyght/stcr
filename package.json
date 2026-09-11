@@ -26,6 +26,8 @@
     "user:create": "node backend/tools/create-user.mjs",
     "api-key:create": "node backend/tools/create-api-key.mjs",
     "password:hash": "node backend/tools/hash-password.mjs",
+    "node-red:gr:db-ack": "node scripts/upgrade-gr-node-red-db-ack.mjs",
+    "node-red:delivery:verify": "node scripts/verify-node-red-durable-delivery.mjs output/node-red/gr-production-complete-v9.json output/node-red/ttn-production-complete-v10.json",
     "backend:security-test": "node backend/scripts/security-test.mjs",
     "backend:smoke": "node backend/scripts/production-smoke.mjs",
     "audit:production": "npm audit --omit=dev --audit-level=high",

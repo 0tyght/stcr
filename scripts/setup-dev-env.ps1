@@ -205,6 +205,7 @@ $settings = [ordered]@{
     STCR_FACTORY_MQTT_COMPANY_ID = $MqttCompanyId
     STCR_FACTORY_MQTT_TOPICS = "test,sensor"
     STCR_FACTORY_MQTT_CLIENT_ID = "stcr-multi-company-server"
+    STCR_FACTORY_MQTT_CLEAN_SESSION = "false"
     STCR_FACTORY_MQTT_OVEN_MAP_JSON = $ovenMap
     STCR_FACTORY_MQTT_TOPIC_ROUTES_JSON = $topicRoutes
     STCR_FACTORY_MQTT_OVEN_MAPS_JSON = $ovenMaps

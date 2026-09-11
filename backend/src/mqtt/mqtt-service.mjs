@@ -229,11 +229,18 @@ export async function startMqttService() {
   }
 
   const qos = envNumber("STCR_FACTORY_MQTT_QOS", 1, 0, 2);
+  const cleanSession = envBoolean("STCR_FACTORY_MQTT_CLEAN_SESSION", false);
+  const clientId = String(
+    process.env.STCR_FACTORY_MQTT_CLIENT_ID || "stcr-multi-company-server",
+  ).trim();
+  if (!cleanSession && !clientId) {
+    throw new Error("STCR_FACTORY_MQTT_CLIENT_ID is required for a persistent MQTT session");
+  }
   const client = mqtt.connect(brokerUrl, {
-    clientId: String(process.env.STCR_FACTORY_MQTT_CLIENT_ID || `stcr-express-${process.pid}`),
+    clientId,
     username: process.env.STCR_FACTORY_MQTT_USERNAME || undefined,
     password: process.env.STCR_FACTORY_MQTT_PASSWORD || undefined,
-    clean: true,
+    clean: cleanSession,
     protocolVersion: 4,
     keepalive: envNumber("STCR_FACTORY_MQTT_KEEPALIVE_SECONDS", 30, 5, 300),
     reconnectPeriod: envNumber("STCR_FACTORY_MQTT_RECONNECT_MS", 5000, 1000, 60000),
