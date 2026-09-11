@@ -54,3 +54,11 @@ Run the static flow check with:
 ```powershell
 npm run node-red:delivery:verify
 ```
+
+On each factory computer, verify the deployed runtime without printing sensor
+payloads or credentials:
+
+```powershell
+.\scripts\check-stcr-source-buffer.ps1 -Company gr
+.\scripts\check-stcr-source-buffer.ps1 -Company ttn
+```
