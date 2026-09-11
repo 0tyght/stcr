@@ -40,7 +40,7 @@
     "mqtt": "^5.15.2",
     "mysql2": "^3.23.1",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1",
+    "react-dom": "^19.2.8",
     "express": "^5.1.0",
     "react-router": "8.3.0"
   },
