@@ -480,7 +480,7 @@ async function loadRuntimeStateFromDatabase() {
       auditEvents: [],
     };
 
-    const lastUpdatedAt = databaseTimestamp(row.readingAt || row.lastSeenAt) || new Date(0).toISOString();
+    const lastUpdatedAt = databaseTimestamp(row.lastSeenAt || row.readingAt) || new Date(0).toISOString();
     const readings = emptyReadings();
     if (row.readingAt) {
       const latestValues = {

@@ -53,6 +53,14 @@ if (runtimeConfig.apiBaseUrl !== "/stcr/api" || runtimeConfig.dataSource !== "ex
   throw new Error("Production runtime config must use the same-origin Express API");
 }
 
+const apiRouter = await readFile(
+  resolve(root, "backend/src/legacy-functions/api-router.js"),
+  "utf8",
+);
+if (!apiRouter.includes("row.lastSeenAt || row.readingAt")) {
+  throw new Error("Offline status must prefer connection receipt time");
+}
+
 const schema = await readFile(resolve(root, "database/schema.sql"), "utf8");
 if (
   schema.includes("CREATE TABLE IF NOT EXISTS sensor_readings") ||
