@@ -16,6 +16,7 @@ export type Oven = {
   startedAt?: string;
   stoppedAt?: string;
   lastUpdatedAt: string;
+  lastSourceAt?: string;
   readings: SensorSnapshot;
   limits: LimitMap;
 };

@@ -97,8 +97,8 @@ export function OvenDetailPage() {
   const unusuallyLongCycle = Boolean(
     oven?.status === "open" &&
       oven.startedAt &&
-      oven.lastUpdatedAt &&
-      Date.parse(oven.lastUpdatedAt) - Date.parse(oven.startedAt) >
+      oven.lastSourceAt &&
+      Date.parse(oven.lastSourceAt) - Date.parse(oven.startedAt) >
         REPORT_CYCLE_MS,
   );
 

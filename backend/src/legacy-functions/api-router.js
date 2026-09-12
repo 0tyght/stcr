@@ -513,6 +513,7 @@ async function loadRuntimeStateFromDatabase() {
       ...(reportStartedAt ? { reportStartedAt, startedAt: reportStartedAt } : {}),
       ...(stoppedAt ? { stoppedAt } : {}),
       lastUpdatedAt,
+      ...(row.readingAt ? { lastSourceAt: databaseTimestamp(row.readingAt) } : {}),
       readings,
       limits: {
         chamberTemp: { sensor: "chamberTemp", lower: Number(row.chamberLower), upper: Number(row.chamberUpper) },

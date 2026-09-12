@@ -28,3 +28,14 @@ After DNS is ready:
 3. Test `nginx -t`.
 4. Enable the public site and remove the local-only site.
 5. Run the full browser acceptance test before retiring an older system.
+
+For later releases, prepare and verify the release directory first, then activate
+the API and frontend together:
+
+```bash
+sudo /opt/stcr/current/deploy/ubuntu/activate-release.sh \
+  /opt/stcr/releases/<release>
+```
+
+The activation waits for API health and readiness before replacing the frontend
+entry point. If the API does not become ready, it restores the previous release.

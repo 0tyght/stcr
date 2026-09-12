@@ -15,6 +15,7 @@ const required = [
   "backend/tools/create-user.mjs",
   "backend/tools/create-api-key.mjs",
   "src/services/api/expressApi.ts",
+  "deploy/ubuntu/activate-release.sh",
   "deploy/ubuntu/ecosystem.config.cjs",
   "deploy/ubuntu/nginx-stcr-local.conf",
   "deploy/ubuntu/stcr-express.service",
@@ -75,9 +76,10 @@ if (
 }
 if (
   !mqttWriter.includes("MAX(last_source_at) AS referenceAt") ||
-  !mqttWriter.includes("eventAt: cycle.referenceAt")
+  !mqttWriter.includes("eventAt: cycle.referenceAt") ||
+  !mqttWriter.includes("oven.lastSourceAt = sourceTimestamp")
 ) {
-  throw new Error("Long-cycle reconciliation must follow source time during durable replay");
+  throw new Error("Long-cycle handling must follow source time during durable replay");
 }
 
 console.log("Express production structure verification passed");

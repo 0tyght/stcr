@@ -91,6 +91,13 @@ function updateRealtimeMemory(value, receivedAtDate) {
   if (!rootState || !oven) return;
 
   const timestamp = receivedAtDate.toISOString();
+  const sourceTimestamp = validDate(
+    value.sourceTimestamp,
+    receivedAtDate,
+  ).toISOString();
+  if (!oven.lastSourceAt || sourceTimestamp > oven.lastSourceAt) {
+    oven.lastSourceAt = sourceTimestamp;
+  }
 
   if (value.type === "test") {
     oven.status = value.ovenState === 1 ? "open" : "closed";
