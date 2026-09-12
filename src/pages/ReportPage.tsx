@@ -395,6 +395,13 @@ function createCsvBlob(points: TimeSeriesPoint[], sensors: SensorKey[]): Blob {
   return new Blob([csv], { type: "text/csv;charset=utf-8" });
 }
 
+function filenameDocumentNo(value: string): string {
+  return (
+    value.trim().replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-|-$/g, "") ||
+    "report"
+  );
+}
+
 export function ReportPage() {
   const { ovens } = useAppData();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -849,7 +856,9 @@ export function ReportPage() {
   const downloadCurrentCsv = useCallback(async () => {
     if (!oven || selectedCycle == null || !points.length) return;
 
-    const filename = `F-WS-05-${oven.name}-cycle-${selectedCycle}.csv`;
+    const filename = `${filenameDocumentNo(reportForm.documentNo)}-${
+      oven.name
+    }-cycle-${selectedCycle}.csv`;
 
     if (!confirmDownload(filename, `ข้อมูล CSV รอบ ${selectedCycle}`)) return;
 
@@ -864,7 +873,7 @@ export function ReportPage() {
 
     const blob = createCsvBlob(points, reportSensors);
     await saveBlob(blob, filename, fileHandle);
-  }, [oven, points, selectedCycle]);
+  }, [oven, points, reportForm.documentNo, selectedCycle]);
 
   useEffect(() => {
     if (!autoPdf || autoDownloaded || loadingReport || !points.length || !oven) return;
@@ -940,7 +949,7 @@ export function ReportPage() {
 
       <PageHeader
         title={mode === "current" ? "รายงานรอบปัจจุบัน" : "ดาวน์โหลดรายงานย้อนหลัง"}
-        description="แบบฟอร์ม F-WS-05 รายงานการตรวจสอบอุณหภูมิเตา"
+        description={`แบบฟอร์ม ${reportForm.documentNo} รายงานการตรวจสอบอุณหภูมิเตา`}
         actions={
           <Link className="button" to={`/ovens/${oven.id}`}>
             กลับหน้าเตา
@@ -1605,7 +1614,7 @@ function FwsSvgReport({
       width={svgWidth}
       height={svgHeight}
       role="img"
-      aria-label="F-WS-05 รายงานการตรวจสอบอุณหภูมิเตา"
+      aria-label={`${form.documentNo} รายงานการตรวจสอบอุณหภูมิเตา`}
       xmlns="http://www.w3.org/2000/svg"
     >
       <style>{fwsSvgStyles}</style>
