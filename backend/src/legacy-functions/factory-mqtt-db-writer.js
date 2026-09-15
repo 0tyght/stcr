@@ -101,6 +101,7 @@ function updateRealtimeMemory(value, receivedAtDate) {
 
   if (value.type === "test") {
     oven.status = value.ovenState === 1 ? "open" : "closed";
+    oven.lastUpdatedAt = timestamp;
   } else {
     if (oven.status === "offline") {
       oven.status = fallbackStatus(value.startOven);

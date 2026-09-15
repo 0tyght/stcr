@@ -89,5 +89,8 @@ if (
 ) {
   throw new Error("Long-cycle handling must follow source time during durable replay");
 }
+if (!/value\.type === "test"[\s\S]{0,180}oven\.lastUpdatedAt = timestamp/.test(mqttWriter)) {
+  throw new Error("Status heartbeats must refresh the realtime connection timestamp");
+}
 
 console.log("Express production structure verification passed");
